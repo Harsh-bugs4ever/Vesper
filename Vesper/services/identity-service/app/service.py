@@ -1,0 +1,209 @@
+"""Login, token rotation and user administration."""
+from __future__ import annotations
+
+import hashlib
+from datetime import timedelta
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
+
+from vesper_common.clock import utcnow
+from vesper_common.config import settings
+from vesper_common.errors import Conflict, Forbidden, Invalid, NotFound
+from vesper_common.permissions import ALL_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS
+from vesper_common.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+
+from .models import RefreshSession, Role, User
+
+
+def _fingerprint(token: str) -> str:
+    """Refresh tokens are stored hashed — a leaked database must not grant sessions."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def get_user(db: Session, user_id: UUID) -> User:
+    user = db.scalars(select(User).options(joinedload(User.role)).where(User.id == user_id)).first()
+    if user is None:
+        raise NotFound("User not found")
+    return user
+
+
+def get_role(db: Session, property_id: UUID, key: str) -> Role:
+    role = db.scalars(select(Role).where(Role.property_id == property_id, Role.key == key)).first()
+    if role is None:
+        raise NotFound(f"Role '{key}' not found")
+    return role
+
+
+def issue_tokens(db: Session, user: User, *, user_agent: str | None = None) -> dict:
+    access = create_access_token(
+        user_id=str(user.id),
+        property_id=str(user.property_id),
+        role=user.role.key,
+        permissions=user.permissions,
+        department_id=str(user.department_id) if user.department_id else None,
+    )
+    refresh = create_refresh_token(user_id=str(user.id))
+    db.add(
+        RefreshSession(
+            user_id=user.id,
+            token_hash=_fingerprint(refresh),
+            expires_at=utcnow() + timedelta(days=settings.refresh_token_days),
+            user_agent=(user_agent or "")[:200] or None,
+        )
+    )
+    user.last_login_at = utcnow()
+    db.commit()
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "expires_in": settings.access_token_minutes * 60,
+    }
+
+
+def login(db: Session, email: str, password: str, *, user_agent: str | None = None) -> dict:
+    user = db.scalars(
+        select(User).options(joinedload(User.role)).where(User.email == email.lower().strip())
+    ).first()
+    # Same message either way: never tell an attacker which half was wrong.
+    if user is None or not verify_password(password, user.password_hash):
+        raise Forbidden("Incorrect email or password")
+    if not user.is_active:
+        raise Forbidden("This account has been deactivated")
+    return issue_tokens(db, user, user_agent=user_agent)
+
+
+def refresh(db: Session, refresh_token: str) -> dict:
+    payload = decode_token(refresh_token, expect="refresh")
+    fingerprint = _fingerprint(refresh_token)
+    session_row = db.scalars(
+        select(RefreshSession).where(RefreshSession.token_hash == fingerprint)
+    ).first()
+    if session_row is None or session_row.revoked_at is not None:
+        raise Forbidden("Refresh token is no longer valid")
+    if session_row.expires_at <= utcnow():
+        raise Forbidden("Refresh token expired")
+
+    # Rotation: the presented token dies as the new pair is minted.
+    session_row.revoked_at = utcnow()
+    return issue_tokens(db, get_user(db, UUID(payload["sub"])))
+
+
+def logout(db: Session, refresh_token: str) -> None:
+    row = db.scalars(
+        select(RefreshSession).where(RefreshSession.token_hash == _fingerprint(refresh_token))
+    ).first()
+    if row and row.revoked_at is None:
+        row.revoked_at = utcnow()
+        db.commit()
+
+
+def list_roles(db: Session, property_id: UUID) -> list[Role]:
+    return list(db.scalars(select(Role).where(Role.property_id == property_id).order_by(Role.key)))
+
+
+def set_role_permissions(db: Session, property_id: UUID, key: str, permissions: list[str]) -> Role:
+    role = get_role(db, property_id, key)
+    unknown = sorted(set(permissions) - set(ALL_PERMISSIONS))
+    if unknown:
+        raise Invalid("Unknown permissions", details={"permissions": unknown})
+    role.permissions = sorted(set(permissions))
+    db.commit()
+    db.refresh(role)
+    return role
+
+
+def create_role(db: Session, property_id: UUID, data) -> Role:
+    if db.scalars(select(Role).where(Role.property_id == property_id, Role.key == data.key)).first():
+        raise Conflict(f"Role '{data.key}' already exists")
+    role = Role(
+        property_id=property_id,
+        key=data.key,
+        label=data.label,
+        permissions=sorted(set(data.permissions) & set(ALL_PERMISSIONS)),
+    )
+    db.add(role)
+    db.commit()
+    db.refresh(role)
+    return role
+
+
+def list_users(
+    db: Session, property_id: UUID, *, department_id: UUID | None = None, search: str | None = None
+) -> list[User]:
+    query = select(User).options(joinedload(User.role)).where(User.property_id == property_id)
+    if department_id:
+        query = query.where(User.department_id == department_id)
+    if search:
+        needle = f"%{search.lower()}%"
+        query = query.where(User.full_name.ilike(needle) | User.email.ilike(needle))
+    return list(db.scalars(query.order_by(User.full_name)))
+
+
+def create_user(db: Session, property_id: UUID, data) -> User:
+    email = data.email.lower().strip()
+    if db.scalars(select(User).where(User.property_id == property_id, User.email == email)).first():
+        raise Conflict("A user with that email already exists")
+    role = get_role(db, property_id, data.role_key)
+    user = User(
+        property_id=property_id,
+        department_id=data.department_id,
+        role_id=role.id,
+        email=email,
+        full_name=data.full_name,
+        phone=data.phone,
+        employee_code=data.employee_code,
+        password_hash=hash_password(data.password),
+        extra_permissions=sorted(set(data.extra_permissions) & set(ALL_PERMISSIONS)),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user(db: Session, property_id: UUID, user_id: UUID, data) -> User:
+    user = get_user(db, user_id)
+    if user.property_id != property_id:
+        raise NotFound("User not found")
+    if data.role_key is not None:
+        user.role_id = get_role(db, property_id, data.role_key).id
+    for field in ("full_name", "phone", "department_id", "is_active"):
+        value = getattr(data, field)
+        if value is not None:
+            setattr(user, field, value)
+    if data.extra_permissions is not None:
+        user.extra_permissions = sorted(set(data.extra_permissions) & set(ALL_PERMISSIONS))
+    if data.password:
+        user.password_hash = hash_password(data.password)
+        # Changing a password ends every other session for that user.
+        for row in db.scalars(select(RefreshSession).where(RefreshSession.user_id == user.id)):
+            row.revoked_at = row.revoked_at or utcnow()
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def ensure_default_roles(db: Session, property_id: UUID) -> None:
+    """Idempotent: seeding and first boot both call this."""
+    existing = {r.key for r in list_roles(db, property_id)}
+    for key, perms in DEFAULT_ROLE_PERMISSIONS.items():
+        if key in existing:
+            continue
+        db.add(
+            Role(
+                property_id=property_id,
+                key=str(key),
+                label=str(key).upper() if key in {"gm"} else str(key).title(),
+                permissions=sorted(str(p) for p in perms),
+                is_system=True,
+            )
+        )
+    db.commit()
