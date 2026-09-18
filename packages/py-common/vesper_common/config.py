@@ -29,8 +29,20 @@ class Settings(BaseSettings):
     property_timezone: str = "Asia/Kolkata"
     currency: str = "INR"
 
-    anthropic_api_key: str | None = None
-    concierge_model: str = "claude-opus-5"
+    # Generation runs on Groq's free API. The model line-up there changes, so this is
+    # a setting rather than a constant — GET /concierge/models lists what the key can
+    # actually serve.
+    groq_api_key: str | None = None
+    concierge_model: str = "llama-3.3-70b-versatile"
+
+    # Sentiment and retrieval embeddings run locally, not through Groq: they score every
+    # rating and every passage, which would burn the free tier's request budget in
+    # minutes. Both download weights on first use, so both are opt-in — a cold
+    # deployment must not make the first guest to rate their breakfast wait for a
+    # 500MB download.
+    sentiment_use_transformer: bool = False
+    sentiment_model: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    concierge_use_embeddings: bool = False
 
     # Shadow mode lets every executor preview without touching the world.
     shadow_mode_default: bool = False

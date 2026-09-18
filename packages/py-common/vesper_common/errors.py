@@ -32,7 +32,8 @@ class Forbidden(VesperError):
 
 
 class Invalid(VesperError):
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    # Starlette renamed its 422 constant; the status code itself is stable.
+    status_code = 422
     code = "invalid"
 
 
@@ -52,6 +53,5 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=_body("invalid", "Request validation failed", {"errors": exc.errors()}),
+            422, content=_body("invalid", "Request validation failed", {"errors": exc.errors()})
         )

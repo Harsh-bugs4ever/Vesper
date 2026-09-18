@@ -5,7 +5,7 @@ import csv
 import io
 import secrets
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -205,6 +205,14 @@ def create_asset(db: Session, property_id: UUID, data) -> Asset:
         raise Conflict("Asset " + data.code + " already exists")
     asset = Asset(property_id=property_id, **data.model_dump())
     db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def mark_serviced(db: Session, property_id: UUID, asset_id: UUID, serviced_on: date) -> Asset:
+    asset = get_asset(db, property_id, asset_id)
+    asset.last_serviced_on = serviced_on
     db.commit()
     db.refresh(asset)
     return asset

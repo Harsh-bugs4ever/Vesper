@@ -3,7 +3,7 @@
 Gives every service: CORS, the shared error shape, /health and /ready, request-id
 logging, and an optional event subscription started at boot.
 """
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from .clock import utcnow
 from .config import settings
-from .db import engine
+from .db import get_engine
 from .errors import install_error_handlers
 from .events import Envelope, bus
 
@@ -25,12 +25,15 @@ def create_app(
     version: str = "0.1.0",
     routers: Iterable[APIRouter] = (),
     subscriptions: Callable[[], None] | None = None,
+    on_shutdown: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         if subscriptions is not None:
             subscriptions()
         yield
+        if on_shutdown is not None:
+            await on_shutdown()
 
     app = FastAPI(
         title=title,
@@ -65,7 +68,7 @@ def create_app(
     def ready() -> dict:
         checks = {"database": False, "redis": False}
         try:
-            with engine.connect() as conn:
+            with get_engine().connect() as conn:
                 conn.execute(text("SELECT 1"))
             checks["database"] = True
         except Exception:  # noqa: BLE001 - readiness must not raise

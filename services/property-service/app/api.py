@@ -11,6 +11,7 @@ from . import service
 from .schemas import (
     AssetCreate,
     AssetOut,
+    AssetServiced,
     DepartmentOut,
     ImportResult,
     PropertyOut,
@@ -209,6 +210,22 @@ def get_asset(
     db: Session = Depends(get_session),
 ) -> AssetOut:
     return AssetOut.model_validate(service.get_asset(db, UUID(principal.property_id), asset_id))
+
+
+@assets_router.post("/{asset_id}/serviced", response_model=AssetOut)
+def mark_serviced(
+    body: AssetServiced,
+    asset_id: UUID,
+    principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+    db: Session = Depends(get_session),
+) -> AssetOut:
+    """Reset the service clock.
+
+    maintenance-service calls this when a work order completes, so the asset stops
+    scoring as overdue on the next risk sweep.
+    """
+    asset = service.mark_serviced(db, UUID(principal.property_id), asset_id, body.serviced_on)
+    return AssetOut.model_validate(asset)
 
 
 @assets_router.get("/{asset_id}/readings", response_model=list[SensorReadingOut])

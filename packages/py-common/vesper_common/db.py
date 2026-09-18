@@ -40,8 +40,19 @@ naming_convention = {
 
 metadata = MetaData(naming_convention=naming_convention)
 
-engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+# Built on first use, not at import. A service that never touches the database (the
+# gateway, notification) should not need the driver installed, and importing a module
+# for its constants should not open a connection pool.
+_engine = None
+SessionLocal = sessionmaker(autoflush=False, expire_on_commit=False)
+
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
+        SessionLocal.configure(bind=_engine)
+    return _engine
 
 
 class Base(DeclarativeBase):
@@ -79,6 +90,7 @@ class TimestampMixin:
 
 def get_session() -> Iterator[Session]:
     """FastAPI dependency: one session per request, committed by the caller."""
+    get_engine()
     session = SessionLocal()
     try:
         yield session
@@ -88,6 +100,7 @@ def get_session() -> Iterator[Session]:
 
 def session_scope() -> Session:
     """For scripts and background jobs, where there is no request to hang off."""
+    get_engine()
     return SessionLocal()
 
 

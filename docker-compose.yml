@@ -1,0 +1,226 @@
+# Thirteen services, one Postgres, one Redis. Everything runs on a laptop.
+#
+# The database is shared with one schema per bounded context (see vesper_common.db):
+# splitting it per service is a deployment change, not a code change.
+
+x-service-env: &service-env
+  VESPER_DATABASE_URL: postgresql+psycopg://vesper:vesper@postgres:5432/vesper
+  VESPER_REDIS_URL: redis://redis:6379/0
+  VESPER_JWT_SECRET: ${VESPER_JWT_SECRET:-dev-only-change-me}
+  VESPER_ENVIRONMENT: ${VESPER_ENVIRONMENT:-development}
+  VESPER_PROPERTY_TIMEZONE: ${VESPER_PROPERTY_TIMEZONE:-Asia/Kolkata}
+  VESPER_CORS_ORIGINS: ${VESPER_CORS_ORIGINS:-http://localhost:3000}
+
+# Every service waits for both backing stores to be genuinely ready, not merely started.
+x-depends: &depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vesper
+      POSTGRES_PASSWORD: vesper
+      POSTGRES_DB: vesper
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vesper -d vesper"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: identity-service
+    ports:
+      - "8001:8001"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  property-service:
+    build:
+      context: .
+      dockerfile: services/property-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: property-service
+    ports:
+      - "8002:8002"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  staff-service:
+    build:
+      context: .
+      dockerfile: services/staff-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: staff-service
+    ports:
+      - "8003:8003"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  guest-service:
+    build:
+      context: .
+      dockerfile: services/guest-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: guest-service
+    ports:
+      - "8004:8004"
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: inventory-service
+    ports:
+      - "8005:8005"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  frontdesk-service:
+    build:
+      context: .
+      dockerfile: services/frontdesk-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: frontdesk-service
+    ports:
+      - "8006:8006"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  action-service:
+    build:
+      context: .
+      dockerfile: services/action-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: action-service
+    ports:
+      - "8007:8007"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  revenue-service:
+    build:
+      context: .
+      dockerfile: services/revenue-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: revenue-service
+    ports:
+      - "8008:8008"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  maintenance-service:
+    build:
+      context: .
+      dockerfile: services/maintenance-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: maintenance-service
+    ports:
+      - "8009:8009"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  workforce-service:
+    build:
+      context: .
+      dockerfile: services/workforce-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: workforce-service
+    ports:
+      - "8010:8010"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  guest-intel-service:
+    build:
+      context: .
+      dockerfile: services/guest-intel-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: guest-intel-service
+      VESPER_GROQ_API_KEY: ${VESPER_GROQ_API_KEY:-}
+      VESPER_CONCIERGE_MODEL: ${VESPER_CONCIERGE_MODEL:-llama-3.3-70b-versatile}
+    ports:
+      - "8011:8011"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      <<: *service-env
+      VESPER_SERVICE_NAME: notification-service
+    ports:
+      - "8012:8012"
+    depends_on:
+      <<: *depends
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:

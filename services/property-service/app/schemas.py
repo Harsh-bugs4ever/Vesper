@@ -103,6 +103,10 @@ class AssetCreate(BaseModel):
     service_interval_days: int = 180
 
 
+class AssetServiced(BaseModel):
+    serviced_on: date
+
+
 class SensorReadingIn(BaseModel):
     asset_id: UUID
     metric: str
