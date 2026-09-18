@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 
@@ -215,9 +214,6 @@ export default function LoginPage() {
                     Select a simulated role or sign in with your enterprise credentials.
                   </CardDescription>
                 </div>
-                <Badge variant="sage" className="text-xs">
-                  Day 1 Ready
-                </Badge>
               </div>
 
               {/* Navigation Switch Tabs */}
