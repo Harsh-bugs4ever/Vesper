@@ -1,7 +1,5 @@
 # API contracts
 
-Written for: the frontend engineer wiring `apps/web` to the real backend.
-
 `openapi/` holds one generated OpenAPI 3.1 spec per service. They are generated from the
 running code, so they are never out of date with it:
 
