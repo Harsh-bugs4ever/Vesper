@@ -10,3 +10,6 @@ venv/
 dist/
 build/
 .logs/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
