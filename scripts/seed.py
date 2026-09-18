@@ -12,6 +12,7 @@ Run: python scripts/seed.py [--reset]
 from __future__ import annotations
 
 import argparse
+import itertools
 import random
 import secrets
 import sys
@@ -141,6 +142,16 @@ KNOWLEDGE = [
     ("Doctor on call", "A doctor is on call 24 hours. Please dial 0 and the front desk will arrange a visit to your room.", "services"),
     ("Banquet and events", "Four banquet halls seat between 40 and 400 guests. The events team can be reached on extension 5555.", "facilities"),
 ]
+
+
+def _demo_reference(index: int) -> str:
+    """VS + a zero-padded base-36 counter. Short, readable and collision-free."""
+    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    value, out = index, ""
+    while value:
+        value, remainder = divmod(value, 36)
+        out = digits[remainder] + out
+    return "VS" + (out or "0").rjust(6, "0")
 
 
 def main() -> int:
@@ -347,18 +358,29 @@ def _seed(db) -> dict[str, int]:
     counts["stock_items"] = len(stock_items)
 
     # Recipes tie the menu to the store, which is what makes stock auto-deduct.
+    # Every menu item consumes something. An item with no recipe silently deducts
+    # nothing, which quietly breaks the point of auto-deduction, so the list below
+    # covers the whole menu rather than a sample of it.
     recipes = {
         "Masala Omelette": {"FD-EGGS": 0.1, "FD-BREAD": 0.1},
+        "Poha": {"FD-RICE": 0.12},
+        "Continental Platter": {"FD-BREAD": 0.2, "FD-BUTTER": 0.02},
         "Club Sandwich": {"FD-BREAD": 0.25, "FD-CHICKEN": 0.15, "FD-EGGS": 0.05},
         "Paneer Tikka Roll": {"FD-PANEER": 0.18, "FD-BREAD": 0.15},
+        "Bombay Vada Pav": {"FD-BREAD": 0.2},
         "Butter Chicken": {"FD-CHICKEN": 0.3, "FD-BUTTER": 0.05},
         "Dal Makhani": {"FD-BUTTER": 0.04},
         "Goan Fish Curry": {"FD-FISH": 0.28},
         "Biryani (Veg)": {"FD-RICE": 0.25, "FD-PANEER": 0.08},
-        "Cold Coffee": {"BV-COFFEE": 0.02},
+        "Gulab Jamun": {"FD-BUTTER": 0.02},
+        "Tiramisu": {"BV-COFFEE": 0.01, "FD-BUTTER": 0.03},
         "Masala Chai": {"BV-TEA": 0.01},
-        "Continental Platter": {"FD-BREAD": 0.2, "FD-BUTTER": 0.02},
+        "Fresh Lime Soda": {},  # nothing tracked in the store
+        "Cold Coffee": {"BV-COFFEE": 0.02},
     }
+    missing = [name for _, name, *_ in MENU if name not in recipes]
+    if missing:
+        raise SystemExit(f"menu items without a recipe entry: {missing}")
 
     menu_count = 0
     for category, name, price, is_veg, prep, description in MENU:
@@ -465,6 +487,10 @@ def _seed(db) -> dict[str, int]:
     bookings = 0
     visits = 0
     category_list = list(categories.values())
+    # A year of bookings is ~35k rows. Six random hex characters collide long before
+    # that by the birthday paradox, so references are drawn from a counter here and
+    # uniqueness is a property of the seed rather than a gamble.
+    reference_seq = itertools.count(1)
     for days_ago in range(365, -14, -1):
         day = today - timedelta(days=days_ago)
         occupancy = min(0.97, max(0.25, random.gauss(0.68, 0.09) * season[day.month] * (1.12 if day.weekday() >= 4 else 1.0)))
@@ -478,7 +504,7 @@ def _seed(db) -> dict[str, int]:
                 property_id=pid,
                 guest_id=guest_row.id,
                 room_category_id=category.id,
-                reference="VS" + secrets.token_hex(3).upper(),
+                reference=_demo_reference(next(reference_seq)),
                 check_in_date=day,
                 check_out_date=day + timedelta(days=nights),
                 adults=random.randint(1, 2),

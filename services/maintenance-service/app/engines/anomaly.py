@@ -30,6 +30,11 @@ ISOLATION_FOREST_MIN_POINTS = 120
 ROBUST_Z_THRESHOLD = 3.5
 # Scale factor making MAD a consistent estimator of sigma for normal data.
 MAD_TO_SIGMA = 1.4826
+# Spread below this fraction of the signal's own magnitude is treated as no spread at
+# all. Detrending a clean linear series leaves residuals of around 1e-16; without this
+# floor, that floating-point noise is divided by itself and every reading looks like a
+# massive outlier.
+RELATIVE_NOISE_FLOOR = 1e-6
 
 
 @dataclass(slots=True)
@@ -69,32 +74,40 @@ def detect(readings: Sequence[Reading]) -> tuple[list[Anomaly], str]:
 
 
 def _robust_z(readings: list[Reading]) -> list[Anomaly]:
-    values = [r.value for r in readings]
+    """Robust z-score on the *detrended* series.
+
+    Testing the raw values hides exactly the failure we care about: as a chiller drifts
+    upward the median rises and the MAD widens with it, so late spikes sit inside a band
+    the drift itself inflated. Removing the linear trend first leaves the spikes standing
+    proud of it, which is the whole signature of a machine on its way out.
+
+    The trend is not lost — assess_risk scores it separately as its own driver.
+    """
+    values = _detrend([r.value for r in readings])
     median = statistics.median(values)
     deviations = [abs(v - median) for v in values]
     mad = statistics.median(deviations)
 
-    if mad == 0:
-        # A perfectly flat sensor: anything off the constant is worth a look, but a
-        # stuck sensor reading the same number forever is not an anomaly either.
-        spread = statistics.pstdev(values)
-        if spread == 0:
-            return []
-        scale = spread
-    else:
-        scale = mad * MAD_TO_SIGMA
+    scale = mad * MAD_TO_SIGMA if mad else statistics.pstdev(values)
+    if _is_negligible(scale, readings):
+        # Either a stuck sensor reading one number forever, or a perfectly clean signal
+        # whose residuals are floating-point dust. Neither is a failing machine.
+        return []
 
     anomalies: list[Anomaly] = []
-    for reading in readings:
-        z = abs(reading.value - median) / scale
+    for reading, residual in zip(readings, values, strict=True):
+        z = abs(residual - median) / scale
         if z >= ROBUST_Z_THRESHOLD:
-            direction = "above" if reading.value > median else "below"
+            direction = "above" if residual > median else "below"
             anomalies.append(
                 Anomaly(
                     recorded_at=reading.recorded_at,
                     value=reading.value,
                     score=round(min(1.0, z / (ROBUST_Z_THRESHOLD * 2)), 4),
-                    reason=f"{reading.value:.2f} is {z:.1f} deviations {direction} the normal {median:.2f}",
+                    reason=(
+                        f"{reading.value:.2f} is {z:.1f} deviations {direction} "
+                        f"this asset's underlying trend"
+                    ),
                 )
             )
     return anomalies
@@ -135,7 +148,11 @@ def _isolation_forest(readings: list[Reading]) -> list[Anomaly] | None:
         return None
 
     level_outlier = _robust_outlier_mask([r.value for r in readings])
-    delta_outlier = _robust_outlier_mask(deltas.flatten().tolist())
+    # Deltas are already a difference, so there is no trend left to remove. The first
+    # one is fabricated — np.diff prepends the opening value, making it exactly zero —
+    # so it is judged against the rest and never flagged on its own account.
+    delta_values = deltas.flatten().tolist()
+    delta_outlier = [False] + _robust_outlier_mask(delta_values[1:], detrend=False)
 
     median = float(np.median(values))
     anomalies: list[Anomaly] = []
@@ -159,14 +176,38 @@ def _isolation_forest(readings: list[Reading]) -> list[Anomaly] | None:
     return anomalies
 
 
-def _robust_outlier_mask(values: list[float]) -> list[bool]:
-    """Which values are genuinely far from the median, on the MAD scale."""
+def _is_negligible(scale: float, readings: list[Reading]) -> bool:
+    """Is this spread just noise, relative to what the sensor actually reads?"""
+    magnitude = max((abs(r.value) for r in readings), default=0.0) or 1.0
+    return scale <= magnitude * RELATIVE_NOISE_FLOOR
+
+
+def _detrend(values: list[float]) -> list[float]:
+    """Residuals after removing a least-squares straight line."""
+    n = len(values)
+    if n < MIN_POINTS:
+        return list(values)
+    mean_x = (n - 1) / 2
+    mean_y = statistics.fmean(values)
+    denominator = sum((i - mean_x) ** 2 for i in range(n))
+    if denominator == 0:
+        return list(values)
+    slope = sum((i - mean_x) * (v - mean_y) for i, v in enumerate(values)) / denominator
+    intercept = mean_y - slope * mean_x
+    return [v - (slope * i + intercept) for i, v in enumerate(values)]
+
+
+def _robust_outlier_mask(values: list[float], *, detrend: bool = True) -> list[bool]:
+    """Which values are genuinely far from normal, on the MAD scale."""
     if not values:
         return []
+    magnitude = max(abs(v) for v in values) or 1.0
+    if detrend:
+        values = _detrend(values)
     median = statistics.median(values)
     mad = statistics.median([abs(v - median) for v in values])
     scale = mad * MAD_TO_SIGMA if mad else statistics.pstdev(values)
-    if not scale:
+    if scale <= magnitude * RELATIVE_NOISE_FLOOR:
         return [False] * len(values)
     return [abs(v - median) / scale >= ROBUST_Z_THRESHOLD for v in values]
 
@@ -192,17 +233,36 @@ def assess_risk(
     drivers: list[dict] = []
     risk = 0.0
 
-    # 1. How much of the recent window looks wrong.
-    anomaly_rate = len(anomalies) / max(len(readings), 1)
-    if anomalies:
-        contribution = min(0.35, anomaly_rate * 3.5)
+    # 1. Unusual readings, weighted by how recent they are.
+    #
+    # Deliberately not a rate over the window: dividing by sample count means a longer
+    # history makes a failing machine look healthier, which is backwards. Three severe
+    # spikes yesterday is the same evidence whether we hold a fortnight of data or a
+    # year. Recency carries the weight instead, because a machine that misbehaved in
+    # March and has been fine since is not the one to send an engineer to today.
+    if anomalies and readings:
+        ordered = sorted(readings, key=lambda r: r.recorded_at)
+        window_start, window_end = ordered[0].recorded_at, ordered[-1].recorded_at
+        span = (window_end - window_start).total_seconds() or 1.0
+
+        weighted = 0.0
+        recent = 0
+        for item in anomalies:
+            position = (item.recorded_at - window_start).total_seconds() / span
+            # Linear from 0.25 at the start of the window to 1.0 at the end.
+            recency = 0.25 + 0.75 * max(0.0, min(1.0, position))
+            weighted += item.score * recency
+            if position >= 0.8:
+                recent += 1
+
+        # Saturating: the first couple of genuine anomalies carry most of the signal.
+        contribution = min(0.35, 0.18 * weighted)
         risk += contribution
+        detail = f"{len(anomalies)} unusual reading(s)"
+        if recent:
+            detail += f", {recent} in the most recent fifth of the window"
         drivers.append(
-            {
-                "label": "Sensor anomalies",
-                "detail": f"{len(anomalies)} unusual readings in the last {len(readings)} samples",
-                "weight": round(contribution, 3),
-            }
+            {"label": "Sensor anomalies", "detail": detail, "weight": round(contribution, 3)}
         )
 
     # 2. Direction of travel. A rising trend is worse than a noisy flat one.

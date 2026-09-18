@@ -56,27 +56,40 @@ class Prediction:
     features: dict
 
 
-def forecast(history: Sequence[Observation], horizon_days: int = 30) -> list[Prediction]:
-    """Predict occupancy for the next `horizon_days` nights."""
+def forecast(
+    history: Sequence[Observation],
+    horizon_days: int = 30,
+    *,
+    start: date | None = None,
+) -> list[Prediction]:
+    """Predict occupancy for `horizon_days` nights from `start` (default: tomorrow).
+
+    `start` is explicit because anchoring to the end of the history is wrong here. The
+    series already contains future nights — rooms sold weeks ahead are occupied nights,
+    not predictions — so anchoring to its last date skips the near-term dates the rate
+    card actually prices.
+    """
     if not history:
         return []
 
     ordered = sorted(history, key=lambda o: o.day)
+    first = start or (ordered[-1].day + timedelta(days=1))
+
     if len(ordered) >= PROPHET_MIN_DAYS:
-        predictions = _try_prophet(ordered, horizon_days)
+        predictions = _try_prophet(ordered, horizon_days, first)
         if predictions:
             return predictions
     if len(ordered) >= GRADIENT_MIN_DAYS:
-        predictions = _try_gradient(ordered, horizon_days)
+        predictions = _try_gradient(ordered, horizon_days, first)
         if predictions:
             return predictions
-    return _baseline(ordered, horizon_days)
+    return _baseline(ordered, horizon_days, first)
 
 
 # --- baseline ---------------------------------------------------------------------
 
 
-def _baseline(history: list[Observation], horizon_days: int) -> list[Prediction]:
+def _baseline(history: list[Observation], horizon_days: int, start: date) -> list[Prediction]:
     """Day-of-week means, a linear trend and a month multiplier.
 
     The interval comes from the observed spread within each weekday rather than a fixed
@@ -89,12 +102,11 @@ def _baseline(history: list[Observation], horizon_days: int) -> list[Prediction]
     overall_mean = statistics.fmean(o.occupancy for o in history)
     slope = _trend_slope([o.occupancy for o in history])
     recent_adr = statistics.fmean([o.adr for o in history[-30:]] or [0.0])
-    last_day = history[-1].day
     sample_size = len(history)
 
     predictions: list[Prediction] = []
     for step in range(1, horizon_days + 1):
-        target = last_day + timedelta(days=step)
+        target = start + timedelta(days=step - 1)
         weekday_values = by_weekday.get(target.weekday(), [])
         weekday_mean = statistics.fmean(weekday_values) if weekday_values else overall_mean
         spread = statistics.pstdev(weekday_values) if len(weekday_values) > 2 else overall_mean * 0.15
@@ -146,12 +158,20 @@ def _trend_slope(values: list[float]) -> float:
     return max(-0.002, min(0.002, numerator / denominator))
 
 
+# A day-of-week mean with a linear trend is a reasonable forecast, not an authoritative
+# one. Capping it well below certainty keeps the pricing page honest: a card claiming
+# 99% confidence off a baseline with a 20-point interval invites a decision the method
+# cannot support. Prophet and the gradient model report their own, higher, ceilings.
+BASELINE_MAX_CONFIDENCE = 0.72
+
+
 def _confidence(sample_size: int, weekday_samples: int, step: int, horizon: int) -> float:
     """How much to trust this number, before the action queue scales it again."""
     history_factor = min(1.0, sample_size / 180)
     weekday_factor = min(1.0, weekday_samples / 12)
+    evidence = 0.35 + 0.4 * history_factor + 0.25 * weekday_factor
     distance_penalty = 1.0 - 0.35 * (step / horizon)
-    return max(0.15, 0.35 + 0.4 * history_factor + 0.25 * weekday_factor) * distance_penalty
+    return max(0.15, min(BASELINE_MAX_CONFIDENCE, evidence) * distance_penalty)
 
 
 def _clamp(value: float) -> float:
@@ -161,7 +181,7 @@ def _clamp(value: float) -> float:
 # --- optional heavier models -------------------------------------------------------
 
 
-def _try_prophet(history: list[Observation], horizon_days: int) -> list[Prediction] | None:
+def _try_prophet(history: list[Observation], horizon_days: int, start: date) -> list[Prediction] | None:
     try:
         import pandas as pd
         from prophet import Prophet
@@ -179,8 +199,13 @@ def _try_prophet(history: list[Observation], horizon_days: int) -> list[Predicti
             interval_width=0.8,
         )
         model.fit(frame)
-        future = model.make_future_dataframe(periods=horizon_days)
-        result = model.predict(future).tail(horizon_days)
+        # Project far enough to cover the window even when it starts before the end of
+        # the history, then keep only the nights asked for.
+        wanted = {start + timedelta(days=i) for i in range(horizon_days)}
+        reach = max(horizon_days, (max(wanted) - history[-1].day).days + 1)
+        future = model.make_future_dataframe(periods=max(reach, 1))
+        predicted = model.predict(future)
+        result = predicted[predicted["ds"].dt.date.isin(wanted)]
     except Exception:
         # A fit that blows up must not take the pricing page down with it.
         log.exception("Prophet fit failed; falling back to the baseline")
@@ -206,7 +231,7 @@ def _try_prophet(history: list[Observation], horizon_days: int) -> list[Predicti
     return predictions
 
 
-def _try_gradient(history: list[Observation], horizon_days: int) -> list[Prediction] | None:
+def _try_gradient(history: list[Observation], horizon_days: int, start: date) -> list[Prediction] | None:
     """Gradient boosting on calendar features.
 
     Tree models cannot extrapolate a trend, so this is only used when there is enough
@@ -229,8 +254,7 @@ def _try_gradient(history: list[Observation], horizon_days: int) -> list[Predict
         residuals = targets - model.predict(features)
         spread = float(np.std(residuals))
 
-        last_day = history[-1].day
-        future_days = [last_day + timedelta(days=s) for s in range(1, horizon_days + 1)]
+        future_days = [start + timedelta(days=s) for s in range(horizon_days)]
         future_features = np.array([_calendar_features(d) for d in future_days])
         points = model.predict(future_features)
     except Exception:

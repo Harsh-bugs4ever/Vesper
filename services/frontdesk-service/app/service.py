@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from vesper_common.clients import guest as guest_client
@@ -21,8 +21,25 @@ from .models import Booking, BookingStatus, GuestVisit, Stay, StayStatus, VisitK
 REFERENCE_ALPHABET = string.ascii_uppercase + string.digits
 
 
+# Six characters from a 36-letter alphabet is 2.2 billion combinations — plenty for one
+# property, but "unlikely" is not "impossible", and a booking reference is unique in the
+# database. Collisions are retried rather than returned to the front desk as a 500.
+REFERENCE_ATTEMPTS = 5
+
+
 def _reference() -> str:
     return "VS" + "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(6))
+
+
+def _unique_reference(db: Session, property_id: UUID) -> str:
+    for _ in range(REFERENCE_ATTEMPTS):
+        candidate = _reference()
+        clash = select(Booking).where(
+            Booking.property_id == property_id, Booking.reference == candidate
+        )
+        if db.scalars(clash).first() is None:
+            return candidate
+    raise Conflict("Could not allocate a booking reference — please try again")
 
 
 def get_booking(db: Session, property_id: UUID, booking_id: UUID) -> Booking:
@@ -63,7 +80,7 @@ def create_booking(db: Session, property_id: UUID, data, *, actor_id: str | None
         property_id=property_id,
         guest_id=data.guest_id,
         room_category_id=data.room_category_id,
-        reference=_reference(),
+        reference=_unique_reference(db, property_id),
         check_in_date=data.check_in_date,
         check_out_date=data.check_out_date,
         adults=data.adults,
@@ -304,24 +321,47 @@ def arrivals_and_departures(db: Session, property_id: UUID, day: date | None = N
 
 
 def occupancy_history(db: Session, property_id: UUID, *, days: int = 180) -> list[dict]:
-    """Nightly room-nights sold, the training series for the demand forecast."""
+    """Room-nights occupied per night — the series the demand forecast is fitted on.
+
+    Counting arrivals per date is the tempting shortcut and it is wrong: with an average
+    stay of 2.4 nights it under-reports occupancy by roughly that factor, because a guest
+    who checks in on Monday for three nights occupies a room on Tuesday and Wednesday
+    too. That error flows straight into the rate card, so each booking is expanded across
+    the nights it actually covers.
+
+    The check-out date is excluded: a guest leaving on Thursday did not sleep there on
+    Thursday night.
+    """
     since = local_today() - timedelta(days=days)
     rows = db.execute(
-        select(
-            Booking.check_in_date.label("day"),
-            func.count(Booking.id).label("bookings"),
-            func.avg(Booking.rate).label("average_rate"),
-        )
-        .where(
-            Booking.property_id == property_id,
-            Booking.check_in_date >= since,
-            Booking.status.notin_([BookingStatus.CANCELLED, BookingStatus.NO_SHOW]),
-        )
-        .group_by(Booking.check_in_date)
-        .order_by(Booking.check_in_date)
+        text(
+            """
+            SELECT night::date AS day,
+                   count(*)    AS rooms_occupied,
+                   avg(b.rate) AS average_rate
+            FROM frontdesk.bookings b
+            CROSS JOIN LATERAL generate_series(
+                b.check_in_date,
+                b.check_out_date - INTERVAL '1 day',
+                INTERVAL '1 day'
+            ) AS night
+            WHERE b.property_id = :property_id
+              AND b.status NOT IN ('cancelled', 'no_show')
+              AND night >= :since
+            GROUP BY night
+            ORDER BY night
+            """
+        ),
+        {"property_id": property_id, "since": since},
     ).all()
     return [
-        {"date": r.day.isoformat(), "bookings": r.bookings, "average_rate": float(r.average_rate or 0)}
+        {
+            "date": r.day.isoformat(),
+            # Kept as `bookings` for the existing contract; it is rooms occupied.
+            "bookings": r.rooms_occupied,
+            "rooms_occupied": r.rooms_occupied,
+            "average_rate": float(r.average_rate or 0),
+        }
         for r in rows
     ]
 

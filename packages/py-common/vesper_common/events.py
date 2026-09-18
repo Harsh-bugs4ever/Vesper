@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
@@ -28,6 +29,15 @@ log = logging.getLogger(__name__)
 STREAM = "vesper:events"
 CHANNEL = "vesper:broadcast"
 MAXLEN = 50_000
+
+# Redis is on the same network as the service; half a second is generous. Without an
+# explicit timeout a publish blocks on the OS connect timeout instead — measured at
+# roughly two seconds each with Redis down, which a guest waits for.
+SOCKET_TIMEOUT_SECONDS = 0.5
+# After this many consecutive failures, stop trying until the cooldown expires. Retrying
+# every publish turns one outage into latency on every single write in the product.
+FAILURE_THRESHOLD = 3
+COOLDOWN_SECONDS = 15.0
 
 
 class Event(StrEnum):
@@ -112,12 +122,41 @@ class EventBus:
     def __init__(self, url: str | None = None) -> None:
         self._url = url or settings.redis_url
         self._client: redis.Redis | None = None
+        self._failures = 0
+        self._retry_after = 0.0
 
     @property
     def client(self) -> redis.Redis:
         if self._client is None:
-            self._client = redis.Redis.from_url(self._url, decode_responses=True)
+            self._client = redis.Redis.from_url(
+                self._url,
+                decode_responses=True,
+                socket_timeout=SOCKET_TIMEOUT_SECONDS,
+                socket_connect_timeout=SOCKET_TIMEOUT_SECONDS,
+            )
         return self._client
+
+    @property
+    def available(self) -> bool:
+        """False while the breaker is open, so callers skip Redis entirely."""
+        return time.monotonic() >= self._retry_after
+
+    def _record_failure(self) -> None:
+        self._failures += 1
+        if self._failures >= FAILURE_THRESHOLD:
+            self._retry_after = time.monotonic() + COOLDOWN_SECONDS
+            log.warning(
+                "event bus unreachable after %s attempts; pausing for %ss",
+                self._failures,
+                COOLDOWN_SECONDS,
+            )
+            self._failures = 0
+            # Drop the client so the next attempt reconnects cleanly.
+            self._client = None
+
+    def _record_success(self) -> None:
+        self._failures = 0
+        self._retry_after = 0.0
 
     def publish(
         self,
@@ -128,13 +167,21 @@ class EventBus:
         actor_id: str | None = None,
     ) -> str | None:
         envelope = Envelope(str(name), payload, property_id=property_id, actor_id=actor_id)
+        if not self.available:
+            # The breaker is open. Dropping the event costs a live update; waiting on a
+            # dead Redis would cost the guest two seconds on their order.
+            log.debug("event bus paused, dropped %s", envelope.name)
+            return None
+
         wire = envelope.to_wire()
         try:
             self.client.xadd(STREAM, wire, maxlen=MAXLEN, approximate=True)
             self.client.publish(CHANNEL, json.dumps(wire))
-        except redis.RedisError:
-            log.warning("event bus unavailable, dropped %s", envelope.name, exc_info=True)
+        except (redis.RedisError, OSError):
+            log.warning("event bus unavailable, dropped %s", envelope.name)
+            self._record_failure()
             return None
+        self._record_success()
         return envelope.id
 
     def subscribe(
@@ -181,9 +228,12 @@ class EventBus:
 
     def recent(self, count: int = 50) -> list[Envelope]:
         """Backing data for the dashboard's live feed on first paint."""
+        if not self.available:
+            return []
         try:
             entries = self.client.xrevrange(STREAM, count=count)
-        except redis.RedisError:
+        except (redis.RedisError, OSError):
+            self._record_failure()
             return []
         return [Envelope.from_wire(raw) for _id, raw in entries]
 

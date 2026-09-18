@@ -170,3 +170,32 @@ def test_suggested_rate_is_always_positive(occupancy):
         base_rate=10000, prediction=_prediction(occupancy), competitor_median=None
     )
     assert rate > 0
+
+
+def test_forecast_starts_where_it_is_told_not_where_history_ends():
+    """Nights already sold are occupancy, not predictions.
+
+    Anchoring to the end of the series skipped the near-term dates the rate card prices,
+    because the history contains bookings weeks ahead.
+    """
+    history = make_history(days=120)
+    last_historical = history[-1].day
+    start = last_historical - timedelta(days=10)
+
+    predictions = demand.forecast(history, horizon_days=14, start=start)
+    assert predictions[0].day == start
+    assert len(predictions) == 14
+    assert predictions[-1].day == start + timedelta(days=13)
+
+
+def test_forecast_defaults_to_the_day_after_the_history():
+    history = make_history(days=60)
+    predictions = demand.forecast(history, horizon_days=5)
+    assert predictions[0].day == history[-1].day + timedelta(days=1)
+
+
+def test_baseline_confidence_is_capped_below_certainty():
+    """A day-of-week mean with a 20-point band must not claim 99%."""
+    for prediction in demand.forecast(make_history(days=365), horizon_days=30):
+        if prediction.model == "baseline":
+            assert prediction.confidence <= demand.BASELINE_MAX_CONFIDENCE

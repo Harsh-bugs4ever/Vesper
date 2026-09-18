@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ListTodo, BedDouble, QrCode, AlertTriangle } from "lucide-react";
+import { ListTodo, BedDouble, QrCode, AlertTriangle, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface StaffBottomNavProps {
@@ -9,13 +9,27 @@ interface StaffBottomNavProps {
   onSelectTab: (tab: "tasks" | "rooms" | "scan" | "report") => void;
 }
 
+type StaffTab = StaffBottomNavProps["activeTab"];
+
+interface NavTab {
+  id: StaffTab;
+  label: string;
+  icon: LucideIcon;
+  /** Unread badge, when the tab has one. */
+  count?: number;
+  /** The raised centre button. */
+  isFab?: boolean;
+}
+
 export function StaffBottomNav({ activeTab, onSelectTab }: StaffBottomNavProps) {
-  const tabs = [
+  // Typed rather than `as const`: that gave each entry its own literal type, so the
+  // union had no common `count` or `isFab` to read.
+  const tabs: NavTab[] = [
     { id: "tasks", label: "My Tasks", icon: ListTodo, count: 3 },
     { id: "rooms", label: "Room Board", icon: BedDouble },
     { id: "scan", label: "QR Scan", icon: QrCode, isFab: true },
     { id: "report", label: "Log Issue", icon: AlertTriangle },
-  ] as const;
+  ];
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-sand-200 py-1 px-4 shadow-elevated">

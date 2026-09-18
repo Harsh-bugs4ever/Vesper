@@ -114,11 +114,19 @@ def import_all_models(services_root: str | None = None) -> None:
     """
     import importlib.util
     import sys
+    import types
     from pathlib import Path
 
     root = Path(services_root) if services_root else Path(__file__).resolve().parents[3] / "services"
     if not root.is_dir():
         return
+
+    # Register the parent namespace first. Without it, `import vesper_models.staff_service`
+    # fails on the parent lookup even though the submodule is already in sys.modules.
+    if "vesper_models" not in sys.modules:
+        parent = types.ModuleType("vesper_models")
+        parent.__path__ = []  # a namespace package, with no directory of its own
+        sys.modules["vesper_models"] = parent
     for models_file in sorted(root.glob("*/app/models.py")):
         service = models_file.parents[1].name.replace("-", "_")
         module_name = f"vesper_models.{service}"
@@ -130,6 +138,8 @@ def import_all_models(services_root: str | None = None) -> None:
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
+        # Expose it as an attribute too, so `from vesper_models import staff_service` works.
+        setattr(sys.modules["vesper_models"], service, module)
 
 
 def json_default(value: Any) -> Any:

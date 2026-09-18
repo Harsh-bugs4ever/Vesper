@@ -59,7 +59,10 @@ async def close_client() -> None:
 
 
 def _error(status_code: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code, content={"error": {"code": code, "message": message}})
+    # content is JSONResponse's first positional argument, so status_code is named.
+    return JSONResponse(
+        content={"error": {"code": code, "message": message}}, status_code=status_code
+    )
 
 
 @router.api_route(

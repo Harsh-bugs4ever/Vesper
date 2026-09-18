@@ -47,6 +47,7 @@ ROUTES: tuple[Route, ...] = (
     Route("/stays", settings.frontdesk_url),
     Route("/visits", settings.frontdesk_url),
     Route("/cards", settings.action_url),
+    Route("/dashboard", settings.action_url),
     Route("/learning", settings.action_url),
     Route("/audit", settings.action_url),
     Route("/revenue", settings.revenue_url),

@@ -58,7 +58,11 @@ def generate_forecast(db: Session, property_id: UUID, *, horizon: int = FORECAST
     if not history:
         raise Invalid("Not enough booking history to forecast yet")
 
-    predictions = demand.forecast(history, horizon_days=horizon)
+    # Anchored to tomorrow, not to the end of the history: nights already sold are
+    # occupancy, and the rate card prices the fortnight starting now.
+    predictions = demand.forecast(
+        history, horizon_days=horizon, start=local_today() + timedelta(days=1)
+    )
     now = utcnow()
     stored: list[DemandForecast] = []
     for prediction in predictions:

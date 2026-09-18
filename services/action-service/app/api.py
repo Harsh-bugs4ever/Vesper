@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
@@ -8,6 +8,7 @@ from vesper_common.db import get_session
 from vesper_common.permissions import Perm
 from vesper_common.security import Principal, current_user, requires
 
+from . import dashboard as dashboard_builder
 from . import service
 from .models import ActionCard
 from .schemas import (
@@ -26,6 +27,7 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/cards", tags=["action-cards"])
+dashboard_router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 learning_router = APIRouter(prefix="/learning", tags=["learning"])
 audit_router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -216,3 +218,22 @@ def record_audit(
         note=body.note,
     )
     return AuditOut.model_validate(entry)
+
+
+@dashboard_router.get("", response_model=dict)
+def dashboard(
+    request: Request,
+    live_feed: int = Query(default=15, ge=0, le=50),
+    principal: Principal = Depends(requires(Perm.DASHBOARD_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    """Every tile on the owner dashboard in one call.
+
+    The caller's own token is forwarded to each service, so the dashboard shows exactly
+    what this person is allowed to see rather than widening to a service principal.
+    Tiles that could not be loaded come back null and are named in `unavailable`.
+    """
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip() or None
+    return dashboard_builder.build(
+        db, UUID(principal.property_id), token=token, live_feed=live_feed
+    )

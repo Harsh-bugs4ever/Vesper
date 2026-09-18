@@ -44,14 +44,15 @@ def _body(code: str, message: str, details: dict | None = None) -> dict:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(VesperError)
     async def _vesper(_: Request, exc: VesperError) -> JSONResponse:
-        return JSONResponse(exc.status_code, content=_body(exc.code, exc.message, exc.details))
+        return JSONResponse(content=_body(exc.code, exc.message, exc.details), status_code=exc.status_code)
 
     @app.exception_handler(HTTPException)
     async def _http(_: Request, exc: HTTPException) -> JSONResponse:
-        return JSONResponse(exc.status_code, content=_body("http_error", str(exc.detail)))
+        return JSONResponse(content=_body("http_error", str(exc.detail)), status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(
-            422, content=_body("invalid", "Request validation failed", {"errors": exc.errors()})
+            content=_body("invalid", "Request validation failed", {"errors": exc.errors()}),
+            status_code=422,
         )

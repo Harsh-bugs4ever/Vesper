@@ -1765,6 +1765,59 @@
         ]
       }
     },
+    "/dashboard": {
+      "get": {
+        "description": "Every tile on the owner dashboard in one call.\n\nThe caller's own token is forwarded to each service, so the dashboard shows exactly\nwhat this person is allowed to see rather than widening to a service principal.\nTiles that could not be loaded come back null and are named in `unavailable`.",
+        "operationId": "dashboard_dashboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "live_feed",
+            "required": false,
+            "schema": {
+              "default": 15,
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Live Feed",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dashboard Dashboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dashboard",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",

@@ -8,7 +8,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Every variable is VESPER_-prefixed: VESPER_DATABASE_URL sets `database_url`.
+    # Without the prefix a stray DATABASE_URL or DEBUG from the surrounding shell would
+    # silently reconfigure the service, and the compose file's settings would be ignored.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="VESPER_", extra="ignore", case_sensitive=False
+    )
 
     service_name: str = "vesper"
     environment: str = "development"

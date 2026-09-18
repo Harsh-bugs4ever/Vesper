@@ -15,7 +15,7 @@ sys.path.insert(0, str(SERVICE_ROOT))
 sys.path.insert(0, str(SERVICE_ROOT.parents[1] / "packages" / "py-common"))
 
 from app.engines import anomaly  # noqa: E402
-from app.engines.anomaly import Reading  # noqa: E402
+from app.engines.anomaly import Anomaly, Reading  # noqa: E402
 
 START = datetime(2026, 9, 1, tzinfo=timezone.utc)
 TODAY = date(2026, 9, 17)
@@ -175,3 +175,57 @@ def test_service_window_picks_the_quietest_night():
 
 def test_no_forecast_means_no_window_rather_than_a_bad_one():
     assert anomaly.suggest_service_window([]) is None
+
+
+def test_spikes_on_a_rising_trend_are_still_caught():
+    """The failing-chiller signature: a drift with spikes on top.
+
+    Without detrending, the rising median and widening MAD swallow the spikes — the
+    machine hides its own failure inside the trend it is causing.
+    """
+    readings = []
+    for i in range(200):
+        level = 2.4 + (i / 200) * 1.4  # a steady climb
+        if i > 180 and i % 4 == 0:
+            level += 1.8  # intermittent spikes late on
+        readings.append(Reading(recorded_at=START + timedelta(hours=2 * i), value=level))
+
+    anomalies, _method = anomaly.detect(readings)
+    assert anomalies, "spikes riding a trend must still register"
+    # Every one should come from the late, spiking part of the window.
+    assert all(a.recorded_at > START + timedelta(hours=2 * 175) for a in anomalies)
+
+
+def test_a_pure_trend_with_no_spikes_raises_no_anomalies():
+    """A smooth drift is a trend, not an anomaly — assess_risk scores it separately."""
+    smooth = [
+        Reading(recorded_at=START + timedelta(hours=2 * i), value=2.4 + (i / 200) * 1.4)
+        for i in range(200)
+    ]
+    anomalies, _ = anomaly.detect(smooth)
+    assert anomalies == []
+
+
+def test_recent_anomalies_outweigh_old_ones():
+    """An engineer is sent to the machine misbehaving now, not the one that did in March."""
+    readings = steady(n=200)
+
+    def anomaly_at(when):
+        return [Anomaly(recorded_at=when, value=40.0, score=1.0, reason="spike")]
+
+    early = _assess(readings, anomaly_at(readings[2].recorded_at), "robust_z")
+    late = _assess(readings, anomaly_at(readings[-1].recorded_at), "robust_z")
+    assert late.risk_score > early.risk_score
+
+
+def test_more_history_does_not_make_a_failing_machine_look_healthier():
+    """The bug in a rate-over-window formulation: the denominator grows, the signal shrinks."""
+    short_window = steady(n=60)
+    long_window = steady(n=400)
+
+    def spike_at_end(readings):
+        return [Anomaly(recorded_at=readings[-1].recorded_at, value=40.0, score=1.0, reason="spike")]
+
+    short = _assess(short_window, spike_at_end(short_window), "robust_z")
+    long = _assess(long_window, spike_at_end(long_window), "robust_z")
+    assert long.risk_score == short.risk_score
