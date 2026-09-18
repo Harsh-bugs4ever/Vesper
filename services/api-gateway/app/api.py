@@ -65,6 +65,9 @@ def _error(status_code: int, code: str, message: str) -> JSONResponse:
 @router.api_route(
     "/{full_path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    # The gateway has no API of its own to document — each service publishes its own
+    # schema, and a catch-all wildcard in the docs would describe nothing.
+    include_in_schema=False,
 )
 async def proxy(full_path: str, request: Request) -> Response:
     path = "/" + full_path.lstrip("/")

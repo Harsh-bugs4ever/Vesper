@@ -14,6 +14,7 @@ import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
+from itertools import pairwise
 
 
 @dataclass(slots=True)
@@ -59,12 +60,27 @@ SEGMENTS = ((10, "loyal"), (4, "regular"), (2, "occasional"), (0, "new"))
 
 # Complaint themes we can name from a comment, for the sentiment trend chart.
 THEME_KEYWORDS = {
-    "cleanliness": {"clean", "dirty", "filthy", "unclean", "dust", "stain", "smell", "smelly"},
-    "service speed": {"slow", "wait", "waited", "waiting", "late", "delayed", "forgot"},
-    "staff attitude": {"rude", "unhelpful", "ignored", "polite", "friendly", "attentive"},
-    "food quality": {"food", "cold", "stale", "tasty", "delicious", "breakfast", "dinner"},
-    "room comfort": {"bed", "pillow", "noisy", "noise", "ac", "air", "hot", "cramped"},
-    "value": {"expensive", "overpriced", "value", "charge", "bill", "refund"},
+    "cleanliness": {
+        "clean", "cleaned", "dirty", "filthy", "unclean", "dust", "dusty", "stain",
+        "stained", "smell", "smells", "smelly", "hygiene", "mould", "grubby",
+    },
+    "service speed": {
+        "slow", "slowly", "wait", "waited", "waiting", "late", "delayed", "forgot",
+        "forgotten", "delay",
+    },
+    "staff attitude": {
+        "rude", "unhelpful", "ignored", "polite", "friendly", "attentive", "helpful",
+        "courteous",
+    },
+    "food quality": {
+        "food", "cold", "stale", "tasty", "delicious", "breakfast", "dinner", "lunch",
+        "undercooked", "bland",
+    },
+    "room comfort": {
+        "bed", "pillow", "noisy", "noise", "ac", "air", "hot", "cramped", "mattress",
+        "stuffy",
+    },
+    "value": {"expensive", "overpriced", "value", "charge", "charged", "bill", "refund"},
 }
 
 
@@ -206,7 +222,7 @@ def assess_risk(
             suggested_offer=None,
         )
 
-    gaps = [(b - a).days for a, b in zip(ordered, ordered[1:], strict=True)]
+    gaps = [(b - a).days for a, b in pairwise(ordered)]
     typical_gap = statistics.median(gaps)
     risk = 0.0
 

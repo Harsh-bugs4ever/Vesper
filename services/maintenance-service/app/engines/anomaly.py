@@ -101,6 +101,19 @@ def _robust_z(readings: list[Reading]) -> list[Anomaly]:
 
 
 def _isolation_forest(readings: list[Reading]) -> list[Anomaly] | None:
+    """Isolation Forest over (level, rate-of-change), gated by an absolute test.
+
+    The gate matters. `contamination` is a prior on what fraction of points are
+    outliers, so a fixed value flags that fraction *by construction* — a perfectly
+    healthy chiller would report 5% of its readings as anomalies, and a team that gets
+    three false alarms stops reading the fourth. `contamination="auto"` helps but still
+    has no notion of "this machine is simply fine".
+
+    So the forest ranks and scores, and a point is only reported if it is also genuinely
+    far from normal on its level or its rate of change. The forest earns its place by
+    catching combinations a level-only test misses — a reading inside the normal band
+    that arrived via an abnormal jump — while the gate keeps a healthy asset silent.
+    """
     try:
         import numpy as np
         from sklearn.ensemble import IsolationForest
@@ -114,28 +127,48 @@ def _isolation_forest(readings: list[Reading]) -> list[Anomaly] | None:
         deltas = np.diff(values.flatten(), prepend=values[0][0]).reshape(-1, 1)
         features = np.hstack([values, deltas])
 
-        model = IsolationForest(contamination=0.05, random_state=42, n_estimators=150)
+        model = IsolationForest(contamination="auto", random_state=42, n_estimators=150)
         predictions = model.fit_predict(features)
         scores = model.score_samples(features)
     except Exception:
         log.exception("Isolation Forest failed; falling back to robust z-score")
         return None
 
+    level_outlier = _robust_outlier_mask([r.value for r in readings])
+    delta_outlier = _robust_outlier_mask(deltas.flatten().tolist())
+
     median = float(np.median(values))
     anomalies: list[Anomaly] = []
-    for reading, prediction, score in zip(readings, predictions, scores, strict=True):
-        if prediction == -1:
-            direction = "above" if reading.value > median else "below"
-            anomalies.append(
-                Anomaly(
-                    recorded_at=reading.recorded_at,
-                    value=reading.value,
-                    # score_samples is negative, more negative being more anomalous.
-                    score=round(min(1.0, float(-score)), 4),
-                    reason=f"{reading.value:.2f} sits well {direction} this asset's normal pattern",
-                )
+    for index, (reading, prediction, score) in enumerate(
+        zip(readings, predictions, scores, strict=True)
+    ):
+        if prediction != -1:
+            continue
+        if not (level_outlier[index] or delta_outlier[index]):
+            continue  # unusual to the forest, but not actually far from normal
+        direction = "above" if reading.value > median else "below"
+        anomalies.append(
+            Anomaly(
+                recorded_at=reading.recorded_at,
+                value=reading.value,
+                # score_samples is negative, more negative being more anomalous.
+                score=round(min(1.0, float(-score)), 4),
+                reason=f"{reading.value:.2f} sits well {direction} this asset's normal pattern",
             )
+        )
     return anomalies
+
+
+def _robust_outlier_mask(values: list[float]) -> list[bool]:
+    """Which values are genuinely far from the median, on the MAD scale."""
+    if not values:
+        return []
+    median = statistics.median(values)
+    mad = statistics.median([abs(v - median) for v in values])
+    scale = mad * MAD_TO_SIGMA if mad else statistics.pstdev(values)
+    if not scale:
+        return [False] * len(values)
+    return [abs(v - median) / scale >= ROBUST_Z_THRESHOLD for v in values]
 
 
 def assess_risk(

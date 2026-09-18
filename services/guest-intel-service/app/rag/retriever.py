@@ -49,8 +49,29 @@ class Hit:
     score: float
 
 
+def _normalise(token: str) -> str:
+    """Fold the most common English inflections.
+
+    Deliberately not a real stemmer: guests ask "can I bring my dog" about a passage
+    that says "guide dogs", and "what are the pool timing" about "timings". Plurals and
+    -ing/-ed endings cover nearly all of that. Because the same folding runs over both
+    the passages and the query, an over-aggressive fold still matches consistently — it
+    costs a little precision, never a hit.
+    """
+    for suffix, minimum in (("ies", 5), ("es", 5), ("s", 4), ("ing", 6), ("ed", 5)):
+        if len(token) >= minimum and token.endswith(suffix):
+            if suffix == "ies":
+                return token[:-3] + "y"
+            return token[: -len(suffix)]
+    return token
+
+
 def tokenise(text: str) -> list[str]:
-    return [t for t in TOKEN_RE.findall(text.lower()) if t not in STOPWORDS and len(t) > 1]
+    return [
+        _normalise(t)
+        for t in TOKEN_RE.findall(text.lower())
+        if t not in STOPWORDS and len(t) > 1
+    ]
 
 
 class Retriever:
