@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Strict Light Theme - Vesper Luxury Resort Tokens */
+    --background: 38 33% 97%; /* #FAF8F5 Warm Sand / Ivory canvas */
+    --foreground: 154 15% 15%; /* #212B26 Deep Slate Charcoal */
+
+    --card: 0 0% 100%; /* #FFFFFF Crisp White Card */
+    --card-foreground: 154 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 154 15% 15%;
+
+    --primary: 146 22% 34%; /* #446954 Refined Heritage Sage */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 38 35% 93%; /* #F4EFE6 Soft Linen / Sand */
+    --secondary-foreground: 154 22% 20%;
+
+    --muted: 140 12% 94%; /* #EDF2EE */
+    --muted-foreground: 150 10% 40%; /* #5C6F65 */
+
+    --accent: 43 65% 47%; /* #C59A2A Warm Metallic Gold */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%; /* #DC2626 Coral Red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 38 22% 88%; /* #E8DED0 Subtle Sand Border */
+    --input: 38 22% 88%;
+    --ring: 146 22% 34%;
+
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+    background-color: #faf8f5;
+    color: #212b26;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-serif-title {
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Luxury Resort Custom Styles & Accents */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 222, 208, 0.7);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #a77c1c 0%, #c59a2a 50%, #e1c269 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sage-gradient-bg {
+  background: linear-gradient(135deg, #446954 0%, #325140 100%);
+}
+
+.sand-card {
+  background: #ffffff;
+  border: 1px solid #e8ded0;
+  box-shadow: 0 2px 8px -2px rgba(44, 62, 51, 0.04);
+}
+
+/* Custom Scrollbar for Luxury Aesthetics */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #faf8f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c8dad0;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a3c0af;
+}
