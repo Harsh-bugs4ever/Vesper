@@ -1,14 +1,17 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { User, UserRole, DEMO_USERS } from "@/lib/auth";
+import { User, UserRole, DEMO_USERS, DEFAULT_ROLE_PERMISSIONS } from "@/lib/auth";
 
 interface AuthContextType {
   user: User;
   role: UserRole;
+  rolePermissions: Record<UserRole, string[]>;
   login: (role: UserRole) => void;
   logout: () => void;
   switchRole: (role: UserRole) => void;
+  updateRolePermissions: (role: UserRole, permissions: string[]) => void;
+  resetPermissions: () => void;
   hasPermission: (permission: string) => boolean;
   isAdmin: boolean;
   isStaff: boolean;
@@ -17,24 +20,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = "vesper_auth_role";
+const STORAGE_KEY_ROLE = "vesper_auth_role";
+const STORAGE_KEY_PERMISSIONS = "vesper_role_permissions";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>("general_manager");
+  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(DEFAULT_ROLE_PERMISSIONS);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem(STORAGE_KEY) as UserRole | null;
-    if (saved && DEMO_USERS[saved]) {
-      setRole(saved);
+    const savedRole = localStorage.getItem(STORAGE_KEY_ROLE) as UserRole | null;
+    if (savedRole && DEMO_USERS[savedRole]) {
+      setRole(savedRole);
+    }
+
+    try {
+      const savedPerms = localStorage.getItem(STORAGE_KEY_PERMISSIONS);
+      if (savedPerms) {
+        setRolePermissions(JSON.parse(savedPerms));
+      }
+    } catch {
+      // Fallback to default
     }
   }, []);
 
   const switchRole = (newRole: UserRole) => {
     if (DEMO_USERS[newRole]) {
       setRole(newRole);
-      localStorage.setItem(STORAGE_KEY, newRole);
+      localStorage.setItem(STORAGE_KEY_ROLE, newRole);
     }
   };
 
@@ -44,14 +58,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setRole("general_manager");
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY_ROLE);
   };
 
-  const user = DEMO_USERS[role];
+  const updateRolePermissions = (targetRole: UserRole, newPerms: string[]) => {
+    setRolePermissions((prev) => {
+      const updated = {
+        ...prev,
+        [targetRole]: newPerms,
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY_PERMISSIONS, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const resetPermissions = () => {
+    setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+    try {
+      localStorage.removeItem(STORAGE_KEY_PERMISSIONS);
+    } catch {}
+  };
+
+  // Merge active permissions for current role
+  const activePermissions = rolePermissions[role] || DEMO_USERS[role].permissions;
+
+  const user: User = {
+    ...DEMO_USERS[role],
+    permissions: activePermissions,
+  };
 
   const hasPermission = (permission: string): boolean => {
-    if (user.permissions.includes("all")) return true;
-    return user.permissions.includes(permission);
+    if (activePermissions.includes("all")) return true;
+    return activePermissions.includes(permission);
   };
 
   const isAdmin = ["general_manager", "dept_manager_fb", "dept_manager_hk", "system_admin"].includes(role);
@@ -59,16 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isGuest = role === "guest";
 
   if (!mounted) {
-    // Avoid hydration mismatch by rendering default GM
     return (
       <AuthContext.Provider
         value={{
           user: DEMO_USERS.general_manager,
           role: "general_manager",
+          rolePermissions: DEFAULT_ROLE_PERMISSIONS,
           login,
           logout,
           switchRole,
-          hasPermission,
+          updateRolePermissions,
+          resetPermissions,
+          hasPermission: () => true,
           isAdmin: true,
           isStaff: false,
           isGuest: false,
@@ -84,9 +126,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         role,
+        rolePermissions,
         login,
         logout,
         switchRole,
+        updateRolePermissions,
+        resetPermissions,
         hasPermission,
         isAdmin,
         isStaff,

@@ -1,20 +1,47 @@
 "use client";
 
 import React from "react";
-import { ListTodo, BedDouble, QrCode, AlertTriangle } from "lucide-react";
+import { ListTodo, BedDouble, QrCode, AlertTriangle, UtensilsCrossed, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth/auth-context";
 
 interface StaffBottomNavProps {
   activeTab: "tasks" | "rooms" | "scan" | "report";
   onSelectTab: (tab: "tasks" | "rooms" | "scan" | "report") => void;
+  pendingTasksCount?: number;
 }
 
-export function StaffBottomNav({ activeTab, onSelectTab }: StaffBottomNavProps) {
+export function StaffBottomNav({
+  activeTab,
+  onSelectTab,
+  pendingTasksCount = 3,
+}: StaffBottomNavProps) {
+  const { user } = useAuth();
+  const isFb = user.department?.toLowerCase().includes("beverage") || user.department?.toLowerCase().includes("f&b");
+
   const tabs = [
-    { id: "tasks", label: "My Tasks", icon: ListTodo, count: 3 },
-    { id: "rooms", label: "Room Board", icon: BedDouble },
-    { id: "scan", label: "QR Scan", icon: QrCode, isFab: true },
-    { id: "report", label: "Log Issue", icon: AlertTriangle },
+    {
+      id: "tasks",
+      label: isFb ? "Food Orders" : "My Tasks",
+      icon: isFb ? UtensilsCrossed : ListTodo,
+      count: pendingTasksCount > 0 ? pendingTasksCount : undefined,
+    },
+    {
+      id: "rooms",
+      label: isFb ? "Tables & Dining" : "Room Board",
+      icon: isFb ? Sparkles : BedDouble,
+    },
+    {
+      id: "scan",
+      label: "QR Scan",
+      icon: QrCode,
+      isFab: true,
+    },
+    {
+      id: "report",
+      label: isFb ? "Shortage" : "Log Issue",
+      icon: AlertTriangle,
+    },
   ] as const;
 
   return (
@@ -30,8 +57,9 @@ export function StaffBottomNav({ activeTab, onSelectTab }: StaffBottomNavProps) 
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
                 className="relative -top-3 flex flex-col items-center group"
+                aria-label={tab.label}
               >
-                <div className="w-12 h-12 rounded-full bg-sage-600 text-white flex items-center justify-center shadow-card group-hover:bg-sage-700 transition-all border-2 border-white">
+                <div className="w-12 h-12 rounded-full bg-sage-600 text-white flex items-center justify-center shadow-card group-hover:bg-sage-700 transition-all border-2 border-white group-active:scale-95">
                   <Icon className="w-6 h-6 text-gold-300" />
                 </div>
                 <span className="text-[10px] font-semibold text-sand-800 mt-0.5">
@@ -54,8 +82,8 @@ export function StaffBottomNav({ activeTab, onSelectTab }: StaffBottomNavProps) 
             >
               <div className="relative">
                 <Icon className="w-5 h-5" />
-                {tab.count && (
-                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-sage-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
+                {tab.count !== undefined && (
+                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-sage-600 text-white rounded-full text-[10px] flex items-center justify-center font-bold shadow-xs">
                     {tab.count}
                   </span>
                 )}

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LogOut,
   Check,
+  Settings,
 } from "lucide-react";
 import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
 import { useRouter } from "next/navigation";
@@ -203,6 +204,17 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
               </div>
             )}
           </div>
+
+          {/* Settings Quick Access for Admin/GM */}
+          {["system_admin", "general_manager"].includes(user.role) && (
+            <button
+              onClick={() => router.push("/admin/settings")}
+              className="p-2 rounded-lg text-sand-600 hover:text-sand-950 hover:bg-sand-100/80 transition-colors"
+              title="Resort Settings & Connectors"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
 
           {/* User Profile Chip */}
           <div className="flex items-center gap-2 pl-2 border-l border-sand-200">

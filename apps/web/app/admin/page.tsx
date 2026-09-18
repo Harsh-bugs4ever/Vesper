@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/components/ui/toast";
 
 export default function AdminOverviewPage() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { showToast, showUndoToast } = useToast();
 
   const [cardStatus, setCardStatus] = useState<"pending" | "approved" | "dismissed">("pending");
@@ -55,7 +55,7 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner & Day 1 Foundation Status */}
+      {/* Welcome Banner & Day 2 Roles & Demo Resort Status */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-sage-50 via-sand-50 to-gold-50/40 p-6 rounded-2xl border border-sand-200 shadow-soft">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -64,7 +64,7 @@ export default function AdminOverviewPage() {
             </span>
             <span className="text-sand-300">·</span>
             <Badge variant="gold" className="text-[10px] py-0 px-2">
-              Day 1 Foundation Active
+              Day 2 Roles & Demo Resort Active
             </Badge>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-sand-950 font-serif">
@@ -72,18 +72,38 @@ export default function AdminOverviewPage() {
           </h1>
           <p className="text-xs sm:text-sm text-sand-600 mt-1">
             Viewing {user.propertyName} as <strong className="text-sage-800">{user.roleTitle}</strong>.
-            All modules running light theme design system.
+            {role === "system_admin" && " You have full governance access to configure users, permission matrices, and connectors."}
+            {role === "general_manager" && " You hold full executive sign-off authority for high-impact AI action cards."}
+            {role === "dept_manager_hk" && " Filtered to Housekeeping board, room cleaning turnover, and floor staff."}
+            {role === "dept_manager_fb" && " Filtered to Food & Beverage, ingredient reorders, and dining tasks."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {["system_admin", "general_manager"].includes(role) && (
+            <>
+              <a href="/admin/users">
+                <Button variant="outline" size="sm">
+                  <Users className="w-3.5 h-3.5 mr-1 text-sage-700" />
+                  Users & Matrix
+                </Button>
+              </a>
+              <a href="/admin/settings">
+                <Button variant="outline" size="sm">
+                  <Sliders className="w-3.5 h-3.5 mr-1 text-sage-700" />
+                  Resort Settings
+                </Button>
+              </a>
+            </>
+          )}
+
           <Button
             variant="outline"
             size="sm"
             onClick={() =>
               showToast({
                 title: "Resort Telemetry Refreshed",
-                description: "Live occupancy, BMS sensors, and task statuses synchronized.",
+                description: "Live occupancy, BMS sensors, and task statuses synchronized with Opera PMS.",
                 type: "success",
               })
             }

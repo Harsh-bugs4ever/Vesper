@@ -16,26 +16,50 @@ import {
   Compass,
   ArrowRightLeft,
   X,
+  SlidersHorizontal,
+  ShieldCheck,
+  ShieldAlert,
+  Server,
+  KeyRound,
+  Utensils,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
+import { Badge } from "@/components/ui/badge";
 
 interface AdminSidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
 }
 
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+  badgeColor?: "gold" | "dirty" | "sand" | "sage" | "amber";
+  requiredRole?: string[];
+  requiredPermission?: string;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, role, hasPermission } = useAuth();
   const [showRoleModal, setShowRoleModal] = useState(false);
 
-  const navGroups = [
+  // Define full navigation catalog with role & permission requirements
+  const allNavGroups: NavGroup[] = [
     {
       label: "Decision Layer",
       items: [
         {
-          name: "Overview",
+          name: "Overview Deck",
           href: "/admin",
           icon: LayoutDashboard,
         },
@@ -43,18 +67,19 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           name: "AI Action Queue",
           href: "/admin#action-queue",
           icon: Sparkles,
-          badge: "3 Pending",
+          badge: role === "general_manager" ? "3 High Impact" : "2 Pending",
           badgeColor: "gold",
         },
       ],
     },
     {
-      label: "Operations",
+      label: "Resort Operations",
       items: [
         {
           name: "Front Desk & Stays",
           href: "/admin#frontdesk",
           icon: BedDouble,
+          requiredRole: ["general_manager", "system_admin"],
         },
         {
           name: "Housekeeping Board",
@@ -62,6 +87,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           icon: Compass,
           badge: "15 Dirty",
           badgeColor: "dirty",
+          requiredRole: ["general_manager", "dept_manager_hk"],
         },
         {
           name: "Predictive Maintenance",
@@ -69,11 +95,15 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           icon: Wrench,
           badge: "BMS Alert",
           badgeColor: "sand",
+          requiredRole: ["general_manager", "dept_manager_hk", "system_admin"],
         },
         {
           name: "Inventory & Stock",
           href: "/admin#inventory",
           icon: PackageCheck,
+          badge: role === "dept_manager_fb" ? "Low Bread" : undefined,
+          badgeColor: "amber",
+          requiredRole: ["general_manager", "dept_manager_fb", "dept_manager_hk"],
         },
       ],
     },
@@ -81,28 +111,85 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
       label: "Team & Guests",
       items: [
         {
-          name: "Workforce Roster",
+          name: "Workforce & Rosters",
           href: "/admin#workforce",
           icon: Users,
+          requiredRole: ["general_manager", "dept_manager_fb", "dept_manager_hk"],
         },
         {
           name: "Guest DNA & Concierge",
           href: "/admin#guests",
           icon: HeartHandshake,
+          requiredRole: ["general_manager", "dept_manager_fb"],
         },
       ],
     },
     {
-      label: "Governance",
+      label: "Governance & Systems",
       items: [
         {
-          name: "Audit Trail & Settings",
+          name: "Users & Permission Matrix",
+          href: "/admin/users",
+          icon: KeyRound,
+          badge: "Editor",
+          badgeColor: "sage",
+          requiredRole: ["general_manager", "system_admin"],
+        },
+        {
+          name: "Resort Settings",
+          href: "/admin/settings",
+          icon: SlidersHorizontal,
+          badge: "145 Rms",
+          badgeColor: "sand",
+          requiredRole: ["general_manager", "system_admin"],
+        },
+        {
+          name: "Audit Trail",
           href: "/admin#audit",
           icon: FileClock,
         },
       ],
     },
   ];
+
+  // Dynamically filter navigation items based on active role & permissions
+  const filteredNavGroups = allNavGroups
+    .map((group) => {
+      const filteredItems = group.items.filter((item) => {
+        // If specific roles required, check match
+        if (item.requiredRole && !item.requiredRole.includes(role)) {
+          return false;
+        }
+        // If specific permission required, check permission
+        if (item.requiredPermission && !hasPermission(item.requiredPermission)) {
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        ...group,
+        items: filteredItems,
+      };
+    })
+    .filter((group) => group.items.length > 0);
+
+  const getRoleScopeDescription = () => {
+    switch (role) {
+      case "general_manager":
+        return "Executive Authority · Full Property";
+      case "system_admin":
+        return "IT Systems & Governance Scope";
+      case "dept_manager_fb":
+        return "Food & Beverage Departmental Scope";
+      case "dept_manager_hk":
+        return "Housekeeping & Rooms Scope";
+      case "employee":
+        return "Mobile Operations Attendant";
+      default:
+        return "Limited Guest Scope";
+    }
+  };
 
   return (
     <>
@@ -143,20 +230,28 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           )}
         </div>
 
-        {/* Resort Location Pill */}
-        <div className="mx-4 my-3 p-2.5 rounded-lg bg-sand-100/60 border border-sand-200/80 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 truncate">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
-            <span className="font-medium text-sand-800 truncate">
-              Madh Island Beach Resort
+        {/* Resort Location & Active Role Scope Pill */}
+        <div className="mx-4 my-3 p-3 rounded-xl bg-sand-100/70 border border-sand-200/80 text-xs">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+              <span className="font-bold text-sand-950 truncate">
+                Madh Island Beach Resort
+              </span>
+            </div>
+            <span className="text-[10px] text-sage-800 font-semibold bg-white/80 px-1.5 py-0.5 rounded border border-sand-200 shrink-0">
+              145 Rms
             </span>
           </div>
-          <span className="text-[11px] text-sage-700 font-semibold shrink-0">145 Rms</span>
+
+          <div className="pt-2 border-t border-sand-200/60 flex items-center justify-between text-[11px] text-sand-600">
+            <span className="truncate">{getRoleScopeDescription()}</span>
+          </div>
         </div>
 
-        {/* Navigation List */}
+        {/* Role-Filtered Navigation List */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6">
-          {navGroups.map((group, groupIdx) => (
+          {filteredNavGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-1">
               <p className="px-3 text-[11px] font-semibold tracking-wider text-sand-500 uppercase">
                 {group.label}
@@ -165,6 +260,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 {group.items.map((item, itemIdx) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href || (item.href === "/admin" && pathname === "/admin");
+
                   return (
                     <Link
                       key={itemIdx}
@@ -191,6 +287,8 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                             "text-[10px] px-1.5 py-0.5 rounded font-semibold",
                             item.badgeColor === "gold" && "bg-gold-200 text-gold-900",
                             item.badgeColor === "dirty" && "bg-rose-100 text-rose-800",
+                            item.badgeColor === "amber" && "bg-amber-100 text-amber-900",
+                            item.badgeColor === "sage" && "bg-sage-100 text-sage-800",
                             item.badgeColor === "sand" && "bg-sand-200 text-sand-800",
                             isActive && "bg-white/20 text-white"
                           )}
@@ -204,14 +302,25 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
               </div>
             </div>
           ))}
+
+          {/* Quick Staff/Guest Portal Jump if authorized */}
+          <div className="pt-2 px-3">
+            <Link
+              href="/staff"
+              className="flex items-center justify-between text-[11px] text-sand-500 hover:text-sage-800 transition-colors py-1 group"
+            >
+              <span>Preview Staff Mobile Portal</span>
+              <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          </div>
         </div>
 
-        {/* Current User & Role Switcher Footer */}
+        {/* Current User Profile & Role Switcher Footer */}
         <div className="p-4 border-t border-sand-200/80 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3 mb-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-sage-100 border border-sage-300 flex items-center justify-center text-sage-800 font-semibold text-xs shrink-0">
-                {user.name.split(" ").map(n => n[0]).join("")}
+                {user.name.split(" ").map((n) => n[0]).join("")}
               </div>
               <div className="truncate">
                 <p className="text-xs font-semibold text-sand-950 truncate leading-tight">
@@ -222,6 +331,10 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 </p>
               </div>
             </div>
+
+            <Badge variant="outline" className="text-[10px] py-0 px-1 bg-sand-50">
+              {user.department?.split(" ")[0] || "Admin"}
+            </Badge>
           </div>
 
           <button
