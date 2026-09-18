@@ -9,3 +9,7 @@ venv/
 .DS_Store
 dist/
 build/
+.logs/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

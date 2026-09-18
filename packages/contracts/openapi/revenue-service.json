@@ -1,0 +1,1053 @@
+{
+  "components": {
+    "schemas": {
+      "CompetitorRow": {
+        "properties": {
+          "distance_km": {
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rates": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Rates",
+            "type": "object"
+          },
+          "star_rating": {
+            "title": "Star Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "distance_km",
+          "star_rating",
+          "rates"
+        ],
+        "title": "CompetitorRow",
+        "type": "object"
+      },
+      "ForecastOut": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "features": {
+            "additionalProperties": true,
+            "title": "Features",
+            "type": "object"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "lower_bound": {
+            "title": "Lower Bound",
+            "type": "number"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "predicted_adr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Predicted Adr",
+            "type": "string"
+          },
+          "predicted_occupancy": {
+            "title": "Predicted Occupancy",
+            "type": "number"
+          },
+          "stay_date": {
+            "format": "date",
+            "title": "Stay Date",
+            "type": "string"
+          },
+          "upper_bound": {
+            "title": "Upper Bound",
+            "type": "number"
+          }
+        },
+        "required": [
+          "stay_date",
+          "predicted_occupancy",
+          "lower_bound",
+          "upper_bound",
+          "predicted_adr",
+          "confidence",
+          "model_name",
+          "features",
+          "generated_at"
+        ],
+        "title": "ForecastOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "RateApplyRequest": {
+        "description": "Per-date, always. A blanket 'set this category's rate' is deliberately absent.",
+        "properties": {
+          "dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Dates",
+            "type": "array"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Rate"
+          },
+          "room_category_id": {
+            "format": "uuid",
+            "title": "Room Category Id",
+            "type": "string"
+          },
+          "source_card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Card Id"
+          }
+        },
+        "required": [
+          "room_category_id",
+          "dates",
+          "rate"
+        ],
+        "title": "RateApplyRequest",
+        "type": "object"
+      },
+      "RateApplyResult": {
+        "properties": {
+          "applied_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Applied Dates",
+            "type": "array"
+          },
+          "previous_rates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Previous Rates",
+            "type": "array"
+          },
+          "rate": {
+            "title": "Rate",
+            "type": "number"
+          },
+          "room_category_id": {
+            "format": "uuid",
+            "title": "Room Category Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_category_id",
+          "applied_dates",
+          "rate",
+          "previous_rates"
+        ],
+        "title": "RateApplyResult",
+        "type": "object"
+      },
+      "RateCardRow": {
+        "properties": {
+          "base_rate": {
+            "title": "Base Rate",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nights": {
+            "items": {
+              "$ref": "#/components/schemas/RateNight"
+            },
+            "title": "Nights",
+            "type": "array"
+          },
+          "room_category_id": {
+            "format": "uuid",
+            "title": "Room Category Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_category_id",
+          "name",
+          "base_rate",
+          "nights"
+        ],
+        "title": "RateCardRow",
+        "type": "object"
+      },
+      "RateHistoryOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "new_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "New Rate",
+            "type": "string"
+          },
+          "previous_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Rate"
+          },
+          "room_category_id": {
+            "format": "uuid",
+            "title": "Room Category Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Card Id"
+          },
+          "stay_date": {
+            "format": "date",
+            "title": "Stay Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "room_category_id",
+          "stay_date",
+          "new_rate",
+          "source",
+          "created_at"
+        ],
+        "title": "RateHistoryOut",
+        "type": "object"
+      },
+      "RateNight": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "is_override": {
+            "title": "Is Override",
+            "type": "boolean"
+          },
+          "predicted_occupancy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Occupancy"
+          },
+          "rate": {
+            "title": "Rate",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "stay_date": {
+            "format": "date",
+            "title": "Stay Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stay_date",
+          "rate",
+          "is_override",
+          "source"
+        ],
+        "title": "RateNight",
+        "type": "object"
+      },
+      "RateRestoreRequest": {
+        "properties": {
+          "previous_rates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Previous Rates",
+            "type": "array"
+          },
+          "source_card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Card Id"
+          }
+        },
+        "required": [
+          "previous_rates"
+        ],
+        "title": "RateRestoreRequest",
+        "type": "object"
+      },
+      "SimulateRequest": {
+        "description": "The owner's three sliders.",
+        "properties": {
+          "days": {
+            "default": 30,
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "promo_discount_pct": {
+            "default": 0.0,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Promo Discount Pct",
+            "type": "number"
+          },
+          "rate_change_pct": {
+            "default": 0.0,
+            "maximum": 50.0,
+            "minimum": -50.0,
+            "title": "Rate Change Pct",
+            "type": "number"
+          },
+          "staffing_change_pct": {
+            "default": 0.0,
+            "maximum": 50.0,
+            "minimum": -50.0,
+            "title": "Staffing Change Pct",
+            "type": "number"
+          }
+        },
+        "title": "SimulateRequest",
+        "type": "object"
+      },
+      "SimulateResult": {
+        "properties": {
+          "assumptions": {
+            "additionalProperties": true,
+            "title": "Assumptions",
+            "type": "object"
+          },
+          "baseline_revenue": {
+            "title": "Baseline Revenue",
+            "type": "number"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "labour_cost_delta": {
+            "title": "Labour Cost Delta",
+            "type": "number"
+          },
+          "net_delta": {
+            "title": "Net Delta",
+            "type": "number"
+          },
+          "nights": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Nights",
+            "type": "array"
+          },
+          "revenue_delta": {
+            "title": "Revenue Delta",
+            "type": "number"
+          },
+          "simulated_revenue": {
+            "title": "Simulated Revenue",
+            "type": "number"
+          }
+        },
+        "required": [
+          "days",
+          "baseline_revenue",
+          "simulated_revenue",
+          "revenue_delta",
+          "labour_cost_delta",
+          "net_delta",
+          "assumptions",
+          "nights"
+        ],
+        "title": "SimulateResult",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Vesper Revenue",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ready Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/revenue/cards/propose": {
+      "post": {
+        "description": "Scan the next fortnight and raise rate cards where the price looks wrong.\n\nRuns on a schedule after the nightly forecast; exposed so the demo can trigger it.",
+        "operationId": "propose_cards_revenue_cards_propose_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Propose Cards Revenue Cards Propose Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Propose Cards",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/competitors": {
+      "get": {
+        "operationId": "competitors_revenue_competitors_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompetitorRow"
+                  },
+                  "title": "Response Competitors Revenue Competitors Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Competitors",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/forecast": {
+      "get": {
+        "description": "The 30-day demand curve with its confidence band.",
+        "operationId": "forecast_revenue_forecast_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ForecastOut"
+                  },
+                  "title": "Response Forecast Revenue Forecast Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Forecast",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/forecast/refresh": {
+      "post": {
+        "description": "Refit against the latest booking history. Nightly job; also a button.",
+        "operationId": "refresh_forecast_revenue_forecast_refresh_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ForecastOut"
+                  },
+                  "title": "Response Refresh Forecast Revenue Forecast Refresh Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Refresh Forecast",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/rate-card": {
+      "get": {
+        "description": "Every category, every night, with the forecast beside the price.",
+        "operationId": "rate_card_revenue_rate_card_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RateCardRow"
+                  },
+                  "title": "Response Rate Card Revenue Rate Card Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rate Card",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/rates/apply": {
+      "post": {
+        "description": "Set a price on specific dates and hand back exactly how to undo it.\n\naction-service calls this when a rate card is approved, and stores the returned\n`previous_rates` as the card's undo payload.",
+        "operationId": "apply_rates_revenue_rates_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateApplyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Apply Rates",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/rates/history": {
+      "get": {
+        "operationId": "rate_history_revenue_rates_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RateHistoryOut"
+                  },
+                  "title": "Response Rate History Revenue Rates History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rate History",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/rates/restore": {
+      "post": {
+        "description": "The undo half. Puts each date back, including back to having no override.",
+        "operationId": "restore_rates_revenue_rates_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Restore Rates Revenue Rates Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Rates",
+        "tags": [
+          "revenue"
+        ]
+      }
+    },
+    "/revenue/simulate": {
+      "post": {
+        "description": "What-if on live data. The response carries its own assumptions.",
+        "operationId": "simulate_revenue_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulateResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Simulate",
+        "tags": [
+          "revenue"
+        ]
+      }
+    }
+  }
+}

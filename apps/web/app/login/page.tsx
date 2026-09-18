@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { UserRole, DEMO_USERS } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 import {
   ShieldCheck,
   Utensils,
@@ -26,12 +28,13 @@ import { useToast } from "@/components/ui/toast";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, signIn } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<"demo" | "credentials">("demo");
-  const [email, setEmail] = useState("arjun.mehta@vesperresorts.com");
-  const [password, setPassword] = useState("••••••••");
+  const [email, setEmail] = useState("gm@vesper.demo");
+  // Prefilled with a seeded demo account so the login screen works out of the box.
+  const [password, setPassword] = useState("vesper123");
   const [isLoading, setIsLoading] = useState(false);
 
   const demoAccounts: {
@@ -116,19 +119,30 @@ export default function LoginPage() {
     router.push(dest);
   };
 
-  const handleCredentialsSubmit = (e: React.FormEvent) => {
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      login("general_manager");
-      setIsLoading(false);
+    try {
+      // Real authentication against the backend. The seeded accounts are listed in
+      // packages/contracts/README.md; the password for all of them is vesper123.
+      const user = await signIn(email, password);
       showToast({
-        title: "Welcome back, Arjun Mehta",
-        description: "Authenticated with General Manager credentials.",
+        title: `Welcome back, ${user.name}`,
+        description: `Signed in as ${user.roleTitle}.`,
         type: "success",
       });
-      router.push("/admin");
-    }, 600);
+      router.push(user.role === "employee" ? "/staff" : "/admin");
+    } catch (caught) {
+      // The backend writes these messages for the person reading the screen.
+      showToast({
+        title: "Could not sign in",
+        description:
+          caught instanceof ApiError ? caught.message : "Something went wrong. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

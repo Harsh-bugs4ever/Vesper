@@ -1,0 +1,263 @@
+/**
+ * The one way this app talks to the backend.
+ *
+ * Everything goes through the gateway on :8000 — never a service port directly, because
+ * the gateway is what validates the token and applies rate limits.
+ *
+ * Three things it handles so callers never have to:
+ *   - attaching the bearer token;
+ *   - refreshing once on a 401 and replaying the original request, with concurrent
+ *     callers sharing that single refresh rather than stampeding;
+ *   - turning the backend's error envelope into a typed error carrying a message that
+ *     is already written for a human.
+ */
+
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+
+const ACCESS_KEY = "vesper_access_token";
+const REFRESH_KEY = "vesper_refresh_token";
+
+/** Endpoints reachable without a token; a 401 on these must not trigger a refresh. */
+const PUBLIC_PATHS = ["/auth/login", "/auth/refresh", "/guest/session"];
+
+export interface ApiErrorBody {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details: Record<string, unknown>;
+
+  constructor(status: number, body: ApiErrorBody) {
+    // `message` is written for the person reading the screen, so it is safe to show.
+    super(body.message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = body.code;
+    this.details = body.details ?? {};
+  }
+
+  /** A failure the user can do something about, rather than a bug. */
+  get isExpected(): boolean {
+    return ["conflict", "invalid", "forbidden", "not_found", "rate_limited"].includes(this.code);
+  }
+}
+
+// --- token storage ----------------------------------------------------------------
+// localStorage rather than a cookie because the API is a separate origin and the demo
+// has no shared domain to set one on. Moving to httpOnly cookies is a backend change
+// and is on the backlog before this ever sees a real guest.
+
+export const tokens = {
+  access(): string | null {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(ACCESS_KEY);
+  },
+  refresh(): string | null {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(REFRESH_KEY);
+  },
+  set(access: string, refresh?: string) {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ACCESS_KEY, access);
+    if (refresh) window.localStorage.setItem(REFRESH_KEY, refresh);
+  },
+  clear() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(ACCESS_KEY);
+    window.localStorage.removeItem(REFRESH_KEY);
+  },
+};
+
+// A single in-flight refresh shared by every caller that hit a 401 at once. Without
+// this, six dashboard tiles expiring together would fire six refreshes and five of them
+// would fail against a rotated token.
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = tokens.refresh();
+    if (!refreshToken) return false;
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!response.ok) {
+        tokens.clear();
+        return false;
+      }
+      const data = await response.json();
+      tokens.set(data.access_token, data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  params?: Record<string, string | number | boolean | undefined | null>;
+  /** Send without a token — only for the QR session call. */
+  anonymous?: boolean;
+  signal?: AbortSignal;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}, retrying = false): Promise<T> {
+  const { method = "GET", body, params, anonymous = false, signal } = options;
+
+  const url = new URL(`${API_URL}${path}`);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+    }
+  }
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const token = tokens.access();
+  if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+  } catch (cause) {
+    // The gateway is down, or the browser is offline. Say which, rather than throwing
+    // a bare TypeError from fetch.
+    throw new ApiError(0, {
+      code: "network_error",
+      message: "Could not reach the server. Check that the backend is running.",
+      details: { cause: String(cause) },
+    });
+  }
+
+  // One refresh attempt, then give up. Anything else risks a loop.
+  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  if (response.status === 401 && !retrying && !anonymous && !isPublic) {
+    if (await refreshAccessToken()) {
+      return request<T>(path, options, true);
+    }
+    tokens.clear();
+  }
+
+  if (response.status === 204) return undefined as T;
+
+  const text = await response.text();
+  const payload = text ? safeJson(text) : null;
+
+  if (!response.ok) {
+    const envelope = (payload as { error?: ApiErrorBody } | null)?.error;
+    throw new ApiError(
+      response.status,
+      envelope ?? {
+        code: "http_error",
+        message: `Request failed (${response.status})`,
+      },
+    );
+  }
+
+  return payload as T;
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+export const api = {
+  get: <T>(path: string, params?: RequestOptions["params"], signal?: AbortSignal) =>
+    request<T>(path, { params, signal }),
+  post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
+  put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
+  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** Unauthenticated — the room QR is the credential. */
+  anonymous: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "POST", body, anonymous: true }),
+};
+
+// --- shapes the backend returns ----------------------------------------------------
+
+export interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface BackendUser {
+  id: string;
+  email: string;
+  full_name: string;
+  /** owner | gm | manager | supervisor | employee */
+  role: string;
+  department_id: string | null;
+  property_id: string;
+  permissions: string[];
+}
+
+export interface GuestSession {
+  token: string;
+  expires_in: number;
+  room_number: string;
+  property_name: string;
+  guest_name: string | null;
+  stay_id: string;
+}
+
+export const auth = {
+  async login(email: string, password: string): Promise<BackendUser> {
+    const pair = await api.post<TokenPair>("/auth/login", { email, password });
+    tokens.set(pair.access_token, pair.refresh_token);
+    return auth.me();
+  },
+
+  me: () => api.get<BackendUser>("/auth/me"),
+
+  async logout(): Promise<void> {
+    const refreshToken = tokens.refresh();
+    try {
+      // Best effort: the server revokes the session, but a failure here must not leave
+      // the user stuck on a screen they have already left.
+      if (refreshToken) await api.post("/auth/logout", { refresh_token: refreshToken });
+    } catch {
+      /* ignore */
+    } finally {
+      tokens.clear();
+    }
+  },
+
+  /** Scanning the nightstand QR. No account, no password. */
+  async openGuestSession(propertyId: string, roomId: string, qrSecret: string) {
+    const session = await api.anonymous<GuestSession>("/guest/session", {
+      property_id: propertyId,
+      room_id: roomId,
+      qr_secret: qrSecret,
+    });
+    tokens.set(session.token);
+    return session;
+  },
+
+  isSignedIn: () => tokens.access() !== null,
+};

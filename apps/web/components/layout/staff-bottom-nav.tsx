@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
-import { ListTodo, BedDouble, QrCode, AlertTriangle, UtensilsCrossed, Sparkles } from "lucide-react";
+import {
+  ListTodo,
+  BedDouble,
+  QrCode,
+  AlertTriangle,
+  UtensilsCrossed,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/auth-context";
 
@@ -11,15 +19,27 @@ interface StaffBottomNavProps {
   pendingTasksCount?: number;
 }
 
+type StaffTab = StaffBottomNavProps["activeTab"];
+
+interface NavTab {
+  id: StaffTab;
+  label: string;
+  icon: LucideIcon;
+  count?: number;
+  isFab?: boolean;
+}
+
 export function StaffBottomNav({
   activeTab,
   onSelectTab,
   pendingTasksCount = 3,
 }: StaffBottomNavProps) {
   const { user } = useAuth();
-  const isFb = user.department?.toLowerCase().includes("beverage") || user.department?.toLowerCase().includes("f&b");
+  const isFb =
+    user.department?.toLowerCase().includes("beverage") ||
+    user.department?.toLowerCase().includes("f&b");
 
-  const tabs = [
+  const tabs: NavTab[] = [
     {
       id: "tasks",
       label: isFb ? "Food Orders" : "My Tasks",
@@ -42,7 +62,7 @@ export function StaffBottomNav({
       label: isFb ? "Shortage" : "Log Issue",
       icon: AlertTriangle,
     },
-  ] as const;
+  ];
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-sand-200 py-1 px-4 shadow-elevated">

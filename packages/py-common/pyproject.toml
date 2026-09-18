@@ -1,0 +1,24 @@
+[project]
+name = "vesper-common"
+version = "0.1.0"
+description = "Shared Vesper building blocks: config, db, auth, permissions, event bus."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  "sqlalchemy>=2.0.35",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.13",
+  "redis>=5.0",
+  "pyjwt>=2.9",
+  "passlib[bcrypt]>=1.7.4",
+  "python-multipart>=0.0.12",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["vesper_common*"]

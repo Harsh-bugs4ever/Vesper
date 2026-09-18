@@ -1,0 +1,7 @@
+-r ../../requirements-base.txt
+-e ../../packages/py-common
+
+# Isolation Forest. Without it the engine uses a robust z-score, which is close to
+# equivalent for a single sensor channel.
+numpy==2.2.1
+scikit-learn==1.6.0
