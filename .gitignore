@@ -1,1 +1,11 @@
-*.pdf
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.db
+.DS_Store
+dist/
+build/
