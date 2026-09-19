@@ -50,6 +50,8 @@ class StayOut(ORMModel):
     guest_id: UUID
     room_id: UUID
     room_number: str
+    # From the booking, so "who is leaving today" needs one call rather than two.
+    check_out_date: date
     checked_in_at: datetime
     checked_out_at: datetime | None = None
     status: str
@@ -64,6 +66,7 @@ class StayContext(BaseModel):
     status: str
     room_id: UUID
     room_number: str
+    check_out_date: date
     guest_id: UUID
     guest_name: str | None = None
     property_name: str

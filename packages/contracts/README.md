@@ -128,8 +128,39 @@ card, not turn it into a different action.
 | Guest DNA, sentiment, concierge | `/guest-intel` |
 | Outbox | `/notifications` |
 | Owner dashboard (one call, 11 tiles) | `/dashboard` |
+| Staff reviews of guests | `/guest-reviews` |
 
 ---
+
+## Staff reviews of guests
+
+The mirror of a guest rating the hotel. Staff record how a stay went from their side;
+the manager sees one score and a summary on checkout morning.
+
+```
+POST /guest-reviews/stays/{stay_id}   { rating: 1-5, comment }   one per person, final
+GET  /guest-reviews/mine                                          only your own
+GET  /guest-reviews/departing?days=1                              the manager's list, ranked
+GET  /guest-reviews/stays/{stay_id}                               summary + every review, attributed
+POST /guest-reviews/stays/{stay_id}/consider-reward               raises a card, sends nothing
+```
+
+Four things the UI should respect, because they are enforced server-side and the screens
+should not imply otherwise:
+
+- **`score` is null until two people have reviewed.** Show the individual reviews and
+  "needs more reviews", not a number. One opinion is not a rating.
+- **`score` is not the average.** It is a Bayesian average pulled toward the house mean,
+  so three fives read lower than twenty fives. `mean_rating` is there too if you want to
+  show both; label them differently.
+- **`is_conflicted` on a review** means that reviewer's department is one this guest
+  complained about. Show it next to the review. It is deliberately not filtered out.
+- **Nothing here is reachable from a guest token** and nothing is ever shown to the
+  guest. A 403 on these paths with a QR session is correct, not a bug.
+
+`summary_method` is `model`, `verbatim` or `empty`. On `verbatim` you are looking at
+exactly what staff wrote, stitched together — say so rather than presenting it as a
+generated summary.
 
 ## Things that run on their own
 
@@ -144,6 +175,7 @@ changes in response to a click:
 | Stock expiry badges | hourly | `days_to_expiry` on `/inventory/items` |
 | Asset risk sweep | every 6 hours | `/maintenance/health`, new work-order cards |
 | Forecast refit + rate cards proposed | twice daily | `/revenue/forecast`, new cards |
+| Departing guests' reviewers prompted | every 10 minutes | a task on the reviewer's list |
 
 `GET /dashboard` returns every tile in one call. Tiles that could not be loaded come back
 `null` and are listed in `unavailable` — show a dash for those rather than a zero, which

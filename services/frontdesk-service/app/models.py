@@ -96,6 +96,15 @@ class Stay(Base, TimestampMixin):
 
     booking: Mapped[Booking] = relationship(back_populates="stay")
 
+    @property
+    def check_out_date(self) -> date:
+        """When this guest is due to leave.
+
+        Lives on the booking, but every caller asking about an in-house stay wants it, so
+        it is surfaced here rather than making each one join through.
+        """
+        return self.booking.check_out_date
+
 
 class GuestVisit(Base, TimestampMixin):
     """Every touchpoint, not just room nights.

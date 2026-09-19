@@ -236,7 +236,9 @@ def stay_by_room(db: Session, property_id: UUID, room_id: UUID) -> Stay | None:
 
 
 def list_stays(db: Session, property_id: UUID, *, status: str | None = StayStatus.IN_HOUSE) -> list[Stay]:
-    query = select(Stay).where(Stay.property_id == property_id)
+    # The booking is eager-loaded because StayOut exposes its checkout date; without this
+    # a list of eighty stays would fire eighty extra queries.
+    query = select(Stay).options(joinedload(Stay.booking)).where(Stay.property_id == property_id)
     if status:
         query = query.where(Stay.status == status)
     return list(db.scalars(query.order_by(Stay.checked_in_at.desc())))
@@ -376,6 +378,7 @@ def enrich_stay(db: Session, property_id: UUID, stay: Stay) -> dict:
         "status": stay.status,
         "room_id": str(stay.room_id),
         "room_number": stay.room_number,
+        "check_out_date": stay.check_out_date.isoformat(),
         "guest_id": str(stay.guest_id),
         "guest_name": guest_row.get("full_name"),
         "property_name": property_row.get("name", "Vesper"),

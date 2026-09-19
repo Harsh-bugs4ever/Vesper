@@ -193,6 +193,115 @@
         "title": "GuestDnaOut",
         "type": "object"
       },
+      "GuestReviewCreate": {
+        "description": "What a staff member submits about a departing guest.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "rating": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rating"
+        ],
+        "title": "GuestReviewCreate",
+        "type": "object"
+      },
+      "GuestReviewOut": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "guest_id": {
+            "format": "uuid",
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_conflicted": {
+            "title": "Is Conflicted",
+            "type": "boolean"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "reviewed_by": {
+            "format": "uuid",
+            "title": "Reviewed By",
+            "type": "string"
+          },
+          "sentiment_label": {
+            "title": "Sentiment Label",
+            "type": "string"
+          },
+          "sentiment_score": {
+            "title": "Sentiment Score",
+            "type": "number"
+          },
+          "stay_id": {
+            "format": "uuid",
+            "title": "Stay Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stay_id",
+          "guest_id",
+          "reviewed_by",
+          "rating",
+          "sentiment_score",
+          "sentiment_label",
+          "is_conflicted",
+          "created_at"
+        ],
+        "title": "GuestReviewOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -561,6 +670,268 @@
           "label"
         ],
         "title": "SentimentSummary",
+        "type": "object"
+      },
+      "StayReviewDetail": {
+        "properties": {
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "conflicted_reviews": {
+            "title": "Conflicted Reviews",
+            "type": "integer"
+          },
+          "departments": {
+            "additionalProperties": true,
+            "title": "Departments",
+            "type": "object"
+          },
+          "departs_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departs On"
+          },
+          "guest_id": {
+            "format": "uuid",
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "mean_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Rating"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "review_count": {
+            "title": "Review Count",
+            "type": "integer"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/GuestReviewOut"
+            },
+            "title": "Reviews",
+            "type": "array"
+          },
+          "room_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Number"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "stay_id": {
+            "format": "uuid",
+            "title": "Stay Id",
+            "type": "string"
+          },
+          "summary_method": {
+            "title": "Summary Method",
+            "type": "string"
+          },
+          "summary_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Text"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stay_id",
+          "guest_id",
+          "review_count",
+          "confidence",
+          "tier",
+          "departments",
+          "reasons",
+          "conflicted_reviews",
+          "summary_method",
+          "reviews"
+        ],
+        "title": "StayReviewDetail",
+        "type": "object"
+      },
+      "StayReviewSummaryOut": {
+        "properties": {
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "conflicted_reviews": {
+            "title": "Conflicted Reviews",
+            "type": "integer"
+          },
+          "departments": {
+            "additionalProperties": true,
+            "title": "Departments",
+            "type": "object"
+          },
+          "departs_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departs On"
+          },
+          "guest_id": {
+            "format": "uuid",
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "mean_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Rating"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "review_count": {
+            "title": "Review Count",
+            "type": "integer"
+          },
+          "room_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Number"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "stay_id": {
+            "format": "uuid",
+            "title": "Stay Id",
+            "type": "string"
+          },
+          "summary_method": {
+            "title": "Summary Method",
+            "type": "string"
+          },
+          "summary_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Text"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stay_id",
+          "guest_id",
+          "review_count",
+          "confidence",
+          "tier",
+          "departments",
+          "reasons",
+          "conflicted_reviews",
+          "summary_method"
+        ],
+        "title": "StayReviewSummaryOut",
         "type": "object"
       },
       "ValidationError": {
@@ -1419,6 +1790,327 @@
         "summary": "Sentiment Trend",
         "tags": [
           "guest-intel"
+        ]
+      }
+    },
+    "/guest-reviews/departing": {
+      "get": {
+        "description": "The manager's checkout list, best regarded first.\n\nStays without enough reviews sort last rather than being hidden, so \"three people\nstill owe a review\" stays visible instead of looking like a complete picture.",
+        "operationId": "departing_guest_reviews_departing_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 14,
+              "minimum": 0,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StayReviewSummaryOut"
+                  },
+                  "title": "Response Departing Guest Reviews Departing Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Departing",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/mine": {
+      "get": {
+        "description": "What you have already submitted.\n\nDeliberately only your own: staff seeing each other's ratings is how a score stops\nbeing candid and starts being a consensus.",
+        "operationId": "my_reviews_guest_reviews_mine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GuestReviewOut"
+                  },
+                  "title": "Response My Reviews Guest Reviews Mine Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Reviews",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/prompt-departing": {
+      "post": {
+        "description": "Ask everyone who dealt with a departing guest for their view.\n\nRuns on a timer; exposed so a demo can trigger it.",
+        "operationId": "prompt_departing_guest_reviews_prompt_departing_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Prompt Departing Guest Reviews Prompt Departing Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Prompt Departing",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/stays/{stay_id}": {
+      "get": {
+        "description": "The summary plus every individual review behind it.\n\nAttributed on purpose: anyone acting on a score should be able to see who said what,\nand a conflicted review should be obvious rather than silently weighted away.",
+        "operationId": "stay_detail_guest_reviews_stays__stay_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayReviewDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stay Detail",
+        "tags": [
+          "guest-reviews"
+        ]
+      },
+      "post": {
+        "description": "Record your own view of a guest's stay.\n\nOne per person per stay, and final once submitted. The guest never sees it.",
+        "operationId": "submit_guest_reviews_stays__stay_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestReviewCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestReviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/stays/{stay_id}/consider-reward": {
+      "post": {
+        "description": "Raise a thank-you card if this guest has earned one.\n\nSends nothing. A good score alone is not enough \u2014 there has to be an objective signal\ntoo, and then somebody with offers:approve still has to say yes.",
+        "operationId": "consider_reward_guest_reviews_stays__stay_id__consider_reward_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Consider Reward Guest Reviews Stays  Stay Id  Consider Reward Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Consider Reward",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/stays/{stay_id}/recompute": {
+      "post": {
+        "description": "Rebuild the score and re-summarise. Normally automatic on each new review.",
+        "operationId": "recompute_guest_reviews_stays__stay_id__recompute_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StayReviewSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recompute",
+        "tags": [
+          "guest-reviews"
         ]
       }
     },

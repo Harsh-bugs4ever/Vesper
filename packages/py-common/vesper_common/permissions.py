@@ -42,6 +42,11 @@ class Perm(StrEnum):
     REQUESTS_READ = "requests:read"
     REQUESTS_ACCEPT = "requests:accept"
     ISSUES_WRITE = "issues:write"
+    # Staff record their own view of a guest; managers read the aggregate. Split because
+    # they are different acts: one is first-hand, the other decides how a guest is
+    # treated on the way out.
+    GUEST_REVIEW_WRITE = "guest_review:write"
+    GUEST_REVIEW_READ = "guest_review:read"
 
     # Inventory
     STOCK_READ = "stock:read"
@@ -82,6 +87,7 @@ EMPLOYEE_PERMS: set[str] = {
     Perm.REQUESTS_ACCEPT,
     Perm.ISSUES_WRITE,
     Perm.STOCK_READ,
+    Perm.GUEST_REVIEW_WRITE,
 }
 
 SUPERVISOR_PERMS: set[str] = EMPLOYEE_PERMS | {
@@ -97,6 +103,7 @@ MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
     Perm.BOOKINGS_READ,
     Perm.BOOKINGS_WRITE,
     Perm.GUESTS_READ,
+    Perm.GUEST_REVIEW_READ,
     Perm.CARDS_APPROVE,
     Perm.CARDS_DISMISS,
     Perm.WORKORDER_APPROVE,

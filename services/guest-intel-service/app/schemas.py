@@ -106,3 +106,50 @@ class ConciergeOut(ORMModel):
     escalation_reason: str | None = None
     handled_at: datetime | None = None
     created_at: datetime
+
+
+class GuestReviewCreate(BaseModel):
+    """What a staff member submits about a departing guest."""
+
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class GuestReviewOut(ORMModel):
+    id: UUID
+    stay_id: UUID
+    guest_id: UUID
+    reviewed_by: UUID
+    department_id: UUID | None = None
+    rating: int
+    comment: str | None = None
+    sentiment_score: float
+    sentiment_label: str
+    # True when the reviewer's department is one this guest complained about. Shown to
+    # the manager rather than used to silently discount the review.
+    is_conflicted: bool
+    created_at: datetime
+
+
+class StayReviewSummaryOut(ORMModel):
+    stay_id: UUID
+    guest_id: UUID
+    room_number: str | None = None
+    review_count: int
+    mean_rating: float | None = None
+    # The Bayesian average the ranking sorts on. Null until enough people have reviewed.
+    score: float | None = None
+    confidence: float
+    tier: str
+    departments: dict
+    reasons: list[str]
+    conflicted_reviews: int
+    summary_text: str | None = None
+    # "model", "verbatim" or "empty" — stated, never implied.
+    summary_method: str
+    departs_on: date | None = None
+    computed_at: datetime | None = None
+
+
+class StayReviewDetail(StayReviewSummaryOut):
+    reviews: list[GuestReviewOut]

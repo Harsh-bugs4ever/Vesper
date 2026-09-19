@@ -317,6 +317,11 @@
       "StayContext": {
         "description": "What guest-service reads when a QR is scanned.",
         "properties": {
+          "check_out_date": {
+            "format": "date",
+            "title": "Check Out Date",
+            "type": "string"
+          },
           "checked_in_at": {
             "format": "date-time",
             "title": "Checked In At",
@@ -372,6 +377,7 @@
           "status",
           "room_id",
           "room_number",
+          "check_out_date",
           "guest_id",
           "property_name",
           "checked_in_at"
@@ -384,6 +390,11 @@
           "booking_id": {
             "format": "uuid",
             "title": "Booking Id",
+            "type": "string"
+          },
+          "check_out_date": {
+            "format": "date",
+            "title": "Check Out Date",
             "type": "string"
           },
           "checked_in_at": {
@@ -438,6 +449,7 @@
           "guest_id",
           "room_id",
           "room_number",
+          "check_out_date",
           "checked_in_at",
           "status",
           "folio_total"

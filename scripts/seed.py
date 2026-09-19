@@ -16,6 +16,7 @@ import itertools
 import random
 import secrets
 import sys
+from uuid import uuid4
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -463,22 +464,64 @@ def _seed(db) -> dict[str, int]:
     counts["sensor_readings"] = readings
 
     # --- guests, bookings, stays --------------------------------------------------
-    guests = []
-    for i in range(140):
-        name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
+    # A realistic guest population, not a small pool sharing every booking between them.
+    #
+    # The first version created 140 guests and picked randomly, which gave every single
+    # one around 270 stays. That is not a hotel, and it quietly broke three features that
+    # read visit history: every guest looked loyal, every churn rhythm looked tight, and
+    # the "has this person actually been a good customer" check that gates a reward
+    # passed for everybody.
+    #
+    # Real hotels are a long tail: most people come once, some come back, a small core
+    # are regulars. Guests are created as bookings need them, with a minority drawn from
+    # a returning pool.
+    LOYAL_CORE = 300
+    # Chance a booking belongs to someone who has stayed before.
+    RETURN_RATE = 0.35
+    # Of those, how often it is one of the regulars rather than a second-time visitor.
+    LOYAL_SHARE = 0.55
+
+    guests: list = []
+    loyal: list = []
+    guest_counter = 0
+
+    def new_guest(*, regular: bool = False):
+        nonlocal guest_counter
+        guest_counter += 1
         row = guest.Guest(
+            # Assigned here rather than at flush time: the booking created in the same
+            # breath needs this id immediately, and flushing once per guest to get it
+            # would mean twenty thousand round trips.
+            id=uuid4(),
             property_id=pid,
-            full_name=name,
-            email=f"guest{i + 1}@example.com",
+            full_name=f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}",
+            email=f"guest{guest_counter}@example.com",
             phone=f"+9199{random.randint(10000000, 99999999)}",
             city=random.choice(["Mumbai", "Delhi", "Bengaluru", "Pune", "Dubai", "London"]),
-            loyalty_tier=random.choice(["none", "none", "silver", "gold", "platinum"]),
-            is_vip=random.random() < 0.08,
+            loyalty_tier=(
+                random.choice(["silver", "gold", "platinum"])
+                if regular
+                else random.choice(["none"] * 6 + ["silver", "gold"])
+            ),
+            is_vip=regular and random.random() < 0.25,
         )
         db.add(row)
         guests.append(row)
+        if regular:
+            loyal.append(row)
+        return row
+
+    for _ in range(LOYAL_CORE):
+        new_guest(regular=True)
     db.flush()
-    counts["guests"] = len(guests)
+
+    def pick_guest():
+        """A returning guest, or a brand-new one."""
+        if guests and random.random() < RETURN_RATE:
+            if loyal and random.random() < LOYAL_SHARE:
+                return random.choice(loyal)
+            return random.choice(guests[-4000:])  # somebody recent, coming back
+        return new_guest()
 
     # A year of bookings so the demand engine has real seasonality to fit, not a
     # straight line. Weekends and the Nov-Feb season run fuller, as Mumbai really does.
@@ -496,7 +539,7 @@ def _seed(db) -> dict[str, int]:
         occupancy = min(0.97, max(0.25, random.gauss(0.68, 0.09) * season[day.month] * (1.12 if day.weekday() >= 4 else 1.0)))
         arrivals = int(len(rooms) * occupancy / 2.4)  # average stay ~2.4 nights
         for _ in range(arrivals):
-            guest_row = random.choice(guests)
+            guest_row = pick_guest()
             category = random.choices(category_list, weights=[180, 95, 55, 25])[0]
             nights = random.choices([1, 2, 3, 4, 7], weights=[30, 35, 20, 10, 5])[0]
             rate = Decimal(int(float(category.base_rate) * random.uniform(0.85, 1.25) / 100) * 100)
@@ -528,9 +571,10 @@ def _seed(db) -> dict[str, int]:
                     )
                 )
                 visits += 1
-        if days_ago % 60 == 0:
+        if days_ago % 30 == 0:
             db.flush()
     db.flush()
+    counts["guests"] = len(guests)
     counts["bookings"] = bookings
     counts["guest_visits"] = visits
 
