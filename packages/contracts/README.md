@@ -167,6 +167,21 @@ should not imply otherwise:
 - **Nothing here is reachable from a guest token** and nothing is ever shown to the
   guest. A 403 on these paths with a QR session is correct, not a bug.
 
+**Staff get something back.** `GET /guest-reviews/service-notes/stays/{stay_id}` is what
+the person about to knock on the door should know — preferences and what colleagues
+noticed last time. It deliberately carries **no ratings and no attribution**: a note
+guides, a score judges, and a housekeeper who knows the guest was marked a 2 treats them
+like a 2. Nothing from a review by a department the guest complained about is passed on.
+
+This is the half that makes the other half survive. A review flow that only takes gets
+abandoned by week three.
+
+**Ratings are corrected for how hard each reviewer marks.** Some people rate everyone a
+3. That is a fact about the reviewer, not the guest, and until it is accounted for the
+guest pays for which shift happened to be on. The stored rating is never rewritten — the
+adjustment happens at aggregation and is reported in `reasons`, and reviewers far from
+the house average are surfaced for a manager rather than silently corrected.
+
 **The coupon size is computed, not typed in.** `payload.discount_pct` on a thank-you card
 is set by two separate questions: how well regarded the stay was decides *whether* there
 is a coupon at all, and how likely the guest is to drift away decides *how much*.
@@ -181,6 +196,12 @@ Three out of five earns nothing on purpose: it is the midpoint of the scale, so 
 threshold there would reward most stays, and a discount most guests receive is a price
 cut rather than a thank-you. The manager can still adjust `discount_pct` on the card —
 it is in `editable_fields` — but the default is reasoned and shown in the drivers.
+
+**The perk is not always a percentage.** `payload.perk_description` is drawn from what
+Guest DNA knows the guest actually likes — breakfast for the person who ordered it every
+morning, a spa treatment for the person who lived at the spa. Same cost, read completely
+differently: one says somebody noticed, the other says the accounting department noticed.
+`discount_pct` is still there as the fallback and the override.
 
 **Rewards go out after departure.** `/offers/{id}/send` is refused with a 409 while the
 guest is still in the building, and delivers by WhatsApp to the number on file. A

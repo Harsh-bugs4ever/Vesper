@@ -27,8 +27,8 @@ from vesper_common.clock import local_today, utcnow
 from vesper_common.errors import Conflict, Invalid, NotFound
 from vesper_common.permissions import Perm
 
-from .engines import guest_rating, sentiment
-from .models import SentimentRecord, StaffGuestReview, StayReviewSummary
+from .engines import fairness, guest_rating, sentiment
+from .models import GuestDna, SentimentRecord, StaffGuestReview, StayReviewSummary
 from .rag import review_summary
 
 log = logging.getLogger(__name__)
@@ -126,12 +126,18 @@ def rebuild_summary(
         )
     )
 
+    # Correct for how hard each reviewer usually marks before aggregating. A guest whose
+    # stay happened to be covered by the floor's harshest reviewer should not lose a
+    # thank-you they earned. The stored ratings are untouched.
+    correction = _severity_correction(db, property_id, reviews)
+    adjusted = {a.reviewer_id: a.adjusted_rating for a in correction.adjustments}
+
     scored = guest_rating.summarise(
         [
             guest_rating.Review(
                 reviewer_id=str(r.reviewed_by),
                 department_id=str(r.department_id) if r.department_id else None,
-                rating=r.rating,
+                rating=round(adjusted.get(str(r.reviewed_by), r.rating)),
                 comment=r.comment,
                 conflicted=r.is_conflicted,
             )
@@ -155,7 +161,7 @@ def rebuild_summary(
     row.departments = scored.departments
     # The blended reasons include the staff ones plus anything the guest's own behaviour
     # added, so a manager reads one list rather than reconciling two.
-    row.reasons = [reason[:300] for reason in blended.reasons]
+    row.reasons = [reason[:300] for reason in blended.reasons + correction.reasons]
     row.conflicted_reviews = scored.conflicted_reviews
 
     # Only summarise once there is a real picture — a single note needs no condensing,
@@ -173,6 +179,44 @@ def rebuild_summary(
     db.commit()
     db.refresh(row)
     return row
+
+
+def _severity_correction(
+    db: Session, property_id: UUID, reviews: list[StaffGuestReview]
+) -> fairness.Correction:
+    """How each of this stay's reviewers marks, compared with everyone else."""
+    if not reviews:
+        return fairness.Correction()
+
+    reviewer_ids = {r.reviewed_by for r in reviews}
+    history = db.execute(
+        select(StaffGuestReview.reviewed_by, StaffGuestReview.rating).where(
+            StaffGuestReview.property_id == property_id,
+            StaffGuestReview.reviewed_by.in_(reviewer_ids),
+        )
+    ).all()
+
+    by_reviewer: dict[str, list[int]] = {}
+    for reviewer_id, rating in history:
+        by_reviewer.setdefault(str(reviewer_id), []).append(rating)
+
+    profiles = fairness.reviewer_profiles(list(by_reviewer.items()))
+    house = _house_average(db, property_id)
+    return fairness.correct(
+        [(str(r.reviewed_by), r.rating) for r in reviews], profiles, house=house
+    )
+
+
+def _house_average(db: Session, property_id: UUID) -> float:
+    """What every reviewer at this property averages, across all guests."""
+    from sqlalchemy import func
+
+    value = db.scalar(
+        select(func.avg(StaffGuestReview.rating)).where(
+            StaffGuestReview.property_id == property_id
+        )
+    )
+    return float(value) if value is not None else 3.5
 
 
 def _guest_signals(
@@ -297,6 +341,16 @@ def get_summary(db: Session, property_id: UUID, stay_id: UUID) -> StayReviewSumm
     return row
 
 
+def _favourite_outlet(dna: GuestDna | None) -> str | None:
+    """Where they spent their time, if Guest DNA is confident about it."""
+    if dna is None:
+        return None
+    for preference in dna.preferences or []:
+        if preference.get("key") == "favourite_outlet":
+            return preference.get("label")
+    return None
+
+
 def _churn_risk(db: Session, property_id: UUID, guest_id: UUID) -> float:
     """How likely this guest is to drift away, from the retention engine.
 
@@ -396,13 +450,25 @@ def consider_reward(
     if not coupon.offered:
         log.info("no coupon for stay %s: %s", stay_id, coupon.reasons[0])
         return None
-    reasons = reasons + coupon.reasons
+
+    # A percentage is the lazy thank-you. We already know what this guest actually likes.
+    dna = db.scalars(
+        select(GuestDna).where(
+            GuestDna.property_id == property_id, GuestDna.guest_id == row.guest_id
+        )
+    ).first()
+    perk = guest_rating.perk_for(
+        coupon,
+        favourite_items=list(dna.favourite_items) if dna else [],
+        favourite_outlet=_favourite_outlet(dna),
+    )
+    reasons = reasons + coupon.reasons + [perk.reason]
 
     room = row.room_number or "?"
     card = {
         "engine": "guest_intel",
         "kind": "retention_offer",
-        "title": f"Thank room {room} with {coupon.percent:.0f}% off their next stay",
+        "title": f"Thank room {room}: {perk.description}",
         "summary": (
             f"Staff rated this stay {row.score:.2f} across {row.review_count} reviews. "
             f"{row.summary_text or ''}"
@@ -420,10 +486,12 @@ def consider_reward(
             "guest_id": str(row.guest_id),
             "review_score": row.score,
             "discount_pct": coupon.percent,
+            "perk_kind": perk.kind,
+            "perk_description": perk.description,
             # The manager can retune the offer; they cannot rewrite who it is for.
-            "editable_fields": ["discount_pct", "impact_amount"],
+            "editable_fields": ["discount_pct", "perk_description", "impact_amount"],
             "task": {
-                "title": f"Arrange a thank-you for room {room} before checkout",
+                "title": f"Arrange for room {room}: {perk.description}",
                 "description": row.summary_text,
                 "department_id": None,
                 "priority": "high",

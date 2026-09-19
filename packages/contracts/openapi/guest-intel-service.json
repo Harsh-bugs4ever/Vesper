@@ -1961,6 +1961,108 @@
         ]
       }
     },
+    "/guest-reviews/service-notes/guests/{guest_id}": {
+      "get": {
+        "description": "The same, for a guest arriving rather than one already in a room.",
+        "operationId": "service_notes_for_guest_guest_reviews_service_notes_guests__guest_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Service Notes For Guest Guest Reviews Service Notes Guests  Guest Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Service Notes For Guest",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
+    "/guest-reviews/service-notes/stays/{stay_id}": {
+      "get": {
+        "description": "What the person about to knock on the door should know.\n\nThe other half of the review loop. Staff are asked to write these; this is where they\nread what colleagues wrote last time, which is the only thing that keeps anyone\nwriting them past week three.\n\nCarries preferences and useful notes. Never ratings, never who said it, and nothing\nfrom a review by a department this guest complained about.",
+        "operationId": "service_notes_for_stay_guest_reviews_service_notes_stays__stay_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Service Notes For Stay Guest Reviews Service Notes Stays  Stay Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Service Notes For Stay",
+        "tags": [
+          "guest-reviews"
+        ]
+      }
+    },
     "/guest-reviews/stays/{stay_id}": {
       "get": {
         "description": "The summary plus every individual review behind it.\n\nAttributed on purpose: anyone acting on a score should be able to see who said what,\nand a conflicted review should be obvious rather than silently weighted away.",

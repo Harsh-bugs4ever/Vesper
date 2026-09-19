@@ -406,3 +406,81 @@ def coupon_for(score: float | None, *, churn_risk: float = 0.0, average_spend: f
     if average_spend:
         reasons.append(f"Worth about Rs {average_spend * percent / 100:,.0f} on their usual spend")
     return Coupon(percent=round(percent, 1), reasons=reasons)
+
+
+# --- making the thank-you feel like one -------------------------------------------
+#
+# A percentage off is the lazy thank-you. It costs the hotel real money and reads as a
+# transaction, because that is what it is.
+#
+# The system already knows what this guest actually likes — what they ordered, where they
+# spent their evenings, what they asked for twice. A perk drawn from that costs about the
+# same and lands completely differently: "breakfast is on us next time" to the person who
+# ordered breakfast every morning says somebody noticed. Ten percent off says the
+# accounting department noticed.
+#
+# The discount stays as the fallback, because a guest we know nothing about should still
+# get something rather than nothing.
+
+# Which perk suits which habit. Matched on what the guest actually did, in priority order.
+PERK_RULES = (
+    ("breakfast", {"breakfast", "omelette", "poha", "continental"}, "Breakfast on us for your next stay"),
+    ("dining", {"biryani", "butter chicken", "curry", "sandwich", "paneer", "vada"}, "Dinner for two at the all-day restaurant"),
+    ("beverages", {"coffee", "chai", "tea", "lime"}, "Complimentary drinks throughout your next stay"),
+)
+PERK_OUTLETS = (
+    ("spa", {"spa"}, "A complimentary spa treatment"),
+    ("dining", {"restaurant", "dining", "bar"}, "Dinner for two at the all-day restaurant"),
+)
+
+
+@dataclass(slots=True)
+class Perk:
+    """What to actually offer. A discount unless we know something better."""
+
+    kind: str
+    description: str
+    # Kept alongside so the manager can swap back to a plain discount.
+    discount_pct: float
+    reason: str
+
+
+def perk_for(
+    coupon: Coupon,
+    *,
+    favourite_items: list[str] | None = None,
+    favourite_outlet: str | None = None,
+) -> Perk:
+    """Turn an earned coupon into something worth receiving."""
+    if not coupon.offered:
+        return Perk(
+            kind="none", description="", discount_pct=0.0, reason="Nothing has been earned"
+        )
+
+    haystack = " ".join(favourite_items or []).lower()
+    for kind, keywords, description in PERK_RULES:
+        if any(word in haystack for word in keywords):
+            matched = next(w for w in keywords if w in haystack)
+            return Perk(
+                kind=kind,
+                description=description,
+                discount_pct=coupon.percent,
+                reason=f"They ordered {matched} more than anything else",
+            )
+
+    outlet = (favourite_outlet or "").lower()
+    for kind, keywords, description in PERK_OUTLETS:
+        if any(word in outlet for word in keywords):
+            return Perk(
+                kind=kind,
+                description=description,
+                discount_pct=coupon.percent,
+                reason=f"They spent their time at the {favourite_outlet}",
+            )
+
+    return Perk(
+        kind="discount",
+        description=f"{coupon.percent:.0f}% off your next stay",
+        discount_pct=coupon.percent,
+        reason="Nothing specific known about their habits yet, so a straight discount",
+    )

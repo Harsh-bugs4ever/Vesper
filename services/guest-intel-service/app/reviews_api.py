@@ -14,7 +14,7 @@ from vesper_common.db import get_session
 from vesper_common.permissions import Perm
 from vesper_common.security import Principal, current_user, requires
 
-from . import prompts, reviews
+from . import prompts, reviews, service_notes
 from .schemas import (
     GuestReviewCreate,
     GuestReviewOut,
@@ -156,3 +156,34 @@ def prompt_departing(
     """
     asked = prompts.prompt_departing_stays(principal.property_id)
     return {"asked": asked}
+
+
+@router.get("/service-notes/stays/{stay_id}", response_model=dict)
+def service_notes_for_stay(
+    stay_id: UUID,
+    request: Request,
+    principal: Principal = Depends(requires(Perm.GUEST_REVIEW_WRITE)),
+    db: Session = Depends(get_session),
+) -> dict:
+    """What the person about to knock on the door should know.
+
+    The other half of the review loop. Staff are asked to write these; this is where they
+    read what colleagues wrote last time, which is the only thing that keeps anyone
+    writing them past week three.
+
+    Carries preferences and useful notes. Never ratings, never who said it, and nothing
+    from a review by a department this guest complained about.
+    """
+    return service_notes.notes_for_stay(
+        db, UUID(principal.property_id), stay_id, token=_bearer(request)
+    )
+
+
+@router.get("/service-notes/guests/{guest_id}", response_model=dict)
+def service_notes_for_guest(
+    guest_id: UUID,
+    principal: Principal = Depends(requires(Perm.GUEST_REVIEW_WRITE)),
+    db: Session = Depends(get_session),
+) -> dict:
+    """The same, for a guest arriving rather than one already in a room."""
+    return service_notes.notes_for_guest(db, UUID(principal.property_id), guest_id)
