@@ -211,7 +211,23 @@ def test_a_mediocre_score_earns_nothing_however_much_they_spent():
     mediocre = guest_rating.summarise(reviews(3, 3))
     worth_it, reasons = guest_rating.deserves_reward(mediocre, objective_spend=500000, visits=20)
     assert not worth_it
-    assert any("threshold" in r for r in reasons)
+    assert any("thank-you starts at" in r for r in reasons)
+
+
+def test_eligibility_and_coupon_size_agree_on_where_the_floor_is():
+    """These two used to disagree, which made the 10% band unreachable.
+
+    deserves_reward refused anything under 4.2 while coupon_for offered 10% from 3.6, so
+    no guest could ever receive the lower tier. Eligibility asks "did they earn
+    anything"; coupon_for decides how much.
+    """
+    just_above = guest_rating.summarise(reviews(4, 4, 4))
+    assert just_above.score >= guest_rating.COUPON_MIN_SCORE
+    assert just_above.score < guest_rating.REWARD_THRESHOLD
+
+    worth_it, _ = guest_rating.deserves_reward(just_above, objective_spend=20000, visits=2)
+    assert worth_it, "a stay in the lower band must still be eligible"
+    assert guest_rating.coupon_for(just_above.score).percent == 10.0
 
 
 def test_an_unscored_stay_earns_nothing():
@@ -319,3 +335,66 @@ def test_an_unscored_stay_stays_unscored_after_blending():
     result = guest_rating.combine(guest_rating.summarise(reviews(5)), signals(ratings_given=9))
     assert result.final_score is None
     assert result.staff_score is None
+
+
+# --- what the coupon is worth -----------------------------------------------------
+
+
+def test_an_average_stay_earns_no_coupon():
+    """Three out of five is the midpoint, not an achievement.
+
+    A discount most guests receive is a price cut with extra paperwork, and it stops
+    meaning anything to the guest precisely because it is unremarkable.
+    """
+    assert not guest_rating.coupon_for(3.0).offered
+    assert not guest_rating.coupon_for(3.5).offered
+
+
+def test_the_refusal_explains_itself():
+    reasons = guest_rating.coupon_for(3.0).reasons
+    assert any("price cut" in r for r in reasons)
+
+
+def test_a_well_regarded_stay_earns_the_base_coupon():
+    assert guest_rating.coupon_for(3.7, churn_risk=0.0).percent == 10.0
+
+
+def test_an_exceptional_stay_earns_more():
+    assert guest_rating.coupon_for(4.5, churn_risk=0.0).percent > guest_rating.coupon_for(
+        3.7, churn_risk=0.0
+    ).percent
+
+
+def test_a_guest_drifting_away_gets_the_larger_offer():
+    """The economic point: a discount should change a decision, not subsidise one."""
+    loyal = guest_rating.coupon_for(4.3, churn_risk=0.05)
+    drifting = guest_rating.coupon_for(4.3, churn_risk=0.7)
+    assert drifting.percent > loyal.percent
+    assert any("changes a decision" in r for r in drifting.reasons)
+
+
+def test_a_regular_is_told_why_the_offer_is_smaller():
+    reasons = guest_rating.coupon_for(4.3, churn_risk=0.05).reasons
+    assert any("need persuading" in r for r in reasons)
+
+
+def test_the_coupon_is_capped():
+    """Past a point it trains regulars to wait for a discount before booking."""
+    assert guest_rating.coupon_for(5.0, churn_risk=1.0).percent <= guest_rating.COUPON_MAX_PCT
+
+
+def test_an_unscored_stay_earns_nothing():
+    assert not guest_rating.coupon_for(None).offered
+
+
+def test_the_coupon_is_costed_against_their_usual_spend():
+    reasons = guest_rating.coupon_for(4.3, churn_risk=0.0, average_spend=40000).reasons
+    assert any("Rs 6,000" in r for r in reasons)
+
+
+@pytest.mark.parametrize("score", [3.6, 3.9, 4.2, 4.8, 5.0])
+def test_every_offered_coupon_is_within_range(score):
+    for risk in (0.0, 0.5, 1.0):
+        coupon = guest_rating.coupon_for(score, churn_risk=risk)
+        assert 0 < coupon.percent <= guest_rating.COUPON_MAX_PCT
+        assert coupon.reasons

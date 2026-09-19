@@ -297,6 +297,22 @@ def get_summary(db: Session, property_id: UUID, stay_id: UUID) -> StayReviewSumm
     return row
 
 
+def _churn_risk(db: Session, property_id: UUID, guest_id: UUID) -> float:
+    """How likely this guest is to drift away, from the retention engine.
+
+    Zero when we have never profiled them — a guest we know nothing about gets the
+    smaller offer, which is the right way round.
+    """
+    from .models import GuestDna
+
+    row = db.scalars(
+        select(GuestDna).where(
+            GuestDna.property_id == property_id, GuestDna.guest_id == guest_id
+        )
+    ).first()
+    return float(row.risk_score) if row else 0.0
+
+
 def _as_score(row: StayReviewSummary) -> guest_rating.Score:
     return guest_rating.Score(
         review_count=row.review_count,
@@ -368,11 +384,25 @@ def consider_reward(
         log.info("no reward for stay %s: %s", stay_id, reasons[-1])
         return None
 
+    # How well regarded they were decides whether there is a coupon; how likely they are
+    # to drift away decides how big it is. The churn score comes from the retention
+    # engine, which is already tracking exactly that.
+    churn = _churn_risk(db, property_id, row.guest_id)
+    coupon = guest_rating.coupon_for(
+        row.final_score if row.final_score is not None else row.score,
+        churn_risk=churn,
+        average_spend=float(profile.get("average_spend") or spend),
+    )
+    if not coupon.offered:
+        log.info("no coupon for stay %s: %s", stay_id, coupon.reasons[0])
+        return None
+    reasons = reasons + coupon.reasons
+
     room = row.room_number or "?"
     card = {
         "engine": "guest_intel",
         "kind": "retention_offer",
-        "title": f"Thank a well-regarded guest in room {room}",
+        "title": f"Thank room {room} with {coupon.percent:.0f}% off their next stay",
         "summary": (
             f"Staff rated this stay {row.score:.2f} across {row.review_count} reviews. "
             f"{row.summary_text or ''}"
@@ -389,7 +419,9 @@ def consider_reward(
             "stay_id": str(stay_id),
             "guest_id": str(row.guest_id),
             "review_score": row.score,
-            "editable_fields": ["impact_amount"],
+            "discount_pct": coupon.percent,
+            # The manager can retune the offer; they cannot rewrite who it is for.
+            "editable_fields": ["discount_pct", "impact_amount"],
             "task": {
                 "title": f"Arrange a thank-you for room {room} before checkout",
                 "description": row.summary_text,

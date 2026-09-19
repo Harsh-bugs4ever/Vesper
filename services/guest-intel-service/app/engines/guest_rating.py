@@ -40,8 +40,11 @@ HOUSE_AVERAGE = 3.5
 PRIOR_WEIGHT = 2.5
 # Below this, show the reviews but no score. One person's opinion is not a rating.
 MIN_REVIEWS_FOR_SCORE = 2
-# A guest this well regarded is worth a thank-you.
+# A guest this well regarded is worth the larger thank-you.
 REWARD_THRESHOLD = 4.2
+# Nothing below this at all. Above the midpoint on purpose: a thank-you is earned by
+# being memorable, not by being unobjectionable.
+COUPON_MIN_SCORE = 3.6
 # Reviews this low are worth a manager's eye, not a discount.
 CONCERN_THRESHOLD = 2.5
 
@@ -198,8 +201,14 @@ def deserves_reward(score: Score, *, objective_spend: float, visits: int) -> tup
     reasons: list[str] = []
     if not score.is_scored:
         return False, ["Not enough reviews to act on"]
-    if score.score is None or score.score < REWARD_THRESHOLD:
-        return False, [f"Score {score.score:.2f} is below the {REWARD_THRESHOLD} threshold"]
+    # Gated at the coupon floor, not the top tier. These two used to disagree — this
+    # refused anything under 4.2 while coupon_for offered 10% from 3.6, which made that
+    # whole band unreachable. Eligibility is one question ("did they earn anything?") and
+    # size is another; coupon_for owns the second.
+    if score.score is None or score.score < COUPON_MIN_SCORE:
+        return False, [
+            f"Score {score.score:.2f} is below the {COUPON_MIN_SCORE} a thank-you starts at"
+        ]
 
     reasons.append(f"Staff rated this stay {score.score:.2f} across {score.review_count} reviews")
 
@@ -320,3 +329,80 @@ def combine(staff: Score, signals: GuestSignals) -> Combined:
         guest_sentiment=signals.mean_sentiment,
         reasons=reasons,
     )
+
+
+# --- what the thank-you is actually worth -----------------------------------------
+#
+# A fixed "3 stars gets 20%" is the obvious design and it fails twice.
+#
+# **Three is the midpoint, not an achievement.** On a 1-5 scale most stays land at 3 or
+# 4, so a threshold of 3 rewards roughly everyone. A discount everyone gets is not a
+# thank-you, it is a price cut with extra paperwork — and it stops meaning anything to
+# the guest precisely because it is unremarkable.
+#
+# **Twenty percent is aimed at the wrong guest.** The most expensive coupon should go to
+# the guest least likely to come back, not to the one who already would have. Spending
+# the biggest discount on a loyal regular buys a visit that was already happening.
+#
+# So the two questions are separated: how well regarded they were decides *whether* there
+# is a coupon, and how likely they are to drift away decides *how much*. The engine that
+# already scores churn risk is doing the second half.
+
+# Base percentages by how well regarded the stay was.
+COUPON_BASE = ((REWARD_THRESHOLD, 15.0), (COUPON_MIN_SCORE, 10.0))
+# Added when the guest looks like drifting away — the case where a discount actually
+# changes a decision rather than subsidising one already made.
+AT_RISK_UPLIFT = 5.0
+# Hard ceiling. Past this it stops being a thank-you and starts training regulars to
+# wait for a discount before booking.
+COUPON_MAX_PCT = 20.0
+
+
+@dataclass(slots=True)
+class Coupon:
+    percent: float
+    reasons: list[str] = field(default_factory=list)
+
+    @property
+    def offered(self) -> bool:
+        return self.percent > 0
+
+
+def coupon_for(score: float | None, *, churn_risk: float = 0.0, average_spend: float = 0.0) -> Coupon:
+    """How large a thank-you this stay has earned, and why.
+
+    `churn_risk` comes from the retention engine: 0 is a guest with a steady rhythm, 1 is
+    one who has all but stopped coming.
+    """
+    if score is None:
+        return Coupon(percent=0.0, reasons=["Not enough reviews to offer anything"])
+    if score < COUPON_MIN_SCORE:
+        return Coupon(
+            percent=0.0,
+            reasons=[
+                f"Scored {score:.2f}, below the {COUPON_MIN_SCORE} a thank-you starts at. "
+                "A discount everyone receives is a price cut, not a thank-you."
+            ],
+        )
+
+    base = next(pct for threshold, pct in COUPON_BASE if score >= threshold)
+    reasons = [f"Scored {score:.2f}, which earns {base:.0f}%"]
+
+    percent = base
+    if churn_risk >= 0.4:
+        percent += AT_RISK_UPLIFT
+        reasons.append(
+            f"Drifting away ({churn_risk:.0%} churn risk), so the offer is worth "
+            f"{AT_RISK_UPLIFT:.0f}% more — this is where a discount changes a decision "
+            "rather than subsidising one already made"
+        )
+    else:
+        reasons.append(
+            "Coming back regularly, so the smaller offer is the right one — the larger "
+            "discount belongs with the guests who need persuading"
+        )
+
+    percent = min(COUPON_MAX_PCT, percent)
+    if average_spend:
+        reasons.append(f"Worth about Rs {average_spend * percent / 100:,.0f} on their usual spend")
+    return Coupon(percent=round(percent, 1), reasons=reasons)

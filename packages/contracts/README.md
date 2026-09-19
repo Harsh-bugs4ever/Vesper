@@ -167,6 +167,21 @@ should not imply otherwise:
 - **Nothing here is reachable from a guest token** and nothing is ever shown to the
   guest. A 403 on these paths with a QR session is correct, not a bug.
 
+**The coupon size is computed, not typed in.** `payload.discount_pct` on a thank-you card
+is set by two separate questions: how well regarded the stay was decides *whether* there
+is a coupon at all, and how likely the guest is to drift away decides *how much*.
+
+| Score | Regular guest | Drifting away |
+|---|---|---|
+| below 3.6 | nothing | nothing |
+| 3.6 – 4.19 | 10% | 15% |
+| 4.2 and above | 15% | 20% |
+
+Three out of five earns nothing on purpose: it is the midpoint of the scale, so a
+threshold there would reward most stays, and a discount most guests receive is a price
+cut rather than a thank-you. The manager can still adjust `discount_pct` on the card —
+it is in `editable_fields` — but the default is reasoned and shown in the drivers.
+
 **Rewards go out after departure.** `/offers/{id}/send` is refused with a 409 while the
 guest is still in the building, and delivers by WhatsApp to the number on file. A
 thank-you handed over at the desk turns checkout into visible differential treatment —
