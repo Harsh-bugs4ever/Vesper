@@ -1234,6 +1234,32 @@
         ]
       }
     },
+    "/property/ids": {
+      "get": {
+        "description": "Every property id this deployment serves.\n\nUsed by scheduled jobs, which have to cover all properties and have no property to\nscope a token to until they have this list. It returns ids and nothing else, so it\ncarries no information worth protecting.",
+        "operationId": "property_ids_property_ids_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Property Ids Property Ids Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Property Ids",
+        "tags": [
+          "property"
+        ]
+      }
+    },
     "/property/import": {
       "post": {
         "description": "Upload a CSV. Defaults to a dry run so the operator sees the damage first.",

@@ -127,8 +127,27 @@ card, not turn it into a different action.
 | Rosters and leave | `/workforce` |
 | Guest DNA, sentiment, concierge | `/guest-intel` |
 | Outbox | `/notifications` |
+| Owner dashboard (one call, 11 tiles) | `/dashboard` |
 
 ---
+
+## Things that run on their own
+
+Some state changes without anyone pressing a button, so the UI should not assume it only
+changes in response to a click:
+
+| What | How often | Visible as |
+|---|---|---|
+| Overdue requests alerted | every minute | `is_overdue` on a request, a new outbox row |
+| Outbox retries | every minute | `attempts`/`status` moving on `/notifications/outbox` |
+| Stale cards expired, abandoned claims released | every 2 minutes | cards leaving `/cards` |
+| Stock expiry badges | hourly | `days_to_expiry` on `/inventory/items` |
+| Asset risk sweep | every 6 hours | `/maintenance/health`, new work-order cards |
+| Forecast refit + rate cards proposed | twice daily | `/revenue/forecast`, new cards |
+
+`GET /dashboard` returns every tile in one call. Tiles that could not be loaded come back
+`null` and are listed in `unavailable` — show a dash for those rather than a zero, which
+would read as "nothing is wrong" when the truth is "we could not check".
 
 ## Two things to agree on
 

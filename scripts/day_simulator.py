@@ -295,12 +295,17 @@ class Simulation:
         return "routed to housekeeping"
 
     def fnb_delivers(self, request_id: str | None = None) -> str:
-        """Deliver a specific order when told which, else the oldest one waiting.
+        return self.deliver("fnb", request_id)
 
-        Targeting matters: picking whatever happens to be first delivers somebody else's
-        breakfast and leaves the order under test still sitting there.
+    def deliver(self, actor: str, request_id: str | None = None) -> str:
+        """Work a task off the queue as the department that actually owns it.
+
+        The actor matters as much as the request id: a towel request routes to
+        housekeeping, so sending the F&B manager to fulfil it finds nothing — their task
+        list only contains their own department's work. That is the permission model
+        doing its job, not a bug to work around.
         """
-        token = self.resort.sign_in("fnb")
+        token = self.resort.sign_in(actor)
         tasks = self.resort.get("/tasks", token)["tasks"]
         pending = [t for t in tasks if t["source"] == "guest_request" and t["status"] != "done"]
         if request_id:
@@ -371,9 +376,14 @@ class Simulation:
         return self.rate(token, request["id"], comment, stars)
 
     def rate(self, token: str, request_id: str, comment: str, stars: int) -> str:
-        """Rate one specific request, once it is actually delivered."""
-        requests = self.resort.get("/guest/requests", token)
-        target = next((r for r in requests if r["id"] == request_id), None)
+        """Rate one specific request, once it is actually delivered.
+
+        The wait is the point rather than a workaround. Marking the task done publishes
+        an event; guest-service consumes it and moves the guest's tracker to delivered.
+        That hop is deliberately asynchronous, so a guest rating the instant the waiter
+        taps "done" is racing the bus. A real guest rates the food after it arrives.
+        """
+        target = self.await_status(token, request_id, "delivered")
         if target is None:
             return "that request vanished"
         if target["status"] != "delivered":
@@ -407,10 +417,30 @@ class Simulation:
             {"kind": "housekeeping", "note": "Room needs attention", "items": []},
             token,
         )
-        self.fnb_delivers(request["id"])
+        # Housekeeping owns this one, so housekeeping closes it.
+        self.deliver("housekeeping", request["id"])
         comment, stars = self.random.choice(COMPLAINTS)
         outcome = self.rate(token, request["id"], comment, stars)
         return f"{outcome} — sentiment scored, department flagged"
+
+    def await_status(
+        self, token: str, request_id: str, wanted: str, *, timeout: float = 10.0
+    ) -> dict | None:
+        """Poll the guest's own tracker until the request reaches `wanted`.
+
+        Returns the last state seen either way, so the caller can report what it actually
+        found rather than pretending it succeeded.
+        """
+        deadline = time.monotonic() + timeout
+        target: dict | None = None
+        while True:
+            requests = self.resort.get("/guest/requests", token)
+            target = next((r for r in requests if r["id"] == request_id), None)
+            if target is None or target["status"] == wanted:
+                return target
+            if time.monotonic() >= deadline:
+                return target
+            time.sleep(0.5)
 
     def show_dashboard(self) -> str:
         data = self.resort.get("/dashboard", self.resort.sign_in("gm"))
