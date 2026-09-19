@@ -137,8 +137,17 @@ class StayReviewSummaryOut(ORMModel):
     room_number: str | None = None
     review_count: int
     mean_rating: float | None = None
-    # The Bayesian average the ranking sorts on. Null until enough people have reviewed.
+    # The staff-only Bayesian average. Null until enough people have reviewed.
     score: float | None = None
+    # That plus what the guest themselves did. Guest feedback can only raise it — a
+    # complaint is information, not misbehaviour, and never subtracts.
+    final_score: float | None = None
+    engagement_bonus: float = 0.0
+    # The guest's own sentiment toward us. Shown beside the score, never inside it: a
+    # guest who rated us badly is a retention question, not a bad guest.
+    guest_sentiment: float = 0.0
+    # A low staff score on a guest who complained — read the reviews before acting.
+    possible_retaliation: bool = False
     confidence: float
     tier: str
     departments: dict

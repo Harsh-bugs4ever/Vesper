@@ -137,11 +137,18 @@ def approve_offer(
 @router.post("/offers/{offer_id}/send", response_model=OfferOut)
 def send_offer(
     offer_id: UUID,
+    request: Request,
     principal: Principal = Depends(requires(Perm.OFFERS_APPROVE)),
     db: Session = Depends(get_session),
 ) -> OfferOut:
+    """Send an approved offer, once the guest has actually left.
+
+    Refused while they are still in the building: a thank-you handed over at the desk
+    turns checkout into visible differential treatment. On their phone an hour later it
+    reads as a thank-you.
+    """
     return OfferOut.model_validate(
-        service.send_offer(db, UUID(principal.property_id), offer_id)
+        service.send_offer(db, UUID(principal.property_id), offer_id, token=_bearer(request))
     )
 
 

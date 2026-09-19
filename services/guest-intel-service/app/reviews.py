@@ -139,14 +139,23 @@ def rebuild_summary(
         ]
     )
 
+    signals = _guest_signals(db, property_id, stay_id, reviews, token)
+    blended = guest_rating.combine(scored, signals)
+
     row = _summary_row(db, property_id, stay_id, reviews, token)
+    row.final_score = blended.final_score
+    row.engagement_bonus = blended.engagement_bonus
+    row.guest_sentiment = blended.guest_sentiment
+    row.possible_retaliation = blended.possible_retaliation
     row.review_count = scored.review_count
     row.mean_rating = scored.mean_rating
     row.score = scored.score
     row.confidence = scored.confidence
-    row.tier = scored.tier
+    row.tier = blended.tier
     row.departments = scored.departments
-    row.reasons = [reason[:300] for reason in scored.reasons]
+    # The blended reasons include the staff ones plus anything the guest's own behaviour
+    # added, so a manager reads one list rather than reconciling two.
+    row.reasons = [reason[:300] for reason in blended.reasons]
     row.conflicted_reviews = scored.conflicted_reviews
 
     # Only summarise once there is a real picture — a single note needs no condensing,
@@ -164,6 +173,47 @@ def rebuild_summary(
     db.commit()
     db.refresh(row)
     return row
+
+
+def _guest_signals(
+    db: Session,
+    property_id: UUID,
+    stay_id: UUID,
+    reviews: list[StaffGuestReview],
+    token: str | None,
+) -> guest_rating.GuestSignals:
+    """What the guest themselves did — ratings left, how they felt, what they spent.
+
+    Complaints are counted so the retaliation pattern can be spotted, never so they can
+    be held against the guest.
+    """
+    guest_id = reviews[0].guest_id if reviews else None
+    if guest_id is None:
+        stay = frontdesk.get(f"/stays/{stay_id}", property_id=property_id, token=token) or {}
+        if not stay.get("guest_id"):
+            return guest_rating.GuestSignals()
+        guest_id = UUID(stay["guest_id"])
+
+    theirs = list(
+        db.scalars(
+            select(SentimentRecord).where(
+                SentimentRecord.property_id == property_id,
+                SentimentRecord.guest_id == guest_id,
+            )
+        )
+    )
+    stay = frontdesk.get(f"/stays/{stay_id}", property_id=property_id, token=token) or {}
+    profile = (
+        frontdesk.get(f"/visits/{guest_id}/profile", property_id=property_id, token=token) or {}
+    )
+    mean = sum(r.score for r in theirs) / len(theirs) if theirs else 0.0
+    return guest_rating.GuestSignals(
+        ratings_given=len(theirs),
+        mean_sentiment=round(mean, 4),
+        complaints=sum(1 for r in theirs if r.score < -0.15),
+        spend=float(stay.get("folio_total") or 0),
+        visits=int(profile.get("total_visits") or 0),
+    )
 
 
 def _summary_row(
@@ -251,7 +301,7 @@ def _as_score(row: StayReviewSummary) -> guest_rating.Score:
     return guest_rating.Score(
         review_count=row.review_count,
         mean_rating=row.mean_rating,
-        score=row.score,
+        score=row.final_score if row.final_score is not None else row.score,
         confidence=row.confidence,
         tier=row.tier,
         departments=row.departments,
@@ -310,6 +360,10 @@ def consider_reward(
     worth_it, reasons = guest_rating.deserves_reward(
         _as_score(row), objective_spend=spend, visits=int(profile.get("total_visits") or 0)
     )
+    if worth_it and row.possible_retaliation:
+        # Never auto-propose off a score that may be payback for a complaint.
+        log.info("holding the reward for stay %s: possible retaliation flagged", stay_id)
+        return None
     if not worth_it:
         log.info("no reward for stay %s: %s", stay_id, reasons[-1])
         return None

@@ -143,6 +143,7 @@ GET  /guest-reviews/mine                                          only your own
 GET  /guest-reviews/departing?days=1                              the manager's list, ranked
 GET  /guest-reviews/stays/{stay_id}                               summary + every review, attributed
 POST /guest-reviews/stays/{stay_id}/consider-reward               raises a card, sends nothing
+POST /guest-intel/offers/{offer_id}/send                          refused while they are in-house
 ```
 
 Four things the UI should respect, because they are enforced server-side and the screens
@@ -153,10 +154,24 @@ should not imply otherwise:
 - **`score` is not the average.** It is a Bayesian average pulled toward the house mean,
   so three fives read lower than twenty fives. `mean_rating` is there too if you want to
   show both; label them differently.
+- **`final_score` is the one to rank on.** It is `score` plus a small lift for the guest
+  having engaged with us. Guest feedback can only raise it — a complaint is the guest
+  handing us information, and counting it against them would punish the same act twice.
+- **`guest_sentiment` sits beside the score, never inside it.** A guest who rated us two
+  stars is a retention question, not a bad guest. Show it as context.
+- **`possible_retaliation` means stop.** This guest complained and staff scored them low.
+  It may be fair; it may be payback. The reward path refuses to auto-propose on it, and
+  the UI should push the manager to the individual reviews rather than the number.
 - **`is_conflicted` on a review** means that reviewer's department is one this guest
   complained about. Show it next to the review. It is deliberately not filtered out.
 - **Nothing here is reachable from a guest token** and nothing is ever shown to the
   guest. A 403 on these paths with a QR session is correct, not a bug.
+
+**Rewards go out after departure.** `/offers/{id}/send` is refused with a 409 while the
+guest is still in the building, and delivers by WhatsApp to the number on file. A
+thank-you handed over at the desk turns checkout into visible differential treatment —
+the guest in the next queue sees who got something. On their phone an hour later it reads
+as a thank-you. If front desk cannot be reached the send is held rather than risked.
 
 `summary_method` is `model`, `verbatim` or `empty`. On `verbatim` you are looking at
 exactly what staff wrote, stitched together — say so rather than presenting it as a

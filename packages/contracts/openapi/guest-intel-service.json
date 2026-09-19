@@ -711,10 +711,31 @@
             ],
             "title": "Departs On"
           },
+          "engagement_bonus": {
+            "default": 0.0,
+            "title": "Engagement Bonus",
+            "type": "number"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          },
           "guest_id": {
             "format": "uuid",
             "title": "Guest Id",
             "type": "string"
+          },
+          "guest_sentiment": {
+            "default": 0.0,
+            "title": "Guest Sentiment",
+            "type": "number"
           },
           "mean_rating": {
             "anyOf": [
@@ -726,6 +747,11 @@
               }
             ],
             "title": "Mean Rating"
+          },
+          "possible_retaliation": {
+            "default": false,
+            "title": "Possible Retaliation",
+            "type": "boolean"
           },
           "reasons": {
             "items": {
@@ -846,10 +872,31 @@
             ],
             "title": "Departs On"
           },
+          "engagement_bonus": {
+            "default": 0.0,
+            "title": "Engagement Bonus",
+            "type": "number"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          },
           "guest_id": {
             "format": "uuid",
             "title": "Guest Id",
             "type": "string"
+          },
+          "guest_sentiment": {
+            "default": 0.0,
+            "title": "Guest Sentiment",
+            "type": "number"
           },
           "mean_rating": {
             "anyOf": [
@@ -861,6 +908,11 @@
               }
             ],
             "title": "Mean Rating"
+          },
+          "possible_retaliation": {
+            "default": false,
+            "title": "Possible Retaliation",
+            "type": "boolean"
           },
           "reasons": {
             "items": {
@@ -1594,6 +1646,7 @@
     },
     "/guest-intel/offers/{offer_id}/send": {
       "post": {
+        "description": "Send an approved offer, once the guest has actually left.\n\nRefused while they are still in the building: a thank-you handed over at the desk\nturns checkout into visible differential treatment. On their phone an hour later it\nreads as a thank-you.",
         "operationId": "send_offer_guest_intel_offers__offer_id__send_post",
         "parameters": [
           {

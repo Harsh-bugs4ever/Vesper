@@ -346,11 +346,36 @@ def approve_offer(db: Session, property_id: UUID, offer_id: UUID, *, actor_id: U
     return offer
 
 
-def send_offer(db: Session, property_id: UUID, offer_id: UUID) -> RetentionOffer:
-    """Hands the offer to the notification outbox. Approved offers only."""
+def send_offer(
+    db: Session, property_id: UUID, offer_id: UUID, *, token: str | None = None
+) -> RetentionOffer:
+    """Hand an approved offer to the outbox, once the guest has actually left.
+
+    After departure, deliberately. A thank-you handed over at the desk turns an ordinary
+    checkout into a visible piece of differential treatment — the guest in the next queue
+    sees who got something and who did not. Arriving on their phone an hour later it
+    reads as a thank-you rather than a grading, which is the whole point of doing this at
+    all.
+
+    It also means nobody is rewarded for a stay that has not finished going wrong yet.
+    """
     offer = _get_offer(db, property_id, offer_id)
     if offer.status != OfferStatus.APPROVED:
         raise Conflict("Only an approved offer can be sent")
+
+    if _guest_still_in_house(property_id, offer.guest_id, token):
+        raise Conflict(
+            "This guest has not checked out yet — the offer goes out after they leave"
+        )
+
+    guest_row = guest_client.get(
+        f"/guests/{offer.guest_id}", property_id=property_id, token=token
+    ) or {}
+    recipient = guest_row.get("phone")
+    if not recipient and offer.channel == "whatsapp":
+        raise Invalid(
+            "No phone number on file for this guest, so there is nowhere to send it"
+        )
 
     from vesper_common.events import Event, bus
 
@@ -360,8 +385,14 @@ def send_offer(db: Session, property_id: UUID, offer_id: UUID) -> RetentionOffer
             "kind": "retention_offer",
             "channel": offer.channel,
             "guest_id": str(offer.guest_id),
+            # The outbox needs somewhere to send it, not just who it is for.
+            "recipient": recipient or guest_row.get("email") or f"guest:{offer.guest_id}",
+            "subject": "Thank you for staying with us",
             "body": offer.message
-            or f"We miss you — here is {offer.discount_pct:.0f}% off your next stay.",
+            or (
+                f"Thank you for staying with us, {guest_row.get('full_name', '').split(' ')[0]}. "
+                f"Here is {offer.discount_pct:.0f}% off your next visit."
+            ).strip(),
             "offer_id": str(offer.id),
         },
         property_id=str(property_id),
@@ -371,6 +402,22 @@ def send_offer(db: Session, property_id: UUID, offer_id: UUID) -> RetentionOffer
     db.commit()
     db.refresh(offer)
     return offer
+
+
+def _guest_still_in_house(property_id: UUID, guest_id: UUID, token: str | None) -> bool:
+    """Is this guest still on the property?
+
+    Fails closed: if front desk cannot be reached we assume they are still here and
+    refuse to send. Holding a thank-you back an hour costs nothing; handing one to
+    somebody mid-stay is the thing this is designed to avoid.
+    """
+    stays = frontdesk.get(
+        "/stays", property_id=property_id, token=token, params={"status": "in_house"}
+    )
+    if stays is None:
+        log.warning("could not check whether guest %s has left; holding the offer", guest_id)
+        return True
+    return any(stay.get("guest_id") == str(guest_id) for stay in stays)
 
 
 def _get_offer(db: Session, property_id: UUID, offer_id: UUID) -> RetentionOffer:

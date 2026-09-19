@@ -168,6 +168,14 @@ class StayReviewSummary(Base, TimestampMixin):
     reasons: Mapped[list[str]] = mapped_column(ARRAY(String(300)), default=list, nullable=False)
     conflicted_reviews: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # Staff score plus what the guest themselves did. Guest feedback can only raise it;
+    # a complaint is information, not misbehaviour, and never subtracts.
+    final_score: Mapped[float | None] = mapped_column(Float)
+    engagement_bonus: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    guest_sentiment: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # A low staff score on a guest who complained. Read the reviews before acting.
+    possible_retaliation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     summary_text: Mapped[str | None] = mapped_column(Text)
     # "model", "verbatim" or "empty" — stated in the UI, never implied.
     summary_method: Mapped[str] = mapped_column(String(16), default="empty", nullable=False)

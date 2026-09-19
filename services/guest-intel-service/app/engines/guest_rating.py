@@ -219,3 +219,104 @@ def deserves_reward(score: Score, *, objective_spend: float, visits: int) -> tup
             f"{score.conflicted_reviews} review(s) may be conflicted — manager should confirm"
         )
     return True, reasons
+
+
+# --- blending in what the guest told us -------------------------------------------
+#
+# "Take everything into consideration" is right, but the direction matters enormously.
+#
+# A guest who complains has given us information. If staff then rate them down — which
+# is the natural human reaction — and we *also* count the complaint itself against them,
+# they are punished twice for the same act, and the second punishment is dressed up as
+# data. So guest feedback can raise a guest's standing and can never lower it.
+#
+# Their sentiment toward us is a different question: it says how the relationship is
+# going, not how good a guest they were. That belongs on the screen next to the score,
+# not inside it. A guest who rated us two stars is not a bad guest; they are an at-risk
+# guest, which the churn engine already handles.
+
+
+# How much engagement can lift a score. Small on purpose: rating your breakfast is
+# pleasant, not a qualification.
+MAX_ENGAGEMENT_BONUS = 0.25
+# Below this staff score, with a complaint on file, the pattern is worth a manager's eye.
+RETALIATION_STAFF_SCORE = 3.2
+
+
+@dataclass(slots=True)
+class GuestSignals:
+    """What the guest themselves did during the stay."""
+
+    ratings_given: int = 0
+    # Their mean sentiment toward us, -1..1. Reported, never subtracted.
+    mean_sentiment: float = 0.0
+    complaints: int = 0
+    spend: float = 0.0
+    visits: int = 0
+
+
+@dataclass(slots=True)
+class Combined:
+    staff_score: float | None
+    final_score: float | None
+    tier: str
+    engagement_bonus: float
+    # True when a low staff score coincides with a complaint — read the reviews.
+    possible_retaliation: bool
+    guest_sentiment: float
+    reasons: list[str] = field(default_factory=list)
+
+
+def combine(staff: Score, signals: GuestSignals) -> Combined:
+    """Fold the guest's own behaviour into their standing, upward only."""
+    reasons = list(staff.reasons)
+
+    if not staff.is_scored or staff.score is None:
+        return Combined(
+            staff_score=None,
+            final_score=None,
+            tier=staff.tier,
+            engagement_bonus=0.0,
+            possible_retaliation=False,
+            guest_sentiment=signals.mean_sentiment,
+            reasons=reasons,
+        )
+
+    # Engaging with the hotel — rating things, telling us how it went — is a small plus.
+    bonus = min(MAX_ENGAGEMENT_BONUS, signals.ratings_given * 0.08)
+    if bonus:
+        reasons.append(
+            f"Left {signals.ratings_given} rating(s) during the stay (+{bonus:.2f})"
+        )
+
+    final = min(5.0, staff.score + bonus)
+
+    # The pattern that matters: this guest complained, and staff scored them low. It may
+    # be fair and it may be payback. Either way a human should read the reviews rather
+    # than let the number decide.
+    retaliation = signals.complaints > 0 and staff.score < RETALIATION_STAFF_SCORE
+    if retaliation:
+        reasons.append(
+            f"This guest raised {signals.complaints} complaint(s) and staff scored them "
+            f"{staff.score:.2f} — read the individual reviews before acting on this"
+        )
+    elif signals.complaints:
+        reasons.append(
+            f"Raised {signals.complaints} complaint(s), which does not count against them"
+        )
+
+    if signals.mean_sentiment < -0.15:
+        reasons.append(
+            f"Their own feedback was {signals.mean_sentiment:+.2f} — a retention question, "
+            "not a mark against them"
+        )
+
+    return Combined(
+        staff_score=staff.score,
+        final_score=round(final, 4),
+        tier=tier_for(final),
+        engagement_bonus=round(bonus, 4),
+        possible_retaliation=retaliation,
+        guest_sentiment=signals.mean_sentiment,
+        reasons=reasons,
+    )

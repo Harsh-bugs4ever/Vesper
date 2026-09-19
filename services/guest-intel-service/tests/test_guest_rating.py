@@ -229,3 +229,93 @@ def test_a_reward_names_its_conflicts():
     )
     assert worth_it
     assert any("conflicted" in r for r in reasons)
+
+
+# --- blending in the guest's own behaviour ----------------------------------------
+
+
+def signals(**kw) -> guest_rating.GuestSignals:
+    return guest_rating.GuestSignals(**kw)
+
+
+def test_a_complaint_never_lowers_a_guests_standing():
+    """The double-punishment trap.
+
+    Staff rate a complainer down — that is human. If the complaint itself also counted
+    against them, they would be punished twice for one act, and the second time it would
+    look like data.
+    """
+    staff = guest_rating.summarise(reviews(4, 4, 4))
+    clean = guest_rating.combine(staff, signals())
+    complained = guest_rating.combine(staff, signals(complaints=3))
+
+    assert complained.final_score >= clean.final_score
+
+
+def test_bad_feedback_about_us_never_lowers_their_standing():
+    """Rating us two stars makes them an at-risk guest, not a bad one."""
+    staff = guest_rating.summarise(reviews(4, 4, 4))
+    happy = guest_rating.combine(staff, signals(mean_sentiment=0.8))
+    unhappy = guest_rating.combine(staff, signals(mean_sentiment=-0.8))
+
+    assert unhappy.final_score >= happy.final_score - 1e-9
+
+
+def test_engagement_lifts_the_score_a_little():
+    staff = guest_rating.summarise(reviews(4, 4))
+    quiet = guest_rating.combine(staff, signals(ratings_given=0))
+    chatty = guest_rating.combine(staff, signals(ratings_given=3))
+
+    assert chatty.final_score > quiet.final_score
+
+
+def test_engagement_cannot_carry_a_poor_score():
+    """Rating your breakfast is pleasant, not a qualification."""
+    staff = guest_rating.summarise(reviews(2, 2))
+    result = guest_rating.combine(staff, signals(ratings_given=50))
+
+    assert result.engagement_bonus <= guest_rating.MAX_ENGAGEMENT_BONUS
+    assert result.final_score < guest_rating.REWARD_THRESHOLD
+
+
+def test_the_final_score_never_exceeds_the_scale():
+    staff = guest_rating.summarise(reviews(*([5] * 30)))
+    assert guest_rating.combine(staff, signals(ratings_given=40)).final_score <= 5.0
+
+
+def test_a_complaint_plus_a_low_staff_score_is_flagged():
+    """The pattern that might be payback. Surfaced, not silently corrected for."""
+    staff = guest_rating.summarise(reviews(2, 2, 3))
+    result = guest_rating.combine(staff, signals(complaints=1))
+
+    assert result.possible_retaliation
+    assert any("read the individual reviews" in r for r in result.reasons)
+
+
+def test_a_complaint_with_a_good_staff_score_is_not_flagged():
+    """No conflict to see: they complained and staff still thought well of them."""
+    staff = guest_rating.summarise(reviews(5, 4, 5))
+    result = guest_rating.combine(staff, signals(complaints=2))
+
+    assert not result.possible_retaliation
+    assert any("does not count against them" in r for r in result.reasons)
+
+
+def test_a_low_score_with_no_complaint_is_not_flagged():
+    staff = guest_rating.summarise(reviews(2, 2))
+    assert not guest_rating.combine(staff, signals()).possible_retaliation
+
+
+def test_their_sentiment_is_reported_alongside_not_folded_in():
+    staff = guest_rating.summarise(reviews(4, 4))
+    result = guest_rating.combine(staff, signals(mean_sentiment=-0.6))
+
+    assert result.guest_sentiment == -0.6
+    assert any("retention question" in r for r in result.reasons)
+
+
+def test_an_unscored_stay_stays_unscored_after_blending():
+    """Guest signals cannot manufacture a score out of one review."""
+    result = guest_rating.combine(guest_rating.summarise(reviews(5)), signals(ratings_given=9))
+    assert result.final_score is None
+    assert result.staff_score is None
