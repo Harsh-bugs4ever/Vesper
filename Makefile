@@ -3,7 +3,7 @@
 COMPOSE := docker compose
 PY := python
 
-.PHONY: help up down logs build ps db-init db-reset seed contracts fmt test clean
+.PHONY: help up down logs build ps migrate migration db-init db-reset seed reseed contracts simulate test clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -25,7 +25,13 @@ ps: ## Show what is running
 build: ## Rebuild the images without starting them
 	$(COMPOSE) build
 
-db-init: ## Create the schemas and tables
+migrate: ## Apply database migrations (the deployment path)
+	$(PY) -m alembic upgrade head
+
+migration: ## Generate a migration from model changes: make migration m="add x"
+	$(PY) -m alembic revision --autogenerate -m "$(m)"
+
+db-init: ## Create the schemas and tables directly, without migrations (local only)
 	$(PY) infra/bootstrap.py
 
 db-reset: ## Drop and recreate the database. Destroys all data.
@@ -39,6 +45,12 @@ reseed: ## Wipe and reseed from scratch
 
 contracts: ## Regenerate the OpenAPI specs the frontend builds against
 	$(PY) scripts/export_contracts.py
+
+simulate: ## Play a resort day against the running stack
+	$(PY) scripts/day_simulator.py
+
+dev: ## Run every service locally, without Docker
+	$(PY) scripts/run_local.py
 
 test: ## Run the test suite
 	$(PY) -m pytest

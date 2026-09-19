@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import timedelta
 from uuid import UUID
 
@@ -21,6 +22,8 @@ from vesper_common.security import (
 )
 
 from .models import RefreshSession, Role, User
+
+log = logging.getLogger(__name__)
 
 
 def _fingerprint(token: str) -> str:
@@ -192,18 +195,36 @@ def update_user(db: Session, property_id: UUID, user_id: UUID, data) -> User:
 
 
 def ensure_default_roles(db: Session, property_id: UUID) -> None:
-    """Idempotent: seeding and first boot both call this."""
-    existing = {r.key for r in list_roles(db, property_id)}
+    """Create the shipped roles, and keep the system ones in step with the code.
+
+    Idempotent: seeding and first boot both call this.
+
+    Existing system roles are re-synced rather than skipped. Skipping them meant that
+    adding a permission to a role in code reached nobody on an already-seeded database —
+    the endpoint simply 403'd for the role that was supposed to have it, with nothing to
+    show why.
+
+    Roles an operator created or edited in the admin panel are never touched: `is_system`
+    is what separates "this is ours to define" from "a human decided this".
+    """
+    by_key = {r.key: r for r in list_roles(db, property_id)}
     for key, perms in DEFAULT_ROLE_PERMISSIONS.items():
-        if key in existing:
-            continue
-        db.add(
-            Role(
-                property_id=property_id,
-                key=str(key),
-                label=str(key).upper() if key in {"gm"} else str(key).title(),
-                permissions=sorted(str(p) for p in perms),
-                is_system=True,
+        wanted = sorted(str(p) for p in perms)
+        existing = by_key.get(str(key))
+
+        if existing is None:
+            db.add(
+                Role(
+                    property_id=property_id,
+                    key=str(key),
+                    label=str(key).upper() if key in {"gm"} else str(key).title(),
+                    permissions=wanted,
+                    is_system=True,
+                )
             )
-        )
+        elif existing.is_system and sorted(existing.permissions) != wanted:
+            added = sorted(set(wanted) - set(existing.permissions))
+            removed = sorted(set(existing.permissions) - set(wanted))
+            log.info("syncing role %s: +%s -%s", key, added or "none", removed or "none")
+            existing.permissions = wanted
     db.commit()

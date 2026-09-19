@@ -40,8 +40,20 @@ DOWNTIME_COST = {
 DEFAULT_DOWNTIME_COST = Decimal("40000")
 
 
-def assess_asset(db: Session, property_id: UUID, asset: dict, *, metric: str | None = None) -> AssetHealth:
-    """Score one asset from its recent sensor window."""
+def assess_asset(
+    db: Session,
+    property_id: UUID,
+    asset: dict,
+    *,
+    metric: str | None = None,
+    issue_counts: dict[str, int] | None = None,
+) -> AssetHealth:
+    """Score one asset from its recent sensor window.
+
+    `issue_counts` is passed in by the sweep so the issue list is fetched once for the
+    whole property rather than once per asset — that was twelve identical HTTP round
+    trips, enough to push the endpoint past its client timeout.
+    """
     asset_id = UUID(asset["id"])
     raw = (
         property_client.get(
@@ -65,7 +77,11 @@ def assess_asset(db: Session, property_id: UUID, asset: dict, *, metric: str | N
         service_interval_days=int(asset.get("service_interval_days") or 180),
         installed_on=date.fromisoformat(asset["installed_on"]) if asset.get("installed_on") else None,
         criticality=asset.get("criticality", "medium"),
-        issue_reports_90d=_issue_count(property_id, asset_id),
+        issue_reports_90d=(
+            issue_counts.get(str(asset_id), 0)
+            if issue_counts is not None
+            else _issue_counts(property_id).get(str(asset_id), 0)
+        ),
         today=local_today(),
     )
 
@@ -103,12 +119,14 @@ def assess_asset(db: Session, property_id: UUID, asset: dict, *, metric: str | N
 def assess_all(db: Session, property_id: UUID) -> list[AssetHealth]:
     """Nightly sweep across every active asset, raising cards where warranted."""
     assets = property_client.get("/assets", property_id=property_id) or []
+    # One fetch for the whole sweep, not one per asset.
+    issue_counts = _issue_counts(property_id)
     results: list[AssetHealth] = []
     for asset in assets:
         if not asset.get("is_active", True):
             continue
         try:
-            health = assess_asset(db, property_id, asset)
+            health = assess_asset(db, property_id, asset, issue_counts=issue_counts)
         except Exception:
             log.exception("could not assess asset %s", asset.get("code"))
             continue
@@ -267,15 +285,20 @@ def summary(db: Session, property_id: UUID) -> dict:
     }
 
 
-def _issue_count(property_id: UUID, asset_id: UUID) -> int:
-    """How often staff have reported this machine lately."""
+def _issue_counts(property_id: UUID) -> dict[str, int]:
+    """How often each asset has been reported by staff lately, keyed by asset id.
+
+    Duplicate reports count individually: three housekeepers flagging the same dead AC is
+    stronger evidence than one, which is exactly what `duplicate_count` records.
+    """
     issues = guest.get("/issues", property_id=property_id) or []
     cutoff = local_today() - timedelta(days=90)
-    count = 0
+    counts: dict[str, int] = {}
     for issue in issues:
-        if issue.get("asset_id") != str(asset_id):
+        asset_id = issue.get("asset_id")
+        if not asset_id:
             continue
         created = issue.get("created_at")
         if created and datetime.fromisoformat(created).date() >= cutoff:
-            count += issue.get("duplicate_count", 1)
-    return count
+            counts[asset_id] = counts.get(asset_id, 0) + issue.get("duplicate_count", 1)
+    return counts

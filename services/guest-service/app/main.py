@@ -4,12 +4,19 @@ from vesper_common.app_factory import create_app
 
 from .api import UPLOAD_DIR, guest_router, guests_router, issues_router, requests_router
 from .events import start_subscriptions
+from .jobs import build as build_scheduler
+
+
+def _startup() -> None:
+    start_subscriptions()
+    build_scheduler().start()
+
 
 app = create_app(
     name="guest-service",
     title="Vesper Guest",
     routers=(guest_router, requests_router, issues_router, guests_router),
-    subscriptions=start_subscriptions,
+    subscriptions=_startup,
 )
 
 # Issue photos are served straight back off the mounted volume they were written to.

@@ -74,6 +74,10 @@ def set_shadow_mode(db: Session, property_id: UUID, enabled: bool, actor_id: str
     return row
 
 
+def list_property_ids(db: Session) -> list[UUID]:
+    return list(db.scalars(select(Property.id).order_by(Property.name)))
+
+
 def list_departments(db: Session, property_id: UUID) -> list[Department]:
     query = select(Department).where(Department.property_id == property_id).order_by(Department.name)
     return list(db.scalars(query))

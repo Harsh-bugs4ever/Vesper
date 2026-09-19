@@ -39,7 +39,7 @@ def summary(
 
 @router.post("/assess", response_model=dict)
 def assess_all(
-    principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+    principal: Principal = Depends(requires(Perm.MAINTENANCE_RUN)),
     db: Session = Depends(get_session),
 ) -> dict:
     """Nightly sweep: score every asset and raise cards above the risk threshold."""

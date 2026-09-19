@@ -60,6 +60,9 @@ class Perm(StrEnum):
     RATES_APPROVE = "rates:approve"
     ROSTER_APPROVE = "roster:approve"
     WORKORDER_APPROVE = "workorder:approve"
+    # Running the asset risk sweep. Separate from property:write because scoring your own
+    # department's equipment is not the same authority as editing the resort.
+    MAINTENANCE_RUN = "maintenance:run"
     OFFERS_APPROVE = "offers:approve"
 
     # Intelligence surfaces
@@ -97,6 +100,7 @@ MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
     Perm.CARDS_APPROVE,
     Perm.CARDS_DISMISS,
     Perm.WORKORDER_APPROVE,
+    Perm.MAINTENANCE_RUN,
     Perm.ROSTER_APPROVE,
     Perm.PURCHASE_APPROVE,
     Perm.FORECAST_READ,

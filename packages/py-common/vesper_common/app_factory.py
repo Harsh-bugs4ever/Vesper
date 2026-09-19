@@ -3,6 +3,8 @@
 Gives every service: CORS, the shared error shape, /health and /ready, request-id
 logging, and an optional event subscription started at boot.
 """
+import logging
+import sys
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -16,6 +18,36 @@ from .config import settings
 from .db import get_engine
 from .errors import install_error_handlers
 from .events import Envelope, bus
+
+
+def configure_logging(service: str) -> None:
+    """Make the service's own log output actually appear.
+
+    uvicorn configures handlers for its own loggers only. Without this, every
+    `log.info` in our code propagates to a bare root logger, finds no handler, and is
+    dropped — so a scheduled job could run all day and leave no trace. That is a bad
+    way to find out what the backend has been doing.
+
+    Called once per process; a second call is a no-op rather than a duplicated handler.
+    """
+    root = logging.getLogger()
+    if any(getattr(h, "_vesper", False) for h in root.handlers):
+        return
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler._vesper = True  # type: ignore[attr-defined]
+    handler.setFormatter(
+        logging.Formatter(
+            f"%(asctime)s %(levelname)-7s [{service}] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    )
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG if settings.debug else logging.INFO)
+
+    # These two are chatty and uvicorn already reports what matters from them.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def create_app(
@@ -34,6 +66,8 @@ def create_app(
         yield
         if on_shutdown is not None:
             await on_shutdown()
+
+    configure_logging(name)
 
     app = FastAPI(
         title=title,

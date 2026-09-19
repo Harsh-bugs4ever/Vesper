@@ -67,6 +67,17 @@ def set_shadow_mode(
     return PropertyOut.model_validate(row)
 
 
+@router.get("/ids", response_model=list[str])
+def property_ids(db: Session = Depends(get_session)) -> list[str]:
+    """Every property id this deployment serves.
+
+    Used by scheduled jobs, which have to cover all properties and have no property to
+    scope a token to until they have this list. It returns ids and nothing else, so it
+    carries no information worth protecting.
+    """
+    return [str(pid) for pid in service.list_property_ids(db)]
+
+
 @router.get("/departments", response_model=list[DepartmentOut])
 def list_departments(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)

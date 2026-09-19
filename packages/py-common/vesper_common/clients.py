@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from threading import Lock
 from typing import Any
 from uuid import UUID
 
@@ -46,11 +47,37 @@ def service_token(property_id: str | UUID, *, permissions: list[str] | None = No
 
 
 class ServiceClient:
-    """One configured base URL plus auth. Built per call site, not per request."""
+    """One configured base URL plus auth. Built per call site, not per request.
+
+    Each client keeps a pooled httpx.Client. The module-level `httpx.get` helpers open a
+    brand-new TCP connection for every call and close it afterwards, which is invisible
+    on a handful of requests and ruinous on a loop: the maintenance sweep makes one call
+    per asset, and paying full connection setup twelve times took it past its timeout.
+    Reusing connections turned that from tens of seconds into about one.
+    """
 
     def __init__(self, base_url: str, *, name: str) -> None:
         self.base_url = base_url.rstrip("/")
         self.name = name
+        self._client: httpx.Client | None = None
+        self._lock = Lock()
+
+    @property
+    def client(self) -> httpx.Client:
+        """Built on first use so importing this module opens no sockets."""
+        if self._client is None:
+            with self._lock:
+                if self._client is None:
+                    self._client = httpx.Client(
+                        timeout=TIMEOUT,
+                        limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                    )
+        return self._client
+
+    def close(self) -> None:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
     def _headers(self, property_id: str | UUID, token: str | None) -> dict[str, str]:
         return {"Authorization": f"Bearer {token or service_token(property_id)}"}
@@ -70,8 +97,8 @@ class ServiceClient:
         """
         url = f"{self.base_url}{path}"
         try:
-            response = httpx.get(
-                url, headers=self._headers(property_id, token), params=params, timeout=TIMEOUT
+            response = self.client.get(
+                url, headers=self._headers(property_id, token), params=params
             )
             response.raise_for_status()
             return response.json()
@@ -89,8 +116,8 @@ class ServiceClient:
     ) -> Any | None:
         url = f"{self.base_url}{path}"
         try:
-            response = httpx.post(
-                url, headers=self._headers(property_id, token), json=json, timeout=TIMEOUT
+            response = self.client.post(
+                url, headers=self._headers(property_id, token), json=json
             )
             response.raise_for_status()
             return response.json() if response.content else {}
