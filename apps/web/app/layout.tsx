@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-context";
 import { ToastProvider } from "@/components/ui/toast";
@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "Vesper | Smart Resort 360",
   description:
     "AI-driven operating layer for boutique & luxury resorts. Connecting front desk, floor staff, equipment, and guests.",
+};
+
+export const viewport: Viewport = {
   themeColor: "#faf8f5",
   colorScheme: "light",
 };

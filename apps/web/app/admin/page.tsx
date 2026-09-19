@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   Clock,
   RotateCcw,
-  Sliders,
+  SlidersHorizontal,
   ShieldCheck,
   Check,
   IndianRupee,
@@ -90,7 +90,7 @@ export default function AdminOverviewPage() {
               </a>
               <a href="/admin/settings">
                 <Button variant="outline" size="sm">
-                  <Sliders className="w-3.5 h-3.5 mr-1 text-sage-700" />
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-sage-700" />
                   Resort Settings
                 </Button>
               </a>
@@ -340,7 +340,7 @@ export default function AdminOverviewPage() {
                       })
                     }
                   >
-                    <Sliders className="w-3.5 h-3.5 mr-1" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
                     Adjust (+10% / +15%)
                   </Button>
                   <Button

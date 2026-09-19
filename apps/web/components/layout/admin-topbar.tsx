@@ -172,7 +172,7 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
                 <div className="flex items-center justify-between pb-3 border-b border-sand-100">
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-semibold text-sand-950">Resort Alerts</h4>
-                    <span className="text-[10px] bg-gold-100 text-gold-900 font-bold px-1.5 py-0.2 rounded-full">
+                    <span className="text-[10px] bg-gold-100 text-gold-900 font-bold px-1.5 py-0.5 rounded-full">
                       2 new
                     </span>
                   </div>

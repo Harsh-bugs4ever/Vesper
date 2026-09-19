@@ -87,10 +87,22 @@ const config: Config = {
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
       },
       boxShadow: {
+        "2xs": "0 1px 2px 0 rgba(0, 0, 0, 0.03)",
+        xs: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
         soft: "0 2px 10px -2px rgba(44, 62, 51, 0.05), 0 1px 3px -1px rgba(44, 62, 51, 0.03)",
         card: "0 4px 20px -4px rgba(68, 105, 84, 0.08), 0 2px 6px -2px rgba(44, 62, 51, 0.03)",
         elevated: "0 12px 32px -6px rgba(44, 62, 51, 0.12), 0 4px 12px -2px rgba(44, 62, 51, 0.06)",
         gold: "0 4px 16px -2px rgba(197, 154, 42, 0.25)",
+      },
+      backdropBlur: {
+        xs: "2px",
+      },
+      scale: {
+        98: "0.98",
+        102: "1.02",
+      },
+      animation: {
+        "spin-slow": "spin 8s linear infinite",
       },
       borderRadius: {
         lg: "var(--radius)",

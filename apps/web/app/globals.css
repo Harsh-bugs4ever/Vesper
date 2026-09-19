@@ -80,6 +80,39 @@
   box-shadow: 0 2px 8px -2px rgba(44, 62, 51, 0.04);
 }
 
+/* Landing Page Hero and Luxury Display Utilities */
+.hero-gradient-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(20, 32, 26, 0.72) 0%,
+    rgba(26, 38, 32, 0.78) 40%,
+    rgba(20, 32, 26, 0.92) 85%,
+    #faf8f5 100%
+  );
+}
+
+.luxury-glow-gold {
+  box-shadow: 0 0 35px -5px rgba(197, 154, 42, 0.35);
+}
+
+.glass-card-dark {
+  background: rgba(26, 38, 32, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(225, 194, 105, 0.25);
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(232, 222, 208, 0.9);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 /* Custom Scrollbar for Luxury Aesthetics */
 ::-webkit-scrollbar {
   width: 6px;
@@ -97,4 +130,37 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a3c0af;
+}
+
+/* Micro-Animations & Entry Transitions */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zoomIn95 {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInFromBottom5 {
+  from { opacity: 0; transform: translateY(1.25rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.zoom-in-95 {
+  animation-name: zoomIn95;
+}
+
+.slide-in-from-bottom-5 {
+  animation-name: slideInFromBottom5;
 }
