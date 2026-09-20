@@ -119,7 +119,7 @@ export default function UsersAndPermissionsPage() {
           : "General Manager",
       department: newUserDept,
       propertyId: "prop_mumbai_01",
-      propertyName: "Madh Island Beach Resort",
+      propertyName: "JW Marriott Mumbai, Juhu",
       shift: newUserShift,
       status: "active",
       permissions: matrixState[newUserRole] || [],

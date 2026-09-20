@@ -41,6 +41,10 @@ class Property(Base, TimestampMixin):
 
     id: Mapped[UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    # The street address, as it would be printed on a folio. Nullable because a
+    # property is usable without one and an existing row should not have to invent
+    # one; `city` remains the field anything that groups or filters should use.
+    address: Mapped[str | None] = mapped_column(String(240), nullable=True)
     city: Mapped[str] = mapped_column(String(80), default="Mumbai", nullable=False)
     timezone: Mapped[str] = mapped_column(String(48), default="Asia/Kolkata", nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)

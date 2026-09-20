@@ -15,6 +15,7 @@ from .schemas import (
     DepartmentOut,
     ImportResult,
     PropertyOut,
+    PropertySummary,
     PropertyUpdate,
     RoomBoardOut,
     RoomCategoryOut,
@@ -76,6 +77,19 @@ def property_ids(db: Session = Depends(get_session)) -> list[str]:
     carries no information worth protecting.
     """
     return [str(pid) for pid in service.list_property_ids(db)]
+
+
+@router.get("/list", response_model=list[PropertySummary])
+def list_properties(
+    _: Principal = Depends(current_user), db: Session = Depends(get_session)
+) -> list[PropertySummary]:
+    """Every property, named, for the switcher in the admin header.
+
+    Unlike /ids this identifies the business, so it needs a token. It is every
+    signed-in user rather than a permission: the header renders for all of them, and
+    a switcher that cannot name what it is switching between is not a switcher.
+    """
+    return [PropertySummary.model_validate(p) for p in service.list_properties(db)]
 
 
 @router.get("/departments", response_model=list[DepartmentOut])

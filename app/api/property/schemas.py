@@ -14,6 +14,7 @@ class ORMModel(BaseModel):
 class PropertyOut(ORMModel):
     id: UUID
     name: str
+    address: str | None = None
     city: str
     timezone: str
     currency: str
@@ -23,8 +24,25 @@ class PropertyOut(ORMModel):
     settings: dict
 
 
+class PropertySummary(ORMModel):
+    """Enough to name a property in a picker, and nothing more.
+
+    The switcher in the admin header used to hold a hardcoded list. It reads this
+    instead, so a property that is renamed or onboarded shows up without a deploy.
+    Deliberately smaller than PropertyOut: listing every property's settings to
+    populate a dropdown hands out more than the dropdown needs.
+    """
+
+    id: UUID
+    name: str
+    address: str | None = None
+    city: str
+
+
 class PropertyUpdate(BaseModel):
     name: str | None = None
+    address: str | None = Field(default=None, max_length=240)
+    city: str | None = Field(default=None, max_length=80)
     check_in_hour: int | None = Field(default=None, ge=0, le=23)
     check_out_hour: int | None = Field(default=None, ge=0, le=23)
     settings: dict | None = None

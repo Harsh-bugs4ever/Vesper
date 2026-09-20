@@ -247,6 +247,6 @@ rather than part of the role. Gate UI on **permissions, not role names** —
 `perms.includes("rates:approve")` rather than `role === "general_manager"` — and the two
 stop needing to match. The full list is `GET /admin/permissions`.
 
-**The demo property.** The sprint PDF describes a 145-room Madh Island resort; the README
-describes JW Marriott Juhu with ~355 rooms. The seed follows the README (355 rooms, 180
-staff). Say which you want and it is a one-line change in `scripts/seed.py`.
+**The demo property.** Settled: JW Marriott Mumbai, Juhu, 355 rooms. The seed, the
+frontend's demo strings and the README all say that now. The sprint PDF still describes a
+145-room Madh Island resort; the PDF is the stale one.

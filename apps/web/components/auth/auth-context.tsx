@@ -16,14 +16,31 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { ApiError, api, auth as authApi, tokens } from "@/lib/api";
-import { DEMO_USERS, DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
-import { type Department, holdsPermission, isAdminUser, toUiUser } from "@/lib/session";
+import { ApiError, api, auth as authApi, property as propertyApi, tokens } from "@/lib/api";
+import { DEMO_PROPERTY, DEMO_USERS, DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
+import {
+  type Department,
+  type Property,
+  type PropertyOption,
+  holdsPermission,
+  isAdminUser,
+  toPropertyOptions,
+  toUiProperty,
+  toUiUser,
+} from "@/lib/session";
 
 interface AuthContextType {
   user: User;
   role: UserRole;
   rolePermissions: Record<UserRole, string[]>;
+  /**
+   * The branch, from `GET /property` once connected. Falls back to the demo property
+   * so screens render identically with the backend down — which is the whole point of
+   * demo mode, and the reason this is not left null.
+   */
+  property: Property;
+  /** Every property this deployment serves, for the header's switcher. */
+  properties: PropertyOption[];
   /** True once a real backend session is established. */
   isConnected: boolean;
   isLoading: boolean;
@@ -58,6 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>("general_manager");
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(DEFAULT_ROLE_PERMISSIONS);
   const [backendUser, setBackendUser] = useState<User | null>(null);
+  const [backendProperty, setBackendProperty] = useState<Property | null>(null);
+  const [properties, setProperties] = useState<PropertyOption[]>([]);
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,11 +102,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (tokens.access()) {
         try {
           const me = await authApi.me();
-          const departments = await loadDepartments();
+          const [departments, branch, branches] = await Promise.all([
+            loadDepartments(),
+            loadProperty(),
+            loadProperties(),
+          ]);
           if (!cancelled) {
-            const uiUser = toUiUser(me, { departments });
+            const uiUser = toUiUser(me, {
+              departments,
+              propertyName: branch?.name,
+            });
             setBackendUser(uiUser);
             setRole(uiUser.role);
+            if (branch) setBackendProperty(branch);
+            if (branches.length) setProperties(branches);
           }
         } catch {
           // An expired or revoked token just means demo mode; not worth an error.
@@ -107,9 +135,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const me = await authApi.login(email, password);
-      const uiUser = toUiUser(me, { departments: await loadDepartments() });
+      const [departments, branch, branches] = await Promise.all([
+        loadDepartments(),
+        loadProperty(),
+        loadProperties(),
+      ]);
+      const uiUser = toUiUser(me, { departments, propertyName: branch?.name });
       setBackendUser(uiUser);
       setRole(uiUser.role);
+      if (branch) setBackendProperty(branch);
+      if (branches.length) setProperties(branches);
       window.localStorage.setItem(STORAGE_KEY, uiUser.role);
       return uiUser;
     } catch (caught) {
@@ -166,6 +201,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     void authApi.logout();
     setBackendUser(null);
+    // The branch came with the session, so it goes with it. Leaving it behind would
+    // show a signed-out screen the name of a property nobody is authenticated to.
+    setBackendProperty(null);
+    setProperties([]);
     setRole("general_manager");
     setError(null);
     window.localStorage.removeItem(STORAGE_KEY);
@@ -190,10 +229,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextType>(() => {
     // Before mount, render the default GM view to avoid a hydration mismatch.
     const effective = mounted ? user : DEMO_USERS.general_manager;
+    const branch = mounted ? (backendProperty ?? DEMO_PROPERTY) : DEMO_PROPERTY;
     return {
       user: effective,
       role: mounted ? role : "general_manager",
       rolePermissions,
+      property: branch,
+      // Before the list arrives, the one property we can name is our own — better than
+      // an empty switcher that looks broken.
+      properties: properties.length ? properties : [{ id: branch.id, name: branch.name, locality: branch.location }],
       isConnected: backendUser !== null,
       isLoading,
       error,
@@ -215,6 +259,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     role,
     rolePermissions,
+    backendProperty,
+    properties,
     backendUser,
     isLoading,
     error,
@@ -234,6 +280,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 async function loadDepartments(): Promise<Department[]> {
   try {
     return await api.get<Department[]>("/property/departments");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The branch, from the backend.
+ *
+ * Swallowing the failure is deliberate and matches loadDepartments: a property lookup
+ * that fails should cost the screen its address, not the user their session. The
+ * caller falls back to the demo property.
+ */
+async function loadProperty(): Promise<Property | null> {
+  try {
+    return toUiProperty(await propertyApi.current());
+  } catch {
+    return null;
+  }
+}
+
+async function loadProperties(): Promise<PropertyOption[]> {
+  try {
+    return toPropertyOptions(await propertyApi.list());
   } catch {
     return [];
   }

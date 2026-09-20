@@ -100,7 +100,7 @@ export default function LoginPage() {
       role: "guest",
       name: "Deluxe Ocean View (412)",
       title: "In-House Guest Companion",
-      department: "Madh Island Wing",
+      department: "Juhu Wing",
       dest: "/guest",
       badge: "No Login Needed",
       badgeVariant: "gold",
@@ -198,7 +198,7 @@ export default function LoginPage() {
                 <Building2 className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <strong className="text-sand-950 font-semibold block">Madh Island Beach Resort (145 Rooms)</strong>
+                <strong className="text-sand-950 font-semibold block">JW Marriott Mumbai, Juhu (355 Rooms)</strong>
                 <span className="text-sand-600 leading-snug">
                   Modelled on authentic Mumbai coastal hospitality telemetry, live occupancy and sensor streams.
                 </span>
@@ -299,7 +299,7 @@ export default function LoginPage() {
                       Resort Property
                     </label>
                     <div className="px-3 py-2 rounded-lg border border-sand-200 bg-sand-50/60 text-xs font-medium text-sand-800 flex items-center justify-between">
-                      <span>Madh Island Beach Resort, Mumbai</span>
+                      <span>JW Marriott Mumbai, Juhu</span>
                       <Building2 className="w-4 h-4 text-sage-600" />
                     </div>
                   </div>

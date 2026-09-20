@@ -48,7 +48,7 @@ def get_property(db: Session, property_id: UUID) -> Property:
 
 def update_property(db: Session, property_id: UUID, data) -> Property:
     row = get_property(db, property_id)
-    for field in ("name", "check_in_hour", "check_out_hour"):
+    for field in ("name", "address", "city", "check_in_hour", "check_out_hour"):
         value = getattr(data, field)
         if value is not None:
             setattr(row, field, value)
@@ -76,6 +76,11 @@ def set_shadow_mode(db: Session, property_id: UUID, enabled: bool, actor_id: str
 
 def list_property_ids(db: Session) -> list[UUID]:
     return list(db.scalars(select(Property.id).order_by(Property.name)))
+
+
+def list_properties(db: Session) -> list[Property]:
+    """Every property, named. Backs the switcher in the admin header."""
+    return list(db.scalars(select(Property).order_by(Property.name)))
 
 
 def list_departments(db: Session, property_id: UUID) -> list[Department]:

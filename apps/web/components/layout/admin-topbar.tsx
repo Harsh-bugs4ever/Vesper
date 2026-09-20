@@ -12,12 +12,6 @@ interface AdminTopBarProps {
   onOpenSidebar: () => void;
 }
 
-const PROPERTIES = [
-  { name: "The Orchid Grand", locality: "Andheri (E), Mumbai" },
-  { name: "Madh Island Beach Resort", locality: "Madh Island, Mumbai" },
-  { name: "Vesper Mandwa Sands", locality: "Alibaug, Maharashtra" },
-];
-
 const NOTIFICATIONS = [
   {
     id: "n1",
@@ -65,12 +59,17 @@ function useDismiss(onDismiss: () => void) {
 }
 
 export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, property: branch, properties } = useAuth();
   const router = useRouter();
 
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [openMenu, setOpenMenu] = useState<"property" | "alerts" | "profile" | null>(null);
-  const [property, setProperty] = useState(PROPERTIES[0]);
+  // Which one is being viewed. Defaults to the user's own branch, and follows it when
+  // the backend's answer replaces the placeholder the context starts with.
+  const [selectedId, setSelectedId] = useState(branch.id);
+  useEffect(() => setSelectedId(branch.id), [branch.id]);
+
+  const property = properties.find((item) => item.id === selectedId) ?? properties[0];
 
   const menuRef = useDismiss(useCallback(() => setOpenMenu(null), []));
   const unread = NOTIFICATIONS.filter((item) => item.unread).length;
@@ -112,11 +111,11 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
 
             {openMenu === "property" && (
               <div className="animate-in fade-in zoom-in-95 absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-sand-200 bg-white p-1.5 shadow-elevated">
-                {PROPERTIES.map((item) => (
+                {properties.map((item) => (
                   <button
-                    key={item.name}
+                    key={item.id}
                     onClick={() => {
-                      setProperty(item);
+                      setSelectedId(item.id);
                       setOpenMenu(null);
                     }}
                     className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-sand-50"
@@ -125,7 +124,7 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
                       <span className="block text-sm font-medium text-sand-900">{item.name}</span>
                       <span className="block text-xs text-sand-500">{item.locality}</span>
                     </span>
-                    {item.name === property.name && <Check className="h-4 w-4 shrink-0 text-sage-600" />}
+                    {item.id === property.id && <Check className="h-4 w-4 shrink-0 text-sage-600" />}
                   </button>
                 ))}
               </div>

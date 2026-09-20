@@ -3,7 +3,12 @@
 COMPOSE := docker compose
 PY := python
 
-.PHONY: help up down logs build ps migrate migration db-init db-reset seed reseed contracts simulate dev test clean
+.PHONY: help up down logs build ps migrate migration db-init db-reset seed reseed contracts simulate dev dev-api dev-web test clean
+
+# Opening a new terminal window. Both halves are started this way by `make dev`.
+# Paths inside are relative on purpose: Start-Process gives the new window the
+# working directory it was launched from, which is this directory.
+NEW_WINDOW = powershell -NoProfile -Command "Start-Process powershell -ArgumentList '-NoExit','-NoProfile','-Command',
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -49,8 +54,21 @@ contracts: ## Regenerate the OpenAPI spec the frontend builds against
 simulate: ## Play a resort day against the running stack
 	$(PY) scripts/day_simulator.py
 
-dev: ## Run the backend locally, without Docker, reloading on change
+dev: ## Run the backend and the web app, each in its own terminal
+	@$(NEW_WINDOW)'if (Test-Path ''.\venv\Scripts\Activate.ps1'') { & ''.\venv\Scripts\Activate.ps1'' }; python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000'"
+	@$(NEW_WINDOW)'Set-Location ''apps\web''; if (-not (Test-Path ''node_modules'')) { Write-Host ''installing web dependencies, first run only'' -ForegroundColor Yellow; npm install }; npm run dev'"
+	@echo ""
+	@echo "  backend   http://127.0.0.1:8000/docs"
+	@echo "  frontend  http://localhost:3000"
+	@echo ""
+	@echo "  sign in with owner@vesper.demo / vesper123"
+	@echo "  close either window to stop that half"
+
+dev-api: ## Run only the backend, in this terminal
 	$(PY) -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+dev-web: ## Run only the web app, in this terminal
+	cd apps/web && npm run dev
 
 test: ## Run the test suite
 	$(PY) -m pytest

@@ -464,7 +464,7 @@ export default function LandingPage() {
                     <div>
                       <strong className="text-xs font-bold text-sand-950 block">Live Room & Order Board</strong>
                       <p className="text-xs text-sand-600">
-                        Real-time visualization of all 145 rooms, order statuses, and housekeeping wings.
+                        Real-time visualization of all 355 rooms, order statuses, and housekeeping wings.
                       </p>
                     </div>
                   </div>
@@ -952,7 +952,7 @@ export default function LandingPage() {
                 </h4>
                 <p className="text-xs font-medium text-sand-500 mb-2">Housekeeping Division</p>
                 <p className="text-xs text-sand-600 leading-relaxed">
-                  Oversee all 145 rooms, assign daily cleaning batches, track dirty-to-ready turnaround,
+                  Oversee all 355 rooms, assign daily cleaning batches, track dirty-to-ready turnaround,
                   and inspect photo reports.
                 </p>
               </div>

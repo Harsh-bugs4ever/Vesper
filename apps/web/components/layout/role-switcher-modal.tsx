@@ -175,7 +175,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
 
         {/* Modal Footer */}
         <div className="px-6 py-3.5 bg-sand-50/60 border-t border-sand-200 flex items-center justify-between text-xs text-sand-500">
-          <span>Property: Madh Island Beach Resort (145 Rooms)</span>
+          <span>Property: JW Marriott Mumbai, Juhu (355 Rooms)</span>
           <button
             onClick={onClose}
             className="text-xs font-medium text-sand-700 hover:text-sand-950 underline"

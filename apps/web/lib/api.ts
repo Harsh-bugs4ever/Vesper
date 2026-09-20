@@ -1,8 +1,8 @@
 /**
  * The one way this app talks to the backend.
  *
- * Everything goes through the gateway on :8000 — never a service port directly, because
- * the gateway is what validates the token and applies rate limits.
+ * One backend on :8000, which is the whole API — it validates the token and applies
+ * rate limits on the way in.
  *
  * Three things it handles so callers never have to:
  *   - attaching the bearer token;
@@ -216,6 +216,36 @@ export interface BackendUser {
   property_id: string;
   permissions: string[];
 }
+
+/** `GET /property` — the branch this user belongs to, as the backend knows it. */
+export interface BackendProperty {
+  id: string;
+  name: string;
+  /** Street address. Null is allowed: a property is usable without one. */
+  address: string | null;
+  city: string;
+  timezone: string;
+  currency: string;
+  total_rooms: number;
+  check_in_hour: number;
+  check_out_hour: number;
+  settings: Record<string, unknown>;
+}
+
+/** `GET /property/list` — enough to name a property in the switcher. */
+export interface BackendPropertySummary {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string;
+}
+
+export const property = {
+  /** The signed-in user's own property. */
+  current: () => api.get<BackendProperty>("/property"),
+  /** Every property this deployment serves. */
+  list: () => api.get<BackendPropertySummary[]>("/property/list"),
+};
 
 export interface GuestSession {
   token: string;

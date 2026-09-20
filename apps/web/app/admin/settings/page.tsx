@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { DEMO_PROPERTY } from "@/lib/auth";
 import {
@@ -47,20 +47,37 @@ interface AuditLogEntry {
 }
 
 export default function ResortSettingsPage() {
-  const { user, role } = useAuth();
+  const { user, role, property } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<
     "profile" | "outlets" | "connectors" | "ai_guardrails" | "audit"
   >("profile");
 
-  // Property Profile State
-  const [resortName, setResortName] = useState(DEMO_PROPERTY.name);
-  const [brandName, setBrandName] = useState(DEMO_PROPERTY.brand);
-  const [locationStr, setLocationStr] = useState(DEMO_PROPERTY.location);
-  const [currency, setCurrency] = useState(DEMO_PROPERTY.currency);
-  const [checkIn, setCheckIn] = useState(DEMO_PROPERTY.checkInTime);
-  const [checkOut, setCheckOut] = useState(DEMO_PROPERTY.checkOutTime);
+  // Property Profile State. Seeded from whatever the context has on first render and
+  // re-seeded below when the backend's answer lands, because `property` starts as the
+  // demo fallback and is replaced once GET /property resolves.
+  const [resortName, setResortName] = useState(property.name);
+  const [brandName, setBrandName] = useState(property.brand);
+  const [locationStr, setLocationStr] = useState(property.location);
+  const [currency, setCurrency] = useState(property.currency);
+  const [checkIn, setCheckIn] = useState(property.checkInTime);
+  const [checkOut, setCheckOut] = useState(property.checkOutTime);
+
+  // Keyed on the property id: it changes exactly once, when the real branch arrives.
+  // Without the key this would overwrite whatever the user had typed on every render
+  // the context happens to produce.
+  const [loadedPropertyId, setLoadedPropertyId] = useState(property.id);
+  useEffect(() => {
+    if (property.id === loadedPropertyId) return;
+    setLoadedPropertyId(property.id);
+    setResortName(property.name);
+    setBrandName(property.brand);
+    setLocationStr(property.location);
+    setCurrency(property.currency);
+    setCheckIn(property.checkInTime);
+    setCheckOut(property.checkOutTime);
+  }, [property, loadedPropertyId]);
 
   // AI Guardrail States
   const [confidenceThreshold, setConfidenceThreshold] = useState(
@@ -114,7 +131,7 @@ export default function ResortSettingsPage() {
       actor: "BMS Anomaly Engine",
       role: "Autonomous ML",
       action: "Flagged Chiller #2 Bearing Vibration (0.42g)",
-      target: "Chiller #2 · Madh Central Plant",
+      target: "Chiller #2 · Juhu Central Plant",
       impact: "Queued Maintenance Card for quiet day",
       status: "flagged",
     },
@@ -156,7 +173,7 @@ export default function ResortSettingsPage() {
       setIsPmsSyncing(false);
       showToast({
         title: "PMS Resync Completed",
-        description: "145/145 room keys and 112 active guest folios synchronized with Opera Cloud.",
+        description: "355/355 room keys and 112 active guest folios synchronized with Opera Cloud.",
         type: "success",
       });
     }, 1200);
@@ -254,7 +271,7 @@ export default function ResortSettingsPage() {
           )}
         >
           <Building2 className="w-4 h-4" />
-          <span>Property Profile & 145 Rooms</span>
+          <span>Property Profile & 355 Rooms</span>
         </button>
 
         <button
@@ -310,7 +327,7 @@ export default function ResortSettingsPage() {
         </button>
       </div>
 
-      {/* TAB 1: PROPERTY PROFILE & 145 ROOMS */}
+      {/* TAB 1: PROPERTY PROFILE & 355 ROOMS */}
       {activeTab === "profile" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -422,7 +439,7 @@ export default function ResortSettingsPage() {
 
                   <div className="pt-2 border-t border-sand-200/80 flex items-center justify-between text-xs font-semibold text-sand-800">
                     <span>Total Key Inventory:</span>
-                    <span className="text-sage-900 font-serif text-lg font-bold">145 Rooms</span>
+                    <span className="text-sage-900 font-serif text-lg font-bold">355 Rooms</span>
                   </div>
                 </CardContent>
               </Card>
@@ -548,7 +565,7 @@ export default function ResortSettingsPage() {
                   <div>
                     <span className="text-sand-500 text-[11px] block">Mapped Rooms</span>
                     <span className="font-serif text-lg font-bold text-sand-950">
-                      145 / 145 Rooms
+                      355 / 355 Rooms
                     </span>
                   </div>
                   <div>

@@ -9,8 +9,8 @@
  * Gate on permissions, not on the role name. `hasPermission("rates:approve")` keeps
  * working whatever either side calls the job.
  */
-import type { BackendUser } from "./api";
-import { DEMO_USERS, type User, type UserRole } from "./auth";
+import type { BackendProperty, BackendPropertySummary, BackendUser } from "./api";
+import { DEMO_PROPERTY, DEMO_USERS, type User, type UserRole } from "./auth";
 
 /** Department keys the backend seeds, used to pick a UI role for a manager. */
 const HOUSEKEEPING = "housekeeping";
@@ -75,6 +75,59 @@ export function toUiUser(
     propertyName: options.propertyName ?? DEMO_USERS[role].propertyName,
     permissions: user.permissions,
   };
+}
+
+export type Property = typeof DEMO_PROPERTY;
+
+/** How the backend writes an hour, rendered the way the screens already show one. */
+function toClockTime(hour: number): string {
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+/**
+ * The property as the backend knows it, in the shape the screens already read.
+ *
+ * Name, address, room count, timezone, currency and the check-in/out hours are facts
+ * about the business, so they come from `GET /property` — printing them from a
+ * constant compiled into the bundle meant the address on screen and the property in
+ * the database could disagree and nothing would notice.
+ *
+ * The rest of `DEMO_PROPERTY` is kept as the base: outlets, room categories, the
+ * headcount table and the live weather have no backend field behind them yet, and
+ * blanking those screens would be a worse answer than showing the demo's version of
+ * them. Each is a candidate for the same treatment as an endpoint appears.
+ *
+ * `address` is nullable server-side; when it is null the city is the honest answer,
+ * because inventing a street for a property that has not recorded one is how the
+ * hardcoded address got there in the first place.
+ */
+export function toUiProperty(backend: BackendProperty): Property {
+  return {
+    ...DEMO_PROPERTY,
+    id: backend.id,
+    name: backend.name,
+    location: backend.address ?? backend.city,
+    totalRooms: backend.total_rooms,
+    timezone: backend.timezone,
+    currency: backend.currency,
+    checkInTime: toClockTime(backend.check_in_hour),
+    checkOutTime: toClockTime(backend.check_out_hour),
+  };
+}
+
+export interface PropertyOption {
+  id: string;
+  name: string;
+  locality: string;
+}
+
+/** The switcher's list. Same nullable-address rule as above. */
+export function toPropertyOptions(rows: BackendPropertySummary[]): PropertyOption[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    locality: row.address ?? row.city,
+  }));
 }
 
 /**

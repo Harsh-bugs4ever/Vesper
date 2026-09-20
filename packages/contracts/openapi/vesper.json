@@ -3352,6 +3352,17 @@
       },
       "PropertyOut": {
         "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
           "check_in_hour": {
             "title": "Check In Hour",
             "type": "integer"
@@ -3404,8 +3415,56 @@
         "title": "PropertyOut",
         "type": "object"
       },
+      "PropertySummary": {
+        "description": "Enough to name a property in a picker, and nothing more.\n\nThe switcher in the admin header used to hold a hardcoded list. It reads this\ninstead, so a property that is renamed or onboarded shows up without a deploy.\nDeliberately smaller than PropertyOut: listing every property's settings to\npopulate a dropdown hands out more than the dropdown needs.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "city"
+        ],
+        "title": "PropertySummary",
+        "type": "object"
+      },
       "PropertyUpdate": {
         "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
           "check_in_hour": {
             "anyOf": [
               {
@@ -3431,6 +3490,18 @@
               }
             ],
             "title": "Check Out Hour"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
           },
           "name": {
             "anyOf": [
@@ -13153,6 +13224,37 @@
           }
         ],
         "summary": "Import Csv",
+        "tags": [
+          "property"
+        ]
+      }
+    },
+    "/property/list": {
+      "get": {
+        "description": "Every property, named, for the switcher in the admin header.\n\nUnlike /ids this identifies the business, so it needs a token. It is every\nsigned-in user rather than a permission: the header renders for all of them, and\na switcher that cannot name what it is switching between is not a switcher.",
+        "operationId": "list_properties_property_list_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PropertySummary"
+                  },
+                  "title": "Response List Properties Property List Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Properties",
         "tags": [
           "property"
         ]

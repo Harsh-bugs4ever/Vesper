@@ -24,7 +24,7 @@ export function StaffHeader() {
     if (newState) {
       showToast({
         title: "Shift Started · GPS & QR Verified",
-        description: "Checked into Madh Island Beach Resort at 07:02 AM. Today's task list loaded.",
+        description: "Checked into JW Marriott Mumbai, Juhu at 07:02 AM. Today's task list loaded.",
         type: "success",
       });
     } else {

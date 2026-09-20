@@ -212,6 +212,7 @@ def _seed(db) -> dict[str, int]:
     # --- property, departments, categories, rooms ---------------------------------
     property_row = prop.Property(
         name="JW Marriott Mumbai, Juhu",
+        address="Juhu Tara Road, Mumbai, Maharashtra 400049",
         city="Mumbai",
         timezone="Asia/Kolkata",
         currency="INR",
