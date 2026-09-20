@@ -171,3 +171,103 @@ export const CHANNELS: RequestChannel[] = [
   "Maintenance",
   "Front Desk",
 ];
+
+const STORAGE_KEY = "vesper_demo_guest_requests";
+const UPDATE_EVENT = "vesper_requests_updated";
+
+export function getStoredRequests(): GuestRequest[] {
+  if (typeof window === "undefined") return requests;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
+      return requests;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return requests;
+  }
+}
+
+export function saveStoredRequests(next: GuestRequest[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: next }));
+  } catch (e) {
+    console.error("Failed to save demo requests:", e);
+  }
+}
+
+export function addGuestRequest(
+  input: Omit<GuestRequest, "id" | "raisedAt" | "openFor" | "state"> & {
+    id?: string;
+    raisedAt?: string;
+    openFor?: number;
+    state?: RequestState;
+  }
+): GuestRequest {
+  const all = getStoredRequests();
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const newReq: GuestRequest = {
+    id: input.id || `REQ-${Math.floor(4200 + Math.random() * 800)}`,
+    room: input.room,
+    guest: input.guest,
+    channel: input.channel,
+    summary: input.summary,
+    detail: input.detail,
+    raisedAt: input.raisedAt || timeStr,
+    openFor: input.openFor ?? 0,
+    sla: input.sla || channelMeta[input.channel]?.sla || 20,
+    state: input.state || "new",
+    assignee: input.assignee,
+    value: input.value,
+  };
+  const updated = [newReq, ...all];
+  saveStoredRequests(updated);
+  return newReq;
+}
+
+export function updateGuestRequest(
+  id: string,
+  updater: (req: GuestRequest) => GuestRequest
+): GuestRequest | null {
+  const all = getStoredRequests();
+  let updatedReq: GuestRequest | null = null;
+  const updated = all.map((r) => {
+    if (r.id === id) {
+      updatedReq = updater(r);
+      return updatedReq;
+    }
+    return r;
+  });
+  if (updatedReq) {
+    saveStoredRequests(updated);
+  }
+  return updatedReq;
+}
+
+export function subscribeRequests(callback: (all: GuestRequest[]) => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handleUpdate = (e: Event) => {
+    const custom = e as CustomEvent<GuestRequest[]>;
+    if (custom.detail) {
+      callback(custom.detail);
+    } else {
+      callback(getStoredRequests());
+    }
+  };
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) {
+      callback(getStoredRequests());
+    }
+  };
+  window.addEventListener(UPDATE_EVENT, handleUpdate);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(UPDATE_EVENT, handleUpdate);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+

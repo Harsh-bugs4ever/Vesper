@@ -747,14 +747,14 @@ export default function LandingPage() {
                 <div
                   key={s.step}
                   onClick={() => setActiveFlowStep(idx)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-4 ${
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-4 overflow-hidden ${
                     activeFlowStep === idx
                       ? "bg-white border-gold-400 shadow-card translate-x-1"
                       : "bg-sand-50/70 border-sand-200 hover:bg-white hover:border-sand-300"
                   }`}
                 >
                   <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${
                       activeFlowStep === idx
                         ? "bg-sage-700 text-gold-300"
                         : "bg-sand-200 text-sand-800"
@@ -762,17 +762,17 @@ export default function LandingPage() {
                   >
                     {s.step}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-sand-950">{s.action}</span>
-                      <span className="text-[10px] uppercase font-semibold text-sage-700">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-sand-950 truncate">{s.action}</span>
+                      <span className="text-[10px] uppercase font-semibold text-sage-700 shrink-0">
                         {s.actor}
                       </span>
                     </div>
                     <p className="text-xs text-sand-600 truncate mt-0.5">{s.desc}</p>
                   </div>
                   <ChevronRight
-                    className={`w-4 h-4 transition-transform ${
+                    className={`w-4 h-4 shrink-0 transition-transform ${
                       activeFlowStep === idx ? "text-gold-600 translate-x-1" : "text-sand-400"
                     }`}
                   />
@@ -785,21 +785,21 @@ export default function LandingPage() {
               <div className="rounded-3xl border border-sand-200 bg-white p-8 sm:p-10 shadow-elevated relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-gold-50/50 rounded-full blur-3xl pointer-events-none" />
 
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-sage-50 border border-sage-200 text-sage-700">
+                <div className="flex items-center justify-between gap-4 mb-6">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-3 rounded-xl bg-sage-50 border border-sage-200 text-sage-700 shrink-0">
                       {flowSteps[activeFlowStep].icon}
                     </div>
-                    <div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-gold-700">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gold-700 block">
                         Step {flowSteps[activeFlowStep].step} of 06
                       </span>
-                      <h4 className="text-2xl font-bold font-serif text-sage-950">
+                      <h4 className="text-2xl font-bold font-serif text-sage-950 truncate">
                         {flowSteps[activeFlowStep].action}
                       </h4>
                     </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-sand-100 border border-sand-200 text-xs font-semibold text-sand-800">
+                  <span className="px-3 py-1 rounded-full bg-sand-100 border border-sand-200 text-xs font-semibold text-sand-800 shrink-0">
                     {flowSteps[activeFlowStep].badge}
                   </span>
                 </div>

@@ -13,7 +13,9 @@ import { useToast } from "@/components/ui/toast";
 import {
   CHANNELS,
   channelMeta,
-  requests as seedRequests,
+  getStoredRequests,
+  subscribeRequests,
+  updateGuestRequest,
   type GuestRequest,
   type RequestChannel,
 } from "@/lib/demo/requests";
@@ -36,9 +38,15 @@ function isOverdue(request: GuestRequest) {
 export default function RequestsPage() {
   const { showToast, showUndoToast } = useToast();
 
-  const [requests, setRequests] = useState<GuestRequest[]>(seedRequests);
+  const [requests, setRequests] = useState<GuestRequest[]>([]);
   const [channel, setChannel] = useState<ChannelFilter>("all");
   const [state, setState] = useState<StateFilter>("open");
+
+  React.useEffect(() => {
+    setRequests(getStoredRequests());
+    const unsub = subscribeRequests(setRequests);
+    return unsub;
+  }, []);
 
   const open = requests.filter((request) => request.state !== "done");
   const overdue = requests.filter(isOverdue);
@@ -60,11 +68,11 @@ export default function RequestsPage() {
   );
 
   const accept = (request: GuestRequest) => {
-    setRequests((current) =>
-      current.map((item) =>
-        item.id === request.id ? { ...item, state: "accepted", assignee: "You" } : item
-      )
-    );
+    updateGuestRequest(request.id, (item) => ({
+      ...item,
+      state: "accepted",
+      assignee: "You",
+    }));
     showToast({
       title: `${request.id} accepted`,
       description: `Room ${request.room} · ${request.summary}. Timer running against a ${request.sla} min target.`,
@@ -76,19 +84,17 @@ export default function RequestsPage() {
     const previous = request.state;
     const previousAssignee = request.assignee;
 
-    setRequests((current) =>
-      current.map((item) => (item.id === request.id ? { ...item, state: "done" } : item))
-    );
+    updateGuestRequest(request.id, (item) => ({ ...item, state: "done" }));
 
     showUndoToast(
       `${request.id} completed`,
       `Room ${request.room} · ${request.summary}. Guest asked to rate it.`,
       () =>
-        setRequests((current) =>
-          current.map((item) =>
-            item.id === request.id ? { ...item, state: previous, assignee: previousAssignee } : item
-          )
-        ),
+        updateGuestRequest(request.id, (item) => ({
+          ...item,
+          state: previous,
+          assignee: previousAssignee,
+        })),
       10
     );
   };

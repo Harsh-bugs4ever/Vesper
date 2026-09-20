@@ -8,18 +8,20 @@ import {
   AlertTriangle,
   UtensilsCrossed,
   Sparkles,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/auth-context";
 
-interface StaffBottomNavProps {
-  activeTab: "tasks" | "rooms" | "scan" | "report";
-  onSelectTab: (tab: "tasks" | "rooms" | "scan" | "report") => void;
-  pendingTasksCount?: number;
-}
+export type StaffTab = "tasks" | "requests" | "rooms" | "scan" | "report";
 
-type StaffTab = StaffBottomNavProps["activeTab"];
+interface StaffBottomNavProps {
+  activeTab: StaffTab;
+  onSelectTab: (tab: StaffTab) => void;
+  pendingTasksCount?: number;
+  pendingRequestsCount?: number;
+}
 
 interface NavTab {
   id: StaffTab;
@@ -33,6 +35,7 @@ export function StaffBottomNav({
   activeTab,
   onSelectTab,
   pendingTasksCount = 3,
+  pendingRequestsCount = 0,
 }: StaffBottomNavProps) {
   const { user } = useAuth();
   const isFb =
@@ -47,15 +50,21 @@ export function StaffBottomNav({
       count: pendingTasksCount > 0 ? pendingTasksCount : undefined,
     },
     {
-      id: "rooms",
-      label: isFb ? "Tables & Dining" : "Room Board",
-      icon: isFb ? Sparkles : BedDouble,
+      id: "requests",
+      label: "Requests",
+      icon: Inbox,
+      count: pendingRequestsCount > 0 ? pendingRequestsCount : undefined,
     },
     {
       id: "scan",
       label: "QR Scan",
       icon: QrCode,
       isFab: true,
+    },
+    {
+      id: "rooms",
+      label: isFb ? "Tables" : "Room Board",
+      icon: isFb ? Sparkles : BedDouble,
     },
     {
       id: "report",
