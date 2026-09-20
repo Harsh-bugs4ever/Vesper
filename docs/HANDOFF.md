@@ -86,15 +86,15 @@ Guests / Property / AI & Analytics), new topbar, footer, hand-drawn `vesper-mark
 `guest_rating` engine, `/guest-reviews/*` routes — staff reviewing guests.
 
 **Built this session** — the missing direction:
-- `services/guest-intel-service/app/engines/staff_rating.py` — Bayesian average, 60-day
+- `app/api/guest_intel/engines/staff_rating.py` — Bayesian average, 60-day
   recency half-life, **min 4 distinct guests** before any score, complaint-context flagging
-- `services/guest-intel-service/app/staff_reviews.py` + `staff_reviews_api.py` — 7 routes
+- `app/api/guest_intel/staff_reviews.py` + `staff_reviews_router.py` — 7 routes
 - `models.py` — `GuestStaffReview`, `StaffPerformanceSummary`
 - `infra/migrations/versions/0003_guest_staff_reviews.py`
-- `services/guest-intel-service/tests/test_staff_rating.py` — **18 tests, all passing**
+- `tests/guest_intel/test_staff_rating.py` — **18 tests, all passing**
 - `permissions.py` — `STAFF_REVIEW_READ`, `STAFF_REVIEW_READ_OWN`
-- `services/guest-service/` — `staff_who_served()` + `GET /guest/served-by`
-- `services/api-gateway/app/service.py` — `/staff-reviews` route
+- `app/api/guest/` — `staff_who_served()` + `GET /guest/served-by`
+- `app/api/__init__.py` — the module registry that mounts `/staff-reviews`
 
 **Design rules the code enforces** (not just documents):
 one rating per guest per staff member per stay, immutable; a score needs 4 separate
@@ -114,7 +114,7 @@ stops, and a test asserts no `flag_for_hr` / `bottom_performer` field exists.
 - `app/api/resort-hero/route.ts` — Node `Buffer` is not a DOM `BodyInit`
 - Three endpoints I had invented in an earlier pass and have now corrected to real ones
   (`frontdesk /stays/{id}/served-by` → guest-service; `staff /staff/{id}` →
-  `identity /admin/users/{id}`; missing gateway route)
+  `identity /admin/users/{id}`; missing route registration)
 - `python-multipart` declared in `requirements-base.txt` but not installed locally
 
 ---

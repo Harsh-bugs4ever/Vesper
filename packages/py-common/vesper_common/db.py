@@ -1,8 +1,8 @@
 """Database session and declarative base.
 
-All thirteen services share one PostgreSQL database with one schema per bounded context,
-so the whole demo runs on a laptop. Services still never read each other's tables — that
-rule is enforced by review, and splitting the databases later is a deployment change.
+One PostgreSQL database, one schema per bounded context. The schemas outlive the
+split into services: a module still reads only its own tables, so pulling one back out
+remains a deployment change rather than a rewrite.
 """
 from collections.abc import Iterator
 from datetime import datetime
@@ -104,32 +104,40 @@ def session_scope() -> Session:
     return SessionLocal()
 
 
-def import_all_models(services_root: str | None = None) -> None:
-    """Import every service's models.py so Base.metadata describes the whole database.
+def import_all_models(models_root: str | None = None) -> None:
+    """Import every module's models.py so Base.metadata describes the whole database.
 
-    Each service owns its own models.py (see services/<name>/app/models.py), but they all
-    hang off one Base. Alembic and the bootstrap script need the complete picture, so we
-    load each file by path under a unique module name — every service package is called
-    "app", so a plain import would collide.
+    Each bounded context owns its own models.py (see app/api/<name>/models.py) and they
+    all hang off one Base, so Alembic and the bootstrap script only see the complete
+    picture once every one of them has been imported. The monolith gets that for free by
+    importing app.api; this exists for the callers that must not — Alembic and bootstrap
+    run against the schema without starting the application.
+
+    Loading by path rather than by import keeps this package independent of the
+    application package that sits above it.
     """
     import importlib.util
     import sys
     import types
     from pathlib import Path
 
-    root = Path(services_root) if services_root else Path(__file__).resolve().parents[3] / "services"
+    root = (
+        Path(models_root)
+        if models_root
+        else Path(__file__).resolve().parents[3] / "app" / "api"
+    )
     if not root.is_dir():
         return
 
-    # Register the parent namespace first. Without it, `import vesper_models.staff_service`
+    # Register the parent namespace first. Without it, `import vesper_models.staff`
     # fails on the parent lookup even though the submodule is already in sys.modules.
     if "vesper_models" not in sys.modules:
         parent = types.ModuleType("vesper_models")
         parent.__path__ = []  # a namespace package, with no directory of its own
         sys.modules["vesper_models"] = parent
-    for models_file in sorted(root.glob("*/app/models.py")):
-        service = models_file.parents[1].name.replace("-", "_")
-        module_name = f"vesper_models.{service}"
+    for models_file in sorted(root.glob("*/models.py")):
+        context = models_file.parent.name.replace("-", "_")
+        module_name = f"vesper_models.{context}"
         if module_name in sys.modules:
             continue
         spec = importlib.util.spec_from_file_location(module_name, models_file)
@@ -138,8 +146,8 @@ def import_all_models(services_root: str | None = None) -> None:
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
-        # Expose it as an attribute too, so `from vesper_models import staff_service` works.
-        setattr(sys.modules["vesper_models"], service, module)
+        # Expose it as an attribute too, so `from vesper_models import staff` works.
+        setattr(sys.modules["vesper_models"], context, module)
 
 
 def json_default(value: Any) -> Any:

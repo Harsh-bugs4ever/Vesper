@@ -6,9 +6,12 @@ existing database, so the first schema change in production would have had nowhe
 This is the baseline every later migration builds on.
 
 The tables themselves are created from the SQLAlchemy metadata rather than being spelled
-out again here. Thirteen services own 44 tables between them; transcribing all of them
+out again here. The twelve contexts own 44 tables between them; transcribing all of them
 into this file by hand would give two definitions of the schema that are free to drift,
 and the models are the ones the code actually reads.
+
+The metadata is read from app/api/<name>/models.py. That path moved when the services
+were folded into one process; the models, and so the schema this produces, did not.
 
 Revision ID: 0001
 """
@@ -31,7 +34,7 @@ depends_on = None
 
 
 def _metadata():
-    import_all_models(str(REPO_ROOT / "services"))
+    import_all_models(str(REPO_ROOT / "app" / "api"))
     return Base.metadata
 
 

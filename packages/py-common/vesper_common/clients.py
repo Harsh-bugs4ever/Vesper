@@ -26,6 +26,25 @@ log = logging.getLogger(__name__)
 
 TIMEOUT = httpx.Timeout(5.0, connect=2.0)
 
+# Normally every ServiceClient opens a real socket. When the whole backend runs as one
+# process there is nothing on the other end of that socket but ourselves, so the entry
+# point installs a transport that dispatches straight into the ASGI app instead — see
+# app/transport.py. Nothing else about a call changes: the same URL is built, the same
+# middleware and dependencies run, the same status code comes back.
+_shared_transport: httpx.BaseTransport | None = None
+
+
+def use_transport(transport: httpx.BaseTransport | None) -> None:
+    """Route every client through `transport`. Call before the first request."""
+    global _shared_transport
+    _shared_transport = transport
+    for client in _registry:
+        client.close()  # drop any pooled client built against the old transport
+
+
+# Every ServiceClient ever built, so use_transport reaches the ones created at import.
+_registry: list["ServiceClient"] = []
+
 
 def service_token(property_id: str | UUID, *, permissions: list[str] | None = None) -> str:
     """A machine principal.
@@ -61,6 +80,7 @@ class ServiceClient:
         self.name = name
         self._client: httpx.Client | None = None
         self._lock = Lock()
+        _registry.append(self)
 
     @property
     def client(self) -> httpx.Client:
@@ -71,6 +91,7 @@ class ServiceClient:
                     self._client = httpx.Client(
                         timeout=TIMEOUT,
                         limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                        transport=_shared_transport,
                     )
         return self._client
 

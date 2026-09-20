@@ -1,0 +1,40 @@
+# The backend's full dependency set. One process now, so one file: what used to be
+# thirteen services/<name>/requirements.txt is the base below plus the extras each
+# engine asked for.
+-r requirements-base.txt
+-e packages/py-common
+
+# The live feed's WebSocket transport.
+websockets==14.1
+
+# --- engine extras ----------------------------------------------------------------
+# Every one of these has a documented fallback: the demand engine drops to a pure
+# Python baseline, the anomaly engine to a robust z-score, the roster to a greedy
+# fill. The product works without them and says so in its own output — they are here
+# because the micro-service images installed them, and dropping them would quietly
+# downgrade what the engines can do.
+
+# Concierge generation, on Groq's free API.
+groq==0.37.1
+
+# Shared by the demand and anomaly engines.
+numpy==2.2.1
+
+# Demand forecasting (revenue).
+pandas==2.2.3
+prophet==1.1.6
+xgboost==2.1.3
+
+# Isolation Forest for sensor anomalies (maintenance).
+scikit-learn==1.6.0
+
+# CP-SAT for rostering (workforce).
+ortools==9.11.4210
+
+# --- optional local models --------------------------------------------------------
+# Off unless VESPER_SENTIMENT_USE_TRANSFORMER / VESPER_CONCIERGE_USE_EMBEDDINGS say
+# otherwise. Both download weights on first use, so a cold deployment must not depend
+# on them: sentiment falls back to the lexicon scorer and retrieval to BM25. Uncomment
+# only with the weights baked into the image.
+# sentence-transformers==3.3.1
+# transformers==4.47.1

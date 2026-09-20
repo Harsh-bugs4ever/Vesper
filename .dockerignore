@@ -1,0 +1,19 @@
+# Shared by every build that uses the repo root as its context — the backend image
+# and apps/web — so this only excludes what neither of them needs.
+.git
+.github
+.logs
+venv
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+**/*.egg-info
+packages/py-common/build
+node_modules
+**/node_modules
+.next
+**/.next
+*.pdf
+.env

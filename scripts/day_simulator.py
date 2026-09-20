@@ -36,7 +36,8 @@ sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
 
 import httpx  # noqa: E402
 
-DEFAULT_GATEWAY = "http://127.0.0.1:8000"
+# The backend, which is the whole API now that there is no proxy in front of it.
+DEFAULT_API = "http://127.0.0.1:8000"
 PASSWORD = "vesper123"
 
 # Who does what. Each step runs as the person who would really do it, so permissions are
@@ -100,10 +101,10 @@ class Clock:
 
 
 class Resort:
-    """A thin client over the gateway, holding one token per actor."""
+    """A thin client over the API, holding one token per actor."""
 
-    def __init__(self, gateway: str, timeout: float = 30.0) -> None:
-        self.gateway = gateway.rstrip("/")
+    def __init__(self, api: str, timeout: float = 30.0) -> None:
+        self.api = api.rstrip("/")
         self.http = httpx.Client(timeout=timeout)
         self.tokens: dict[str, str] = {}
         self.guest_tokens: dict[str, str] = {}
@@ -123,7 +124,7 @@ class Resort:
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         try:
             response = self.http.request(
-                method, f"{self.gateway}{path}", headers=headers, json=json, params=params
+                method, f"{self.api}{path}", headers=headers, json=json, params=params
             )
         except httpx.HTTPError as exc:
             raise Failure(f"could not reach {path}: {exc}") from exc
@@ -379,7 +380,7 @@ class Simulation:
         """Rate one specific request, once it is actually delivered.
 
         The wait is the point rather than a workaround. Marking the task done publishes
-        an event; guest-service consumes it and moves the guest's tracker to delivered.
+        an event; the guest module consumes it and moves the guest's tracker to delivered.
         That hop is deliberately asynchronous, so a guest rating the instant the waiter
         taps "done" is racing the bus. A real guest rates the food after it arrives.
         """
@@ -462,7 +463,9 @@ def parse_clock(value: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Play out a resort day against a running stack")
-    parser.add_argument("--gateway", default=DEFAULT_GATEWAY)
+    # --gateway is kept as an alias: it is what this flag was called for thirteen
+    # services, and breaking a demo command to rename a flag is a poor trade.
+    parser.add_argument("--api", "--gateway", dest="api", default=DEFAULT_API)
     parser.add_argument(
         "--speed", type=float, default=60.0, help="Simulated minutes per real second"
     )
@@ -471,12 +474,12 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Print the schedule only")
     args = parser.parse_args()
 
-    resort = Resort(args.gateway)
+    resort = Resort(args.api)
     simulation = Simulation(
         resort, Clock(speed=args.speed), dry_run=args.dry_run, seed=args.seed
     )
 
-    print(f"\nVesper — a day at the resort  ({args.gateway})\n")
+    print(f"\nVesper — a day at the resort  ({args.api})\n")
     try:
         if not args.dry_run:
             simulation.prepare()

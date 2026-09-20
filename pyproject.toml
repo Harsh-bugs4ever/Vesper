@@ -1,0 +1,54 @@
+[project]
+name = "vesper"
+version = "1.0.0"
+description = "Vesper — the resort operations backend, as a single FastAPI application."
+requires-python = ">=3.12"
+
+# The pinned set the image is built from lives in requirements.txt; these are the
+# ranges the code is actually written against.
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.34",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.7",
+  "sqlalchemy>=2.0.36",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.14",
+  "redis>=5.2",
+  "pyjwt>=2.10",
+  "passlib[bcrypt]>=1.7.4",
+  "bcrypt>=4.2",
+  "python-multipart>=0.0.20",
+  "httpx>=0.28",
+  "email-validator>=2.2",
+  "websockets>=14.1",
+  "vesper-common",
+]
+
+[project.optional-dependencies]
+# The engines' accelerators. Each has a fallback in pure Python; see requirements.txt.
+engines = [
+  "groq>=0.37",
+  "numpy>=2.2",
+  "pandas>=2.2",
+  "prophet>=1.1.6",
+  "xgboost>=2.1",
+  "scikit-learn>=1.6",
+  "ortools>=9.11",
+]
+# Local sentiment and embedding models, both off by default.
+local-models = [
+  "sentence-transformers>=3.3",
+  "transformers>=4.47",
+]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.uv.sources]
+vesper-common = { path = "packages/py-common", editable = true }

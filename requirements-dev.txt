@@ -1,0 +1,4 @@
+# Everything in the image, plus what the test suite needs.
+-r requirements.txt
+
+pytest==8.3.4

@@ -1,7 +1,7 @@
 """Alembic environment.
 
-Points at the same metadata the bootstrap script uses, so autogenerate sees all thirteen
-services' tables even though each service owns its own models.py.
+Points at the same metadata the bootstrap script uses, so autogenerate sees every
+context's tables even though each one owns its own models.py.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-import_all_models(str(REPO_ROOT / "services"))
+import_all_models(str(REPO_ROOT / "app" / "api"))
 target_metadata = Base.metadata
 
 

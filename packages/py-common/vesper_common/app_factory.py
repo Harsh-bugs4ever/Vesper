@@ -1,7 +1,11 @@
-"""One FastAPI app builder, so all thirteen services behave the same.
+"""One FastAPI app builder.
 
-Gives every service: CORS, the shared error shape, /health and /ready, request-id
-logging, and an optional event subscription started at boot.
+It was written so thirteen services would behave identically; it now builds the one
+application they were folded into, which is the same job with one caller. Keeping it
+here rather than inlining it into app/main.py means the behaviour every service was
+held to — CORS, the shared error shape, /health and /ready, request-id logging, and
+subscriptions started at boot — is still defined in one place, and a context pulled
+back out into its own process would still get it.
 """
 import logging
 import sys

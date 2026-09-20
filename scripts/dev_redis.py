@@ -1,8 +1,11 @@
 """A stand-in Redis for laptops without one.
 
 `docker compose up` brings a real Redis. This is for developing without Docker: it
-speaks the Redis wire protocol over TCP, so the services connect to it exactly as they
+speaks the Redis wire protocol over TCP, so the backend connects to it exactly as it
 would to the real thing — streams, consumer groups, pub/sub and all.
+
+Without it the backend still runs; it just loses the event bus, so nothing reacts to
+anything else and the live feed stays empty.
 
 It is in-memory and single-process. Everything vanishes when it stops, which is fine for
 the event bus (events are transient) but means it is for development only.

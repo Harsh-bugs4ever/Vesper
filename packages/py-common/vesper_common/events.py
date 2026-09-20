@@ -38,6 +38,11 @@ SOCKET_TIMEOUT_SECONDS = 0.5
 # every publish turns one outage into latency on every single write in the product.
 FAILURE_THRESHOLD = 3
 COOLDOWN_SECONDS = 15.0
+# How long a consumer waits after a failed read before trying again, and the ceiling
+# that wait doubles up to. Redis being absent is a normal state on a laptop, and it
+# should cost a stopped backend nothing to sit through.
+RETRY_DELAY_SECONDS = 2.0
+MAX_RETRY_DELAY_SECONDS = 60.0
 
 
 class Event(StrEnum):
@@ -198,19 +203,64 @@ class EventBus:
         exceptions are logged and the message is still acked — a poison message must not
         wedge the queue during a demo.
         """
-        consumer = f"{settings.service_name}-{uuid4().hex[:8]}"
+        consumer = f"{settings.service_name}-{group}-{uuid4().hex[:8]}"
+
+        # The consumer gets its own connection, not the publishing client's. That one is
+        # deliberately impatient — half a second, so a guest's order is never held up by
+        # a sick Redis — and a blocking XREADGROUP is the opposite: it is *supposed* to
+        # sit on the socket for block_ms waiting for the next event. Sharing the client
+        # meant every read timed out before it could block, so the consumer spun, logged
+        # a stack trace and read again, several times a second, forever. The margin below
+        # is what makes the read time out only when Redis has genuinely gone away.
+        reader = redis.Redis.from_url(
+            self._url,
+            decode_responses=True,
+            socket_timeout=block_ms / 1000 + SOCKET_TIMEOUT_SECONDS,
+            socket_connect_timeout=SOCKET_TIMEOUT_SECONDS,
+        )
 
         def run() -> None:
-            try:
-                self.client.xgroup_create(STREAM, group, id="$", mkstream=True)
-            except redis.ResponseError:
-                pass  # group already exists
+            # Created inside the loop rather than before it, so a consumer that starts
+            # while Redis is still coming up joins the group on its first good pass
+            # instead of never joining it at all.
+            created = False
+            degraded = False
+            delay = RETRY_DELAY_SECONDS
             while True:
                 try:
-                    batch = self.client.xreadgroup(group, consumer, {STREAM: ">"}, count=32, block=block_ms)
-                except redis.RedisError:
-                    log.warning("event bus read failed; retrying", exc_info=True)
+                    if not created:
+                        try:
+                            reader.xgroup_create(STREAM, group, id="$", mkstream=True)
+                        except redis.ResponseError:
+                            pass  # already exists, which is the normal case
+                        created = True
+                    batch = reader.xreadgroup(
+                        group, consumer, {STREAM: ">"}, count=32, block=block_ms
+                    )
+                except (redis.RedisError, OSError) as exc:
+                    # Say it once, then stop. Twelve consumers retrying a Redis that is
+                    # not running turned the log into a wall — which is how you miss the
+                    # line that matters. The first failure is a warning, the rest are
+                    # debug, and coming back is worth one line.
+                    if not degraded:
+                        log.warning(
+                            "event bus unreachable (%s); %s will retry quietly until it "
+                            "is back", exc, group,
+                        )
+                        degraded = True
+                    else:
+                        log.debug("event bus still unreachable for %s (%s)", group, exc)
+                    created = False
+                    # Escalating backoff, so a Redis that is down for an hour costs
+                    # almost nothing rather than a reconnect every two seconds.
+                    time.sleep(delay)
+                    delay = min(delay * 2, MAX_RETRY_DELAY_SECONDS)
                     continue
+
+                if degraded:
+                    log.info("event bus reconnected for %s", group)
+                    degraded = False
+                delay = RETRY_DELAY_SECONDS
                 for _stream, messages in batch or []:
                     for message_id, raw in messages:
                         try:
@@ -220,7 +270,11 @@ class EventBus:
                         except Exception:
                             log.exception("handler failed for %s", message_id)
                         finally:
-                            self.client.xack(STREAM, group, message_id)
+                            try:
+                                reader.xack(STREAM, group, message_id)
+                            except (redis.RedisError, OSError):
+                                # Unacked, so it stays pending and is redelivered.
+                                log.warning("could not ack %s", message_id)
 
         thread = threading.Thread(target=run, name=f"bus-{group}", daemon=True)
         thread.start()

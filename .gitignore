@@ -13,3 +13,5 @@ build/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+progress.md

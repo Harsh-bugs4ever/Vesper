@@ -1,40 +1,12 @@
-# Thirteen services, one Postgres, one Redis. Everything runs on a laptop.
+# One backend, one Redis, one web app. Everything runs on a laptop.
 #
-# The database is shared with one schema per bounded context (see vesper_common.db):
-# splitting it per service is a deployment change, not a code change.
-
-x-service-env: &service-env
-  VESPER_DATABASE_URL: postgresql+psycopg://vesper:vesper@postgres:5432/vesper
-  VESPER_REDIS_URL: redis://redis:6379/0
-  VESPER_JWT_SECRET: ${VESPER_JWT_SECRET:-dev-only-change-me}
-  VESPER_ENVIRONMENT: ${VESPER_ENVIRONMENT:-development}
-  VESPER_PROPERTY_TIMEZONE: ${VESPER_PROPERTY_TIMEZONE:-Asia/Kolkata}
-  VESPER_CORS_ORIGINS: ${VESPER_CORS_ORIGINS:-http://localhost:3000}
-
-# Every service waits for both backing stores to be genuinely ready, not merely started.
-x-depends: &depends
-  postgres:
-    condition: service_healthy
-  redis:
-    condition: service_healthy
+# This was thirteen near-identical service blocks behind a gateway. They are one
+# process now: the same routes on the same port, minus the proxy hop and twelve
+# images. The database is unchanged — one Postgres with one schema per bounded
+# context (see vesper_common.db) — so splitting a context back out stays a
+# deployment change rather than a rewrite.
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: vesper
-      POSTGRES_PASSWORD: vesper
-      POSTGRES_DB: vesper
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vesper -d vesper"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     ports:
@@ -47,177 +19,38 @@ services:
       timeout: 3s
       retries: 10
 
-  api-gateway:
+  backend:
     build:
       context: .
-      dockerfile: services/api-gateway/Dockerfile
+      dockerfile: Dockerfile
     environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: api-gateway
-    ports:
-      - "8000:8000"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  identity-service:
-    build:
-      context: .
-      dockerfile: services/identity-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: identity-service
-    ports:
-      - "8001:8001"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  property-service:
-    build:
-      context: .
-      dockerfile: services/property-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: property-service
-    ports:
-      - "8002:8002"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  staff-service:
-    build:
-      context: .
-      dockerfile: services/staff-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: staff-service
-    ports:
-      - "8003:8003"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  guest-service:
-    build:
-      context: .
-      dockerfile: services/guest-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: guest-service
-    ports:
-      - "8004:8004"
-    volumes:
-      - uploads:/data/uploads
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  inventory-service:
-    build:
-      context: .
-      dockerfile: services/inventory-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: inventory-service
-    ports:
-      - "8005:8005"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  frontdesk-service:
-    build:
-      context: .
-      dockerfile: services/frontdesk-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: frontdesk-service
-    ports:
-      - "8006:8006"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  action-service:
-    build:
-      context: .
-      dockerfile: services/action-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: action-service
-    ports:
-      - "8007:8007"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  revenue-service:
-    build:
-      context: .
-      dockerfile: services/revenue-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: revenue-service
-    ports:
-      - "8008:8008"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  maintenance-service:
-    build:
-      context: .
-      dockerfile: services/maintenance-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: maintenance-service
-    ports:
-      - "8009:8009"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  workforce-service:
-    build:
-      context: .
-      dockerfile: services/workforce-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: workforce-service
-    ports:
-      - "8010:8010"
-    depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  guest-intel-service:
-    build:
-      context: .
-      dockerfile: services/guest-intel-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: guest-intel-service
+      VESPER_DATABASE_URL: postgresql+psycopg://postgres:ansh@host.docker.internal:5432/vesper_hackathon
+      VESPER_REDIS_URL: redis://redis:6379/0
+      VESPER_JWT_SECRET: ${VESPER_JWT_SECRET:-dev-only-change-me}
+      VESPER_ENVIRONMENT: ${VESPER_ENVIRONMENT:-development}
+      VESPER_PROPERTY_TIMEZONE: ${VESPER_PROPERTY_TIMEZONE:-Asia/Kolkata}
+      VESPER_CORS_ORIGINS: ${VESPER_CORS_ORIGINS:-http://localhost:3000}
+      # Stamped on every event this process publishes and on every service token it
+      # mints, where thirteen different names used to appear.
+      VESPER_SERVICE_NAME: vesper-backend
       VESPER_GROQ_API_KEY: ${VESPER_GROQ_API_KEY:-}
       VESPER_CONCIERGE_MODEL: ${VESPER_CONCIERGE_MODEL:-llama-3.3-70b-versatile}
     ports:
-      - "8011:8011"
+      - "8000:8000"
+    volumes:
+      # Issue photos are written here and served straight back off it.
+      - uploads:/data/uploads
     depends_on:
-      <<: *depends
-    restart: unless-stopped
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
-    environment:
-      <<: *service-env
-      VESPER_SERVICE_NAME: notification-service
-    ports:
-      - "8012:8012"
-    depends_on:
-      <<: *depends
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /ready, not /health: it reports on Postgres and Redis, so the web app does not
+      # come up in front of a backend that cannot answer anything yet.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys,json; sys.exit(0 if json.load(urllib.request.urlopen('http://localhost:8000/ready')).get('ready') else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
   web:
@@ -230,10 +63,10 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api-gateway
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  postgres-data:
   redis-data:
   uploads:

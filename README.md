@@ -40,17 +40,17 @@ How one guest request travels through the whole system.
 
 ```mermaid
 flowchart TD
-    G["Guest — room QR"] --> GW
-    S["Staff pages"] --> GW
-    A["Admin pages"] --> GW
+    G["Guest — room QR"] --> API
+    S["Staff pages"] --> API
+    A["Admin pages"] --> API
 
-    GW["API Gateway<br/>auth · routing · limits"]
+    API["Vesper API — one FastAPI app<br/>auth · limits · every route"]
 
-    GW --> ID["Identity"]
-    GW --> GS["Guest"]
-    GW --> ST["Staff"]
-    GW --> IN["Inventory"]
-    GW --> FD["Front Desk"]
+    API --> ID["Identity"]
+    API --> GS["Guest"]
+    API --> ST["Staff"]
+    API --> IN["Inventory"]
+    API --> FD["Front Desk"]
 
     GS -->|request raised| BUS
     ST -->|task completed| BUS
@@ -88,14 +88,14 @@ flowchart TD
    that room is occupied — no login needed, and nobody outside the hotel can use it.
 2. They order two club sandwiches. **Guest service** creates the request and publishes an
    event.
-3. **Staff service** turns it into a task, routes it to F&B and starts an SLA timer. The
+3. **Staff** turns it into a task, routes it to F&B and starts an SLA timer. The
    kitchen's phone buzzes within seconds.
-4. The waiter marks it delivered. **Inventory service** hears the same event and deducts
+4. The waiter marks it delivered. **Inventory** hears the same event and deducts
    the ingredients automatically.
-5. Bread crosses its minimum. **Inventory service** raises a purchase suggestion, which
-   **Action service** ranks by confidence × impact × urgency and puts in the owner's
+5. Bread crosses its minimum. **Inventory** raises a purchase suggestion, which the
+   **action queue** ranks by confidence × impact × urgency and puts in the owner's
    queue.
-6. The owner approves it. Action service executes, logs it to the audit trail, and gives
+6. The owner approves it. The action queue executes, logs it to the audit trail, and gives
    them a 10-second undo.
 7. A week later the outcome is scored back — if the suggestion was good, that engine's
    confidence goes up. Vesper gets better at its own job.
@@ -107,37 +107,47 @@ Nobody made a phone call.
 
 ## 3. Architecture
 
-Thirteen independently deployable services behind one gateway. Services never read each
-other's tables — they talk over REST through the gateway, or asynchronously over the
-event bus.
+One FastAPI application, twelve bounded contexts inside it. Each context owns its own
+tables and its own schema, and never reads another's — it calls that context's routes,
+or hears about the change asynchronously over the event bus.
 
 ### Operations
 
-| Service | Owns | Responsibilities |
+| Module | Owns | Responsibilities |
 |---|---|---|
-| `api-gateway` | — | Single entry point, JWT validation, routing, rate limiting, WebSocket auth |
-| `identity-service` | users, roles | Login, tokens, permission matrix (`rates:approve`, `attendance:mark`, …) |
-| `property-service` | property, departments, rooms, assets | Resort profile, room categories, CSV import with dry-run, PMS/BMS connectors |
-| `staff-service` | attendance, tasks | Shift check-in/out, task routing, housekeeping room board, live updates |
-| `guest-service` | guests, QR, requests | Room QR tokens, service requests, issue reports with photos, ratings |
-| `inventory-service` | stock, purchase orders | Stock in/out, minimums, expiry, auto-deduction, reorder triggers |
-| `frontdesk-service` | bookings, stays | Check-in/out, room allocation, guest visit history |
+| `identity` | users, roles | Login, tokens, permission matrix (`rates:approve`, `attendance:mark`, …) |
+| `property` | property, departments, rooms, assets | Resort profile, room categories, CSV import with dry-run, PMS/BMS connectors |
+| `staff` | attendance, tasks | Shift check-in/out, task routing, housekeeping room board, live updates |
+| `guest` | guests, QR, requests | Room QR tokens, service requests, issue reports with photos, ratings |
+| `inventory` | stock, purchase orders | Stock in/out, minimums, expiry, auto-deduction, reorder triggers |
+| `frontdesk` | bookings, stays | Check-in/out, room allocation, guest visit history |
 
 ### Intelligence
 
-| Service | Owns | Responsibilities |
+| Module | Owns | Responsibilities |
 |---|---|---|
-| `action-service` | action cards, audit log | Card ranking, claim lock, approve / adjust / snooze / dismiss, safe undo, shadow mode, feedback loop and learning |
-| `revenue-service` | forecasts, rates | Demand forecasting (Prophet + XGBoost + LightGBM), per-date rate execution, competitor set, what-if simulator |
-| `maintenance-service` | asset health, work orders | Anomaly detection on BMS sensors, survival-based risk scores, service windows, work orders |
-| `workforce-service` | rosters | OR-Tools CP-SAT auto-roster from attendance and demand, staffing-gap warnings, leave and shift rules |
-| `guest-intel-service` | guest DNA, concierge | Sentiment model, preference profiles, at-risk retention offers, RAG concierge (Sentence-BERT + FAISS + Claude) |
-| `notification-service` | outbox | WebSocket fan-out, overdue alerts, retrying outbox for mock WhatsApp / SMS / email |
+| `action` | action cards, audit log | Card ranking, claim lock, approve / adjust / snooze / dismiss, safe undo, shadow mode, feedback loop and learning |
+| `revenue` | forecasts, rates | Demand forecasting (Prophet + XGBoost + LightGBM), per-date rate execution, competitor set, what-if simulator |
+| `maintenance` | asset health, work orders | Anomaly detection on BMS sensors, survival-based risk scores, service windows, work orders |
+| `workforce` | rosters | OR-Tools CP-SAT auto-roster from attendance and demand, staffing-gap warnings, leave and shift rules |
+| `guest_intel` | guest DNA, concierge | Sentiment model, preference profiles, at-risk retention offers, RAG concierge (Sentence-BERT + FAISS + Claude) |
+| `notification` | outbox | WebSocket fan-out, overdue alerts, retrying outbox for mock WhatsApp / SMS / email |
 
-**Why this split:** housekeeping peaks at 11am, the restaurant at 9pm, and the forecasting
-engine runs heavy batch jobs whenever it likes. Separating them means one busy service
-never slows the rest, and a crash in the AI layer never stops a guest ordering dinner.
-It also maps cleanly onto the sprint — Day 6 is one service, Day 7 is two.
+**Why one process:** this was thirteen deployable services behind a gateway, and for one
+property that bought isolation nobody was using and charged for it every day — thirteen
+images to build, a proxy hop on every request, and a bug reproducible only by running
+the whole stack. The boundaries were the valuable part and they are all still here: a
+context's tables are still its own, the contexts still talk through each other's routes
+rather than each other's tables, and the event bus still carries every cross-context
+fact. What went away is the deployment cost of pretending they are far apart.
+
+**What that costs, honestly:** a crash no longer stops at one container, and a slow
+engine shares a process with the guest ordering dinner. Both are bounded rather than
+ignored — every scheduled job and every bus handler catches its own exceptions, the
+engines' heavy work runs on scheduler threads rather than in the request path, and the
+worker pool is sized for handlers that call each other. If one context genuinely
+outgrows this, `app/api/<name>/` is a package with its own routers, models and jobs; the
+path back out is to give it its own `main.py` again.
 
 ---
 
@@ -153,7 +163,14 @@ It also maps cleanly onto the sprint — Day 6 is one service, Day 7 is two.
 │   │       └── (auth)/   Login
 │   └── marketing-site/   Backlog — after the demo works
 │
-├── services/             13 FastAPI services (below)
+├── app/                  The backend — one FastAPI application
+│   ├── main.py           Entry point: mounts every router, starts the workers
+│   ├── dependencies.py   DB session, auth, permissions — one import for handlers
+│   ├── transport.py      Internal calls, dispatched in-process instead of over TCP
+│   ├── rate_limit.py     Per-principal limits, at the edge of the one process
+│   ├── api/              One package per bounded context (below)
+│   ├── background/       Event consumers and the scheduled jobs
+│   └── schemas/          Every request/response model, in one namespace
 │
 ├── packages/
 │   ├── contracts/        OpenAPI specs + event schemas, shared both sides
@@ -166,7 +183,9 @@ It also maps cleanly onto the sprint — Day 6 is one service, Day 7 is two.
 │
 ├── data/seed/            JW Marriott Mumbai demo data
 ├── docs/
-├── scripts/              Seeding, day simulator, local bootstrap
+├── scripts/              Seeding, day simulator, contract export
+├── tests/                One directory per context, plus the app's own smoke tests
+├── Dockerfile            One image for the whole backend
 ├── docker-compose.yml
 └── Makefile
 ```
@@ -177,31 +196,34 @@ one deploy, one domain and one session cookie instead of three builds and cross-
 auth. Making the staff section installable, or a native app, is a later decision that
 this structure doesn't block.
 
-Every service is the same six modules, so moving between them is muscle memory:
+Every context is the same handful of modules, so moving between them is muscle memory:
 
 ```
-services/<name>/
-├── app/
-│   ├── main.py        FastAPI app and startup
-│   ├── api.py         HTTP routes
-│   ├── models.py      SQLAlchemy tables
-│   ├── schemas.py     Pydantic request/response
-│   ├── service.py     business logic
-│   ├── events.py      publishers and subscribers
-│   └── engines/       ML and optimisation (intelligence services only)
-├── tests/
-├── Dockerfile
-└── requirements.txt
+app/api/<name>/
+├── __init__.py     what the app mounts and starts: routers, subscriptions, jobs
+├── router.py       HTTP routes, carrying their own prefix (/rooms, /inventory, …)
+├── models.py       SQLAlchemy tables, in this context's schema
+├── schemas.py      Pydantic request/response
+├── service.py      business logic
+├── events.py       publishers and subscribers
+├── jobs.py         periodic work (the contexts that have any)
+└── engines/        ML and optimisation (the intelligence contexts only)
 ```
 
-Flat modules, not nested packages — a service here owns one bounded context, and a
-folder per layer would be five empty directories pretending to be architecture. Split a
-module into a package on the day it earns it. `guest-intel-service` also has `app/rag/`
-for the concierge's embeddings and vector store.
+Flat modules, not nested packages — a context owns one job, and a folder per layer would
+be five empty directories pretending to be architecture. Split a module into a package
+on the day it earns it, as `guest_intel` has with `rag/` for the concierge's embeddings
+and vector store.
 
-Migrations are shared rather than per-service: in development all thirteen services
-point at one PostgreSQL database with separate schemas, which keeps the demo runnable on
-a laptop. Splitting the databases is a deployment change, not a code change.
+That `__init__.py` is the whole contract between a context and the application. It
+exports `routers`, and optionally `start_subscriptions` and `build_scheduler`;
+`app/main.py` and `app/background/` look for exactly those names and nothing else, so
+adding a context is adding a directory. `tests/test_wiring.py` fails the build if one
+declares jobs it never exports — the quiet failure that costs you a scheduler.
+
+The database is unchanged from the service era: one PostgreSQL database with one schema
+per context, which keeps the demo runnable on a laptop. A context reads only its own
+schema, so splitting the databases stays a deployment change rather than a rewrite.
 
 ---
 
@@ -268,8 +290,8 @@ Every feature from the HackCelestial repo, and where it lands here:
 | Predictive maintenance | 7 | `maintenance` | BMS + QR log data, risk gauge, sensor trends |
 | Workforce optimizer | 7 | `workforce` | Attendance-driven roster, gap warnings |
 | Purchase suggestions | 5–6 | `inventory` → `action` | Driven by real stock levels |
-| Guest intelligence & Guest DNA | 8 | `guest-intel` | Real sentiment model, preference chips |
-| AI concierge | 8 | `guest-intel` | RAG chat for guests, escalation for staff |
+| Guest intelligence & Guest DNA | 8 | `guest_intel` | Real sentiment model, preference chips |
+| AI concierge | 8 | `guest_intel` | RAG chat for guests, escalation for staff |
 | Notifications outbox | 9 | `notification` | Outbox page with retry |
 | Feedback loop / learning | 9 | `action` | Accuracy and confidence per engine |
 | Revenue simulator | 9 | `revenue` | Slider what-ifs on live data |
@@ -300,10 +322,28 @@ support · installable PWA and native apps · multi-property.
 
 ## 8. Getting started
 
+Everything, in Docker:
+
 ```bash
 git clone <repo-url> && cd Vesper
 cp .env.example .env
-docker compose up --build
+docker compose up --build        # redis, the backend, the web app
+make migrate                     # bring the database to head
+make seed                        # the demo resort: 355 rooms, ~180 staff, a year of bookings
+```
+
+Or the backend on the host, with reload, against Postgres and Redis in Docker:
+
+```bash
+cp .env.example .env
+docker compose up -d redis
+
+python -m venv venv && source venv/Scripts/activate   # venv/bin/activate on macOS/Linux
+pip install -r requirements-dev.txt
+
+make migrate                     # or `make db-init` to skip migrations entirely
+make seed
+make dev                         # uvicorn app.main:app --reload on :8000
 ```
 
 | Surface | URL |
@@ -311,7 +351,10 @@ docker compose up --build
 | Website | http://localhost:3000 |
 | Staff screens | http://localhost:3000/staff |
 | Guest QR page | http://localhost:3000/r/<room-token> |
-| API gateway | http://localhost:8000/docs |
+| API and docs | http://localhost:8000/docs |
+
+`make help` lists the rest — `make test`, `make contracts`, `make simulate`,
+`make reseed`.
 
 ---
 
@@ -322,4 +365,6 @@ Vesper is the production rebuild of our HackCelestial 3.0 prototype
 built for Problem Statement 4 by Team VOID. That prototype proved the AI action-card
 idea on a single FastAPI monolith with four engines. Vesper keeps the decision layer and
 rebuilds everything around it: real roles and an audit trail, staff screens, guest QR
-ordering, live inventory, and service boundaries that can scale past one property.
+ordering, live inventory, and context boundaries that can scale past one property — held
+in one application, and enforced by the schema each context owns rather than by the
+distance between them.

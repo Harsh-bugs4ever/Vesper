@@ -34,7 +34,7 @@ def main() -> int:
     args = parser.parse_args()
 
     engine = get_engine()
-    import_all_models(str(REPO_ROOT / "services"))
+    import_all_models(str(REPO_ROOT / "app" / "api"))
 
     if args.drop:
         with engine.begin() as connection:

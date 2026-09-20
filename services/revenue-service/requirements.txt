@@ -1,9 +1,0 @@
--r ../../requirements-base.txt
--e ../../packages/py-common
-
-# The demand engine runs on a pure-Python baseline when these are absent, so they are
-# genuinely optional — see app/engines/demand.py.
-numpy==2.2.1
-pandas==2.2.3
-prophet==1.1.6
-xgboost==2.1.3

@@ -161,7 +161,7 @@ def main() -> int:
     args = parser.parse_args()
 
     engine = get_engine()
-    import_all_models(str(REPO_ROOT / "services"))
+    import_all_models(str(REPO_ROOT / "app" / "api"))
 
     if args.reset:
         with engine.begin() as connection:
@@ -194,15 +194,17 @@ def main() -> int:
 
 
 def _seed(db) -> dict[str, int]:
-    # Imported here so a missing service package fails loudly at seed time, not import.
-    import vesper_models.property_service as prop
-    import vesper_models.identity_service as ident
-    import vesper_models.staff_service as staff
-    import vesper_models.guest_service as guest
-    import vesper_models.inventory_service as inv
-    import vesper_models.frontdesk_service as fd
-    import vesper_models.revenue_service as rev
-    import vesper_models.guest_intel_service as gi
+    # Imported here so a missing models module fails loudly at seed time, not import.
+    # These names come from import_all_models above, which loads each app/api/<name>/
+    # models.py by path — so they track the directory names, not the old service ones.
+    import vesper_models.property as prop
+    import vesper_models.identity as ident
+    import vesper_models.staff as staff
+    import vesper_models.guest as guest
+    import vesper_models.inventory as inv
+    import vesper_models.frontdesk as fd
+    import vesper_models.revenue as rev
+    import vesper_models.guest_intel as gi
 
     counts: dict[str, int] = {}
     today = utcnow().astimezone(property_tz()).date()

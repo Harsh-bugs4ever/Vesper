@@ -1,15 +1,17 @@
 # API contracts
 
-`openapi/` holds one generated OpenAPI 3.1 spec per service. They are generated from the
-running code, so they are never out of date with it:
+`openapi/vesper.json` is the generated OpenAPI 3.1 spec for the whole API. It is
+generated from the running code, so it is never out of date with it:
 
 ```bash
 make contracts
 ```
 
-Everything below goes through the gateway at **`http://localhost:8000`**. The frontend
-should never call a service port directly — the gateway is what validates the token and
-applies rate limits.
+There were thirteen specs here, one per service; they described a deployment that no
+longer exists and `make contracts` removes any that are left behind.
+
+Everything below is served by one application at **`http://localhost:8000`**, which is
+the only address the frontend needs.
 
 ---
 
@@ -45,9 +47,13 @@ Every failure has the same shape, so one handler covers the whole app:
 { "error": { "code": "conflict", "message": "Another manager is holding this card", "details": {} } }
 ```
 
-`code` is one of `not_found`, `conflict`, `forbidden`, `invalid`, `http_error`,
-`rate_limited`, `upstream_timeout`, `upstream_unavailable`. **Show `message` directly** —
-they are written for the person reading the screen, not for a log.
+`code` is one of `not_found`, `conflict`, `forbidden`, `invalid`, `http_error` and
+`rate_limited`. **Show `message` directly** — they are written for the person reading the
+screen, not for a log.
+
+(`upstream_timeout` and `upstream_unavailable` are gone. They were the gateway's way of
+saying it could not reach a service behind it, and there is nothing behind anything any
+more — a handler that fails now fails as itself.)
 
 ## The guest QR flow
 
@@ -128,7 +134,7 @@ card, not turn it into a different action.
 | Guest DNA, sentiment, concierge | `/guest-intel` |
 | Outbox | `/notifications` |
 | Owner dashboard (one call, 11 tiles) | `/dashboard` |
-| Staff reviews of guests | `/guest-reviews` |
+| Staff reviews of guests | `/guest-reviews`, `/staff-reviews` |
 
 ---
 

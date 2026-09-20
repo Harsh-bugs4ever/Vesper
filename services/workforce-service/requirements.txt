@@ -1,5 +1,0 @@
--r ../../requirements-base.txt
--e ../../packages/py-common
-
-# CP-SAT. Without it the roster is built greedily and says so.
-ortools==9.11.4210

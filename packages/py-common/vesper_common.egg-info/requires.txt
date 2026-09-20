@@ -1,0 +1,10 @@
+fastapi>=0.115
+pydantic>=2.9
+pydantic-settings>=2.5
+sqlalchemy>=2.0.35
+psycopg[binary]>=3.2
+alembic>=1.13
+redis>=5.0
+pyjwt>=2.9
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.12

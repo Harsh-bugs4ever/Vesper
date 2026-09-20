@@ -1,6 +1,8 @@
 """Settings shared by every Vesper service.
 
-One .env drives all thirteen services; a service only overrides SERVICE_NAME and PORT.
+One .env drives the whole backend. Every name here is the one the services read
+before they were folded into a single process, so an existing .env still applies
+unchanged.
 """
 from functools import lru_cache
 
@@ -54,19 +56,24 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
 
-    # Internal service discovery — docker-compose service names.
-    identity_url: str = "http://identity-service:8001"
-    property_url: str = "http://property-service:8002"
-    staff_url: str = "http://staff-service:8003"
-    guest_url: str = "http://guest-service:8004"
-    inventory_url: str = "http://inventory-service:8005"
-    frontdesk_url: str = "http://frontdesk-service:8006"
-    action_url: str = "http://action-service:8007"
-    revenue_url: str = "http://revenue-service:8008"
-    maintenance_url: str = "http://maintenance-service:8009"
-    workforce_url: str = "http://workforce-service:8010"
-    guest_intel_url: str = "http://guest-intel-service:8011"
-    notification_url: str = "http://notification-service:8012"
+    # Where each context is reachable. Inside the application these are not used at
+    # all: app/transport.py points every ServiceClient in-process, so an internal call
+    # never leaves the machine. They still matter to anything calling from outside it
+    # — the seed script, the day simulator, a context deployed on its own again — and
+    # they keep the names an existing .env already sets.
+    backend_url: str = "http://127.0.0.1:8000"
+    identity_url: str = "http://127.0.0.1:8000"
+    property_url: str = "http://127.0.0.1:8000"
+    staff_url: str = "http://127.0.0.1:8000"
+    guest_url: str = "http://127.0.0.1:8000"
+    inventory_url: str = "http://127.0.0.1:8000"
+    frontdesk_url: str = "http://127.0.0.1:8000"
+    action_url: str = "http://127.0.0.1:8000"
+    revenue_url: str = "http://127.0.0.1:8000"
+    maintenance_url: str = "http://127.0.0.1:8000"
+    workforce_url: str = "http://127.0.0.1:8000"
+    guest_intel_url: str = "http://127.0.0.1:8000"
+    notification_url: str = "http://127.0.0.1:8000"
 
     @property
     def cors_origin_list(self) -> list[str]:

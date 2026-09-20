@@ -38,8 +38,8 @@ log = logging.getLogger(__name__)
 # How long a lease is held. Comfortably longer than any job here takes, short enough
 # that a replica which dies mid-job does not block the next tick for long.
 LEASE_SECONDS = 300
-# Don't fire everything the instant a service boots: thirteen services starting at once
-# would all hit the database in the same moment.
+# Don't fire everything the instant the process boots: every context's jobs would
+# otherwise hit the database in the same moment.
 STARTUP_DELAY_SECONDS = 15
 
 
@@ -166,7 +166,7 @@ def for_each_property(work: Callable[[str], None]) -> Callable[[], None]:
 def property_ids() -> list[str]:
     """Every property id, read from property-service.
 
-    Cached briefly: a job running every minute should not ask thirteen times an hour for
+    Cached briefly: a job running every minute should not ask sixty times an hour for
     a list that changes when somebody onboards a resort.
     """
     global _cached_ids, _cached_at
