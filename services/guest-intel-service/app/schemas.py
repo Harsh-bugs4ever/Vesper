@@ -162,3 +162,90 @@ class StayReviewSummaryOut(ORMModel):
 
 class StayReviewDetail(StayReviewSummaryOut):
     reviews: list[GuestReviewOut]
+
+
+class StaffReviewCreate(BaseModel):
+    """What a guest submits about a member of staff who served them."""
+
+    staff_id: UUID
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=500)
+    # The request or order this rating followed, when it came from one.
+    request_id: UUID | None = None
+
+
+class StaffReviewOut(ORMModel):
+    id: UUID
+    stay_id: UUID
+    staff_id: UUID
+    department_id: UUID | None = None
+    rating: int
+    comment: str | None = None
+    sentiment_score: float
+    sentiment_label: str
+    # True when the guest had an open complaint at the time. Recorded so the score can
+    # say so, rather than counting a rating given mid-problem as a clean read.
+    during_complaint: bool
+    created_at: datetime
+
+
+class StaffReviewForGuest(ORMModel):
+    """The same review as the guest who wrote it may see it back.
+
+    Deliberately narrower than `StaffReviewOut`: no sentiment scoring, no complaint
+    flag. Those exist so a manager can weigh the rating, and showing a guest how their
+    words were scored invites them to write for the scorer.
+    """
+
+    id: UUID
+    staff_id: UUID
+    rating: int
+    comment: str | None = None
+    created_at: datetime
+
+
+class StaffPerformanceOut(ORMModel):
+    staff_id: UUID
+    department_id: UUID | None = None
+    review_count: int
+    mean_rating: float | None = None
+    # Recency-weighted, severity-corrected Bayesian average. Null until four separate
+    # guests have rated this person.
+    score: float | None = None
+    confidence: float
+    tier: str
+    reasons: list[str]
+    complaint_context_reviews: int
+    # Scored, but on too few guests to rank with confidence.
+    thin_evidence: bool
+    deserves_recognition: bool
+    # A manager should read the comments. Never an automatic consequence.
+    merits_a_conversation: bool
+    computed_at: datetime | None = None
+
+
+class StaffPerformanceBoard(BaseModel):
+    """The board, and the people who are not on it.
+
+    Two lists rather than one: appending unrated staff to the bottom of a descending
+    table reads as "worst", and "nobody has rated them yet" is not a ranking.
+    """
+
+    ranked: list[StaffPerformanceOut]
+    unranked: list[StaffPerformanceOut]
+    house_average: float
+    minimum_reviews_for_score: int
+
+
+class StaffPerformanceDetail(StaffPerformanceOut):
+    reviews: list[StaffReviewOut]
+
+
+class RateableStaff(BaseModel):
+    """Someone the guest may rate, because they actually served this stay."""
+
+    id: UUID
+    name: str
+    role: str | None = None
+    department_id: UUID | None = None
+    already_rated: bool = False

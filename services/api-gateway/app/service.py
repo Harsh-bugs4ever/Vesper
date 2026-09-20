@@ -55,6 +55,7 @@ ROUTES: tuple[Route, ...] = (
     Route("/workforce", settings.workforce_url),
     Route("/guest-intel", settings.guest_intel_url),
     Route("/guest-reviews", settings.guest_intel_url),
+    Route("/staff-reviews", settings.guest_intel_url),
     Route("/notifications", settings.notification_url),
 )
 

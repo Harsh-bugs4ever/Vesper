@@ -1,199 +1,384 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
-  Utensils,
-  Sparkles,
-  MessageSquare,
-  Clock,
-  ArrowRightLeft,
-  Send,
+  Check,
+  ChevronRight,
+  ConciergeBell,
+  Loader2,
+  Sparkle,
+  SprayCan,
+  TriangleAlert,
+  Waves,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+
+import { StarRating } from "@/components/ui/star-rating";
 import { useToast } from "@/components/ui/toast";
-import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
+import { reviewErrorMessage, useRateStaff, useRateableStaff } from "@/lib/hooks/use-reviews";
+import { cn } from "@/lib/utils";
+
+/**
+ * The page behind the in-room QR code.
+ *
+ * No login: the room token in the URL is the whole session, so the page shows only what
+ * this room is entitled to and asks for nothing a guest would have to remember.
+ */
+
+const SERVICES = [
+  {
+    id: "room-service",
+    name: "Room Service",
+    detail: "Food & beverages to your room",
+    icon: ConciergeBell,
+    tone: "text-sage-700",
+  },
+  {
+    id: "housekeeping",
+    name: "Housekeeping",
+    detail: "Request room cleaning or amenities",
+    icon: SprayCan,
+    tone: "text-gold-600",
+  },
+  {
+    id: "towels",
+    name: "Extra Towels",
+    detail: "Request additional towels or linens",
+    icon: Waves,
+    tone: "text-sage-700",
+  },
+  {
+    id: "issue",
+    name: "Report an Issue",
+    detail: "Let us know if something needs attention",
+    icon: TriangleAlert,
+    tone: "text-rose-500",
+  },
+] as const;
+
+/** The three states a request moves through, in order. */
+const STAGES = ["Request Placed", "In Progress", "Completed"] as const;
 
 export default function GuestPage() {
-  const router = useRouter();
   const { showToast } = useToast();
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [orderSent, setOrderSent] = useState(false);
 
-  const handleOrderBreakfast = () => {
-    setOrderSent(true);
-    showToast({
-      title: "Order Placed: 2x Club Sandwiches & Coffee",
-      description: "Kitchen has accepted your request. SLA timer started: 25 mins.",
-      type: "success",
-    });
+  const [stage, setStage] = useState(1);
+  const [serviceRating, setServiceRating] = useState(0);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  // Who this guest may rate: the people who actually accepted a request for this room.
+  const { staff: servedBy, isLoading: staffLoading } = useRateableStaff();
+  const rateStaff = useRateStaff();
+
+  const submitRating = (staffId: string, name: string, rating: number) => {
+    setSaving(staffId);
+    rateStaff.mutate(
+      { staffId, rating },
+      {
+        onSuccess: () => {
+          setSubmitted((current) => ({ ...current, [staffId]: true }));
+          setSaving(null);
+          showToast({
+            title: "Thank you",
+            description: `Your rating for ${name} has been passed to their manager.`,
+            type: "success",
+          });
+        },
+        onError: (error) => {
+          setSaving(null);
+          // Clear the stars back: leaving them filled would tell the guest their
+          // rating landed when it did not.
+          setRatings((current) => {
+            const next = { ...current };
+            delete next[staffId];
+            return next;
+          });
+          showToast({
+            title: "Rating not sent",
+            description: reviewErrorMessage(error),
+            type: "warning",
+          });
+        },
+      }
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-sand-950 pb-16">
-      {/* Luxury Guest Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-sand-200 px-4 py-3 shadow-soft">
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-sage-700 flex items-center justify-center text-gold-300 font-serif font-bold text-xl">
-              V
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-sand-950 font-serif leading-none">
-                Madh Island Beach Resort
-              </h1>
-              <span className="text-[11px] text-sage-800 font-semibold flex items-center gap-1 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Room 412 · Deluxe Ocean View
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="gold" className="text-[10px] py-0 px-2">
-              Guest QR Token
-            </Badge>
-            <button
-              onClick={() => setShowRoleModal(true)}
-              className="p-1.5 rounded-lg border border-sand-200 bg-sand-50 text-sand-600 hover:text-sand-900"
-              title="Switch Perspective"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5" />
-            </button>
+    <div className="min-h-screen bg-sand-50 pb-10">
+      {/* Masthead */}
+      <header className="mx-auto flex max-w-3xl items-center justify-between px-5 py-6">
+        <div className="flex items-center gap-3">
+          <Sparkle className="h-7 w-7 shrink-0 text-sand-400" />
+          <div>
+            <p className="font-serif text-2xl leading-none tracking-[0.18em] text-sand-950">
+              VESPER
+            </p>
+            <p className="mt-1.5 text-[11px] tracking-[0.22em] text-sand-500">BEACH RESORT</p>
           </div>
         </div>
+        <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5 text-xs font-medium text-sand-700">
+          EN
+        </span>
       </header>
 
-      {/* Guest Main Content */}
-      <main className="max-w-md mx-auto p-4 space-y-4">
-        {/* Welcome Card */}
-        <div className="bg-gradient-to-br from-sage-700 via-sage-800 to-sage-900 text-white p-5 rounded-2xl shadow-card relative overflow-hidden">
-          <div className="relative z-10 space-y-1.5">
-            <span className="text-[11px] font-semibold text-gold-300 uppercase tracking-wider">
-              Good Morning · Namaste
-            </span>
-            <h2 className="text-2xl font-bold font-serif">Welcome to Room 412</h2>
-            <p className="text-xs text-sage-100 leading-relaxed">
-              Order dining, request housekeeping, or ask your AI Concierge — without installing an app or logging in.
-            </p>
+      <main className="mx-auto max-w-3xl space-y-4 px-5">
+        {/* Welcome */}
+        <section className="overflow-hidden rounded-2xl border border-sand-200/80 bg-white">
+          <div className="grid gap-0 sm:grid-cols-[1fr_auto]">
+            <div className="p-6">
+              <p className="text-xs font-medium tracking-[0.18em] text-sand-500">
+                WELCOME TO VESPER
+              </p>
+              <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight text-sand-950">
+                Make Yourself
+                <br />
+                at Home
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-sand-600">
+                Services at your fingertips.
+                <br />
+                We&rsquo;re here to make your stay special.
+              </p>
+            </div>
+
+            <div className="flex items-start justify-end p-6 sm:pl-0">
+              <div className="rounded-xl bg-sand-400/90 px-5 py-4 text-right">
+                <p className="font-serif text-2xl font-semibold leading-none text-white">
+                  Room 412
+                </p>
+                <p className="mt-1.5 text-xs text-white/90">Deluxe Sea View</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Quick Service Cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <Card
-            onClick={handleOrderBreakfast}
-            className="cursor-pointer hover:border-gold-300 hover:shadow-card transition-all"
-          >
-            <CardContent className="p-4 flex flex-col justify-between h-28">
-              <div className="p-2 rounded-lg bg-gold-50 text-gold-700 w-fit">
-                <Utensils className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-sand-950">In-Room Dining</h4>
-                <p className="text-[10px] text-sand-500">Club sandwiches, coffee</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Services */}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {SERVICES.map((service) => {
+            const Icon = service.icon;
+            return (
+              <button
+                key={service.id}
+                onClick={() =>
+                  showToast({
+                    title: `${service.name} requested`,
+                    description: "Someone will be with you shortly.",
+                    type: "success",
+                  })
+                }
+                className="flex items-center gap-4 rounded-2xl border border-sand-200/80 bg-white p-5 text-left transition-colors hover:bg-sand-50"
+              >
+                <Icon className={cn("h-8 w-8 shrink-0", service.tone)} />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-serif text-lg font-semibold text-sand-950">
+                    {service.name}
+                  </span>
+                  <span className="mt-0.5 block text-sm leading-snug text-sand-600">
+                    {service.detail}
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-sand-400" />
+              </button>
+            );
+          })}
+        </section>
 
-          <Card
-            onClick={() =>
-              showToast({
-                title: "Housekeeping Request Dispatched",
-                description: "Fresh towels and room freshening queued for floor attendant.",
-                type: "success",
-              })
-            }
-            className="cursor-pointer hover:border-sage-300 hover:shadow-card transition-all"
-          >
-            <CardContent className="p-4 flex flex-col justify-between h-28">
-              <div className="p-2 rounded-lg bg-sage-50 text-sage-700 w-fit">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-sand-950">Housekeeping</h4>
-                <p className="text-[10px] text-sand-500">Towels, toiletries, cleaning</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Live request tracker */}
+        <section className="rounded-2xl border border-sand-200/80 bg-white p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-serif text-xl font-semibold text-sand-950">Your Request</h2>
+            <button className="flex items-center gap-1 text-sm font-medium text-sage-700 hover:text-sage-900">
+              View All Requests
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
-        {/* Active Request Live Status */}
-        {orderSent && (
-          <Card className="border-emerald-300 bg-emerald-50/40 p-4 animate-in fade-in">
-            <div className="flex items-start justify-between gap-3">
+          <div className="mt-4 rounded-xl border border-sand-200 p-4">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <Clock className="w-4 h-4" />
-                </div>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-50 text-gold-700">
+                  <Waves className="h-5 w-5" />
+                </span>
                 <div>
-                  <h4 className="text-xs font-bold text-emerald-950">
-                    Breakfast Order In Preparation
-                  </h4>
-                  <p className="text-[11px] text-emerald-800">
-                    2x Club Sandwiches · Est. arrival 09:45 AM (Kitchen SLA running)
+                  <p className="font-serif text-lg font-semibold leading-tight text-sand-950">
+                    Extra Towels
                   </p>
+                  <p className="text-sm text-sand-600">Requested at 10:24 AM</p>
                 </div>
               </div>
+              <span className="shrink-0 rounded-lg bg-sage-50 px-3 py-1.5 text-sm font-medium text-sage-800">
+                {STAGES[stage]}
+              </span>
             </div>
-          </Card>
-        )}
 
-        {/* AI Concierge Chat Preview */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-gold-100 text-gold-800">
-                <MessageSquare className="w-4 h-4" />
+            {/* Progress rail */}
+            <div className="mt-5">
+              <div className="relative flex items-center justify-between">
+                <div className="absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 bg-sand-200" />
+                <div
+                  className="absolute left-0 top-1/2 h-0.5 -translate-y-1/2 bg-sage-600 transition-all"
+                  style={{ width: `${(stage / (STAGES.length - 1)) * 100}%` }}
+                />
+                {STAGES.map((_, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      "relative flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
+                      index < stage
+                        ? "border-sage-600 bg-sage-600 text-white"
+                        : index === stage
+                          ? "border-sage-600 bg-sage-600"
+                          : "border-sand-300 bg-white"
+                    )}
+                  >
+                    {index < stage && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                ))}
               </div>
-              <div>
-                <h4 className="text-xs font-bold text-sand-950">Vesper AI Concierge</h4>
-                <p className="text-[10px] text-sand-500">RAG model · Instant answers</p>
+
+              <div className="mt-2 flex items-start justify-between gap-2 text-center">
+                <span className="flex-1 text-left">
+                  <span className="block text-sm font-medium text-sand-900">Request Placed</span>
+                  <span className="block text-xs text-sand-500">10:24 AM</span>
+                </span>
+                <span className="flex-1">
+                  <span className="block text-sm font-medium text-sand-900">In Progress</span>
+                  <span className="block text-xs text-sand-500">Our team is on it</span>
+                </span>
+                <span className="flex-1 text-right">
+                  <span
+                    className={cn(
+                      "block text-sm font-medium",
+                      stage >= 2 ? "text-sand-900" : "text-sand-400"
+                    )}
+                  >
+                    Completed
+                  </span>
+                  <span className="block text-xs text-sand-400">
+                    {stage >= 2 ? "Done" : "We'll notify you"}
+                  </span>
+                </span>
               </div>
             </div>
-            <Badge variant="sage" className="text-[10px]">
-              Available 24/7
-            </Badge>
-          </div>
 
-          <div className="p-3 rounded-xl bg-sand-50 border border-sand-200 text-xs text-sand-700 space-y-2">
-            <div className="bg-white p-2 rounded-lg border border-sand-200 text-right text-sand-900 font-medium">
-              "What time does the oceanfront infinity pool close?"
-            </div>
-            <div className="p-2 text-sage-900 font-medium">
-              "The infinity pool at Madh Island Beach Resort is open until 8:30 PM this evening. Towels and pool bar drinks are complimentary for Ocean Wing guests!"
-            </div>
+            {stage < 2 && (
+              <button
+                onClick={() => setStage(2)}
+                className="mt-4 text-xs text-sand-400 hover:text-sand-600"
+              >
+                (demo: advance to completed)
+              </button>
+            )}
           </div>
+        </section>
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="text"
-              placeholder="Ask about spa timings, dinner..."
-              className="flex-1 px-3 py-2 rounded-lg border border-sand-200 text-xs bg-white focus:outline-none focus:border-sage-500"
+        {/* Service rating */}
+        <section className="rounded-2xl border border-sand-200/80 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-xl font-semibold text-sand-950">
+                How was the service?
+              </h2>
+              <p className="mt-0.5 text-sm text-sand-600">
+                Your feedback helps us serve you better.
+              </p>
+            </div>
+            <StarRating
+              value={serviceRating}
+              onChange={(value) => {
+                setServiceRating(value);
+                showToast({
+                  title: "Thank you for the feedback",
+                  description: `You rated this service ${value} out of 5.`,
+                  type: "success",
+                });
+              }}
+              size="lg"
+              label="Rate this service"
             />
-            <Button size="sm" variant="default">
-              <Send className="w-3.5 h-3.5" />
-            </Button>
           </div>
-        </Card>
+        </section>
 
-        {/* Return to Admin Link */}
-        <div className="text-center pt-2">
-          <button
-            onClick={() => router.push("/admin")}
-            className="text-xs font-semibold text-sage-700 hover:text-sage-900 hover:underline"
-          >
-            &larr; Return to Resort Admin Deck
-          </button>
-        </div>
+        {/* Rating the people who served this stay */}
+        <section className="rounded-2xl border border-sand-200/80 bg-white p-5">
+          <h2 className="font-serif text-xl font-semibold text-sand-950">Rate our team</h2>
+          <p className="mt-0.5 text-sm text-sand-600">
+            Only the people who looked after you during this stay. Ratings go to their
+            manager, never to the person directly, and you can rate each of them once.
+          </p>
+
+          {staffLoading ? (
+            <div className="mt-4 space-y-2">
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="h-14 animate-pulse rounded-xl bg-sand-100" />
+              ))}
+            </div>
+          ) : servedBy.length === 0 ? (
+            <p className="mt-4 text-sm text-sand-500">
+              Nobody has attended to this room yet. Once someone does, you will be able to
+              rate them here.
+            </p>
+          ) : (
+          <ul className="mt-4 divide-y divide-sand-100">
+            {servedBy.map((member) => {
+              const done = submitted[member.id] || member.already_rated;
+              const isSaving = saving === member.id;
+
+              return (
+                <li
+                  key={member.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sage-50 text-sm font-semibold text-sage-800">
+                      {member.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-sand-950">{member.name}</p>
+                      <p className="text-xs text-sand-500">{member.role}</p>
+                    </div>
+                  </div>
+
+                  {done ? (
+                    <span className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                      <StarRating value={ratings[member.id] ?? 0} size="sm" />
+                      <Check className="h-4 w-4" />
+                      Thank you
+                    </span>
+                  ) : isSaving ? (
+                    <span className="flex items-center gap-2 text-sm text-sand-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending
+                    </span>
+                  ) : (
+                    <StarRating
+                      value={ratings[member.id] ?? 0}
+                      onChange={(value) => {
+                        setRatings((current) => ({ ...current, [member.id]: value }));
+                        submitRating(member.id, member.name, value);
+                      }}
+                      label={`Rate ${member.name}`}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          )}
+        </section>
+
+        <footer className="border-t border-sand-200/80 pt-5 text-center">
+          <p className="text-xs tracking-[0.18em] text-sand-500">VESPER BEACH RESORT</p>
+          <p className="mt-1 text-xs tracking-[0.14em] text-sand-400">
+            HOSPITALITY FOR A BRIGHTER TOMORROW
+          </p>
+          <p className="mt-3 text-xs tracking-[0.2em] text-sand-500">STAY · RELAX · BELONG</p>
+        </footer>
       </main>
-
-      <RoleSwitcherModal
-        isOpen={showRoleModal}
-        onClose={() => setShowRoleModal(false)}
-      />
     </div>
   );
 }

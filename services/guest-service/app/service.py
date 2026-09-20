@@ -246,6 +246,46 @@ def list_stay_requests(db: Session, property_id: UUID, stay_id: UUID) -> list[Se
     return list(db.scalars(query))
 
 
+def staff_who_served(db: Session, property_id: UUID, stay_id: UUID) -> list[dict]:
+    """Who actually attended to this stay.
+
+    The people who accepted a request for this room, deduplicated, most recent first.
+    This is the list a guest may rate, and restricting it here is what keeps ratings
+    about service received rather than about who happens to be well known — a guest
+    cannot rate the general manager they never met.
+
+    Names are resolved by the caller; this returns ids and what each person did, which
+    is everything guest-service actually knows.
+    """
+    rows = db.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.property_id == property_id,
+            ServiceRequest.stay_id == stay_id,
+            ServiceRequest.accepted_by.is_not(None),
+        )
+        .order_by(ServiceRequest.created_at.desc())
+    )
+
+    seen: dict[str, dict] = {}
+    for request in rows:
+        key = str(request.accepted_by)
+        entry = seen.setdefault(
+            key,
+            {
+                "staff_id": key,
+                "department_id": str(request.department_id) if request.department_id else None,
+                "interactions": [],
+            },
+        )
+        # Cap the list: a guest deciding whether to rate someone needs a reminder of who
+        # they were, not an audit log of the stay.
+        if len(entry["interactions"]) < 4:
+            entry["interactions"].append(request.kind)
+
+    return list(seen.values())
+
+
 def list_requests(
     db: Session,
     property_id: UUID,

@@ -5,9 +5,11 @@ import { useAuth } from "@/components/auth/auth-context";
 import {
   MapPin,
   ArrowRightLeft,
+  Star,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
+import Link from "next/link";
 import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
 
 export function StaffHeader() {
@@ -76,6 +78,14 @@ export function StaffHeader() {
               />
               <span>{isOnDuty ? "On Duty" : "Clock In"}</span>
             </button>
+
+            <Link
+              href="/staff/reviews"
+              className="p-2 rounded-lg border border-sand-200 bg-sand-50 text-sand-600 hover:text-sand-900 transition-colors"
+              title="Review departing guests"
+            >
+              <Star className="w-4 h-4" />
+            </Link>
 
             <button
               onClick={() => setShowRoleModal(true)}

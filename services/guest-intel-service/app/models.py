@@ -223,3 +223,80 @@ class ConciergeMessage(Base, TimestampMixin):
     # Set when a human picks the escalation up.
     handled_by: Mapped[UUID | None] = uuid_ref()
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuestStaffReview(Base, TimestampMixin):
+    """One guest's rating of one staff member, for one stay.
+
+    The mirror of `StaffGuestReview`, and held to the same rules for the same reason:
+    it is an opinion about a named person that feeds a decision about them. One rating
+    per guest per staff member per stay, immutable once given.
+
+    Written with a room token, so `reviewed_by` is the guest, not a user account. The
+    guest sees only the person they are rating; they never see the score that results,
+    and neither does the staff member's colleague.
+    """
+
+    __tablename__ = "guest_staff_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "stay_id", "staff_id", "guest_id", name="uq_staff_review_one_per_guest_per_stay"
+        ),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    stay_id: Mapped[UUID] = uuid_ref(nullable=False, index=True)
+    guest_id: Mapped[UUID] = uuid_ref(nullable=False, index=True)
+    staff_id: Mapped[UUID] = uuid_ref(nullable=False, index=True)
+    department_id: Mapped[UUID | None] = uuid_ref()
+    # The request or order this rating followed, when it came from one.
+    request_id: Mapped[UUID | None] = uuid_ref()
+
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+
+    sentiment_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    sentiment_label: Mapped[str] = mapped_column(String(16), default="neutral", nullable=False)
+    sentiment_method: Mapped[str] = mapped_column(String(16), default="lexicon", nullable=False)
+
+    # True when the guest had an open complaint at the time. Kept so the score can say
+    # so rather than quietly counting a rating given mid-problem as a clean read.
+    during_complaint: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class StaffPerformanceSummary(Base, TimestampMixin):
+    """What a manager reads on the performance board: one row per staff member.
+
+    Rebuilt as ratings arrive. `score` stays null until enough separate guests have
+    rated the person — an unscored row is listed apart from the board, never at the
+    bottom of it.
+    """
+
+    __tablename__ = "staff_performance_summaries"
+    __table_args__ = (UniqueConstraint("property_id", "staff_id"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    staff_id: Mapped[UUID] = uuid_ref(nullable=False, index=True)
+    department_id: Mapped[UUID | None] = uuid_ref(index=True)
+
+    review_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mean_rating: Mapped[float | None] = mapped_column(Float)
+    # Recency-weighted, severity-corrected Bayesian average. Null until scoreable.
+    score: Mapped[float | None] = mapped_column(Float, index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    tier: Mapped[str] = mapped_column(String(20), default="unrated", nullable=False, index=True)
+    reasons: Mapped[list[str]] = mapped_column(ARRAY(String(300)), default=list, nullable=False)
+
+    # Ratings given while the guest had an open complaint.
+    complaint_context_reviews: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Scored, but on too few guests to rank with confidence.
+    thin_evidence: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Clear of the recognition threshold on more than thin evidence.
+    deserves_recognition: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # A manager should read the comments. Never an automatic consequence.
+    merits_a_conversation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

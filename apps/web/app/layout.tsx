@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-context";
 import { ToastProvider } from "@/components/ui/toast";
+import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {
   title: "Vesper | Smart Resort 360",
@@ -31,9 +32,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#faf8f5] text-[#212b26] antialiased selection:bg-sage-200 selection:text-sage-900">
-        <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

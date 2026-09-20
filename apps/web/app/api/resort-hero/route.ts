@@ -48,7 +48,8 @@ export async function GET() {
         }
       }
 
-      return new NextResponse(foundBuffer, {
+      // Node's Buffer is not a DOM BodyInit; the view over the same bytes is, and copies nothing.
+      return new NextResponse(new Uint8Array(foundBuffer), {
         status: 200,
         headers: {
           "Content-Type": "image/jpeg",

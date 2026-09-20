@@ -107,6 +107,19 @@ def my_requests(
     return [_detail(r) for r in rows]
 
 
+@guest_router.get("/served-by", response_model=list[dict])
+def served_by(
+    principal: Principal = Depends(current_guest), db: Session = Depends(get_session)
+) -> list[dict]:
+    """The staff who attended to this stay.
+
+    Read by guest-intel to decide who this guest is allowed to rate. Returns ids rather
+    than names: guest-service does not hold the staff directory, and inventing a name
+    here would mean two places that disagree about what someone is called.
+    """
+    return service.staff_who_served(db, UUID(principal.property_id), UUID(principal.stay_id))
+
+
 @guest_router.post("/requests/{request_id}/rating", response_model=RequestDetail)
 def rate(
     request_id: UUID,

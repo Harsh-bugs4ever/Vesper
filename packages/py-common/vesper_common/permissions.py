@@ -47,6 +47,12 @@ class Perm(StrEnum):
     # treated on the way out.
     GUEST_REVIEW_WRITE = "guest_review:write"
     GUEST_REVIEW_READ = "guest_review:read"
+    # The other direction: guests rating staff. Guests write these with a room token and
+    # hold no permission at all, so there is no write entry here. Reading is split the
+    # same way as above, and for a sharper reason — a staff member seeing their own
+    # score is feedback, and one seeing everybody's is a ranking of their colleagues.
+    STAFF_REVIEW_READ_OWN = "staff_review:read_own"
+    STAFF_REVIEW_READ = "staff_review:read"
 
     # Inventory
     STOCK_READ = "stock:read"
@@ -88,6 +94,7 @@ EMPLOYEE_PERMS: set[str] = {
     Perm.ISSUES_WRITE,
     Perm.STOCK_READ,
     Perm.GUEST_REVIEW_WRITE,
+    Perm.STAFF_REVIEW_READ_OWN,
 }
 
 SUPERVISOR_PERMS: set[str] = EMPLOYEE_PERMS | {
@@ -104,6 +111,7 @@ MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
     Perm.BOOKINGS_WRITE,
     Perm.GUESTS_READ,
     Perm.GUEST_REVIEW_READ,
+    Perm.STAFF_REVIEW_READ,
     Perm.CARDS_APPROVE,
     Perm.CARDS_DISMISS,
     Perm.WORKORDER_APPROVE,
