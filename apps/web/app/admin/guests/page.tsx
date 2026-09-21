@@ -11,11 +11,16 @@ import {
   IndianRupee,
   Moon,
   Pencil,
+  Plus,
+  Send,
+  Sparkles,
   Star,
 } from "lucide-react";
 
 import { SentimentTrendChart } from "@/components/charts/sentiment-trend-chart";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { PeriodSelect } from "@/components/ui/period-select";
 import { SectionTabs } from "@/components/ui/section-tabs";
@@ -45,6 +50,37 @@ export default function GuestProfilePage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [range, setRange] = useState<string>(SENTIMENT_RANGES[0]);
   const [offerHandled, setOfferHandled] = useState<"approved" | "saved" | null>(null);
+
+  // Offer Composer Modal State
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerGuest, setComposerGuest] = useState(guest.name);
+  const [composerTitle, setComposerTitle] = useState("Complimentary Sea View Upgrade & High Tea");
+  const [composerPerk, setComposerPerk] = useState("Executive Sea View Upgrade + ₹2,500 F&B credit");
+  const [composerCategory, setComposerCategory] = useState("upgrade");
+  const [composerMessage, setComposerMessage] = useState(
+    `Dear ${guest.name.split(" ")[0]}, we would be delighted to welcome you back to Vesper with a complimentary upgrade to our Executive Sea View Room and high tea at The Palm Lounge.`
+  );
+  const [composerExpiry, setComposerExpiry] = useState("31 Dec 2026");
+
+  const handleSendOffer = () => {
+    if (!composerTitle.trim()) {
+      showToast({
+        title: "Please enter an offer title",
+        description: "An offer title is required.",
+        type: "warning",
+      });
+      return;
+    }
+
+    setComposerOpen(false);
+    setOfferHandled("approved");
+
+    showToast({
+      title: "Retention Offer Dispatched",
+      description: `"${composerTitle}" sent to ${composerGuest} via email/SMS (valid until ${composerExpiry}).`,
+      type: "success",
+    });
+  };
 
   const initials = guest.name
     .split(" ")
@@ -262,9 +298,22 @@ export default function GuestProfilePage() {
                 title="At-Risk Guests"
                 description="Guests who may not return soon"
                 action={
-                  <button className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900">
-                    View all
-                  </button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setComposerGuest(atRisk[0].name);
+                      setComposerTitle("Win-Back Stay Incentive");
+                      setComposerPerk("20% Off Room + Complimentary Breakfast");
+                      setComposerMessage(
+                        `Dear ${atRisk[0].name.split(" ")[0]}, we would love to welcome you back with a 20% privilege and breakfast on us.`
+                      );
+                      setComposerOpen(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Compose Offer
+                  </Button>
                 }
               />
               <PanelBody className="pt-4">
@@ -298,6 +347,20 @@ export default function GuestProfilePage() {
                       >
                         {person.risk === "high" ? "High Risk" : "At Risk"}
                       </span>
+                      <button
+                        onClick={() => {
+                          setComposerGuest(person.name);
+                          setComposerTitle("Personalized Win-Back Offer");
+                          setComposerPerk("Complimentary Room Upgrade + Dining Credit");
+                          setComposerMessage(
+                            `Dear ${person.name.split(" ")[0]}, we noticed it has been ${person.daysSince} days since your last stay. We would love to welcome you back.`
+                          );
+                          setComposerOpen(true);
+                        }}
+                        className="shrink-0 rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs font-medium text-sand-700 hover:bg-sand-50"
+                      >
+                        Offer
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -351,7 +414,7 @@ export default function GuestProfilePage() {
                       : "Saved. It stays on the shelf until someone approves it."}
                   </p>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"
                       className="flex-1"
@@ -370,9 +433,24 @@ export default function GuestProfilePage() {
                       variant="outline"
                       size="sm"
                       className="flex-1"
+                      onClick={() => {
+                        setComposerGuest(guest.name);
+                        setComposerTitle(suggestedOffer.title);
+                        setComposerPerk("Sea view upgrade + high tea");
+                        setComposerMessage(
+                          `Dear ${guest.name.split(" ")[0]}, ${suggestedOffer.detail}`
+                        );
+                        setComposerOpen(true);
+                      }}
+                    >
+                      Customize
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setOfferHandled("saved")}
                     >
-                      Save for Later
+                      Save
                     </Button>
                   </div>
                 )}
@@ -509,6 +587,87 @@ export default function GuestProfilePage() {
           </PanelBody>
         </Panel>
       )}
+      {/* Offer Composer Modal Drawer */}
+      <Drawer
+        open={composerOpen}
+        onOpenChange={setComposerOpen}
+        title="Compose Retention Offer"
+        description={`Craft a personalized incentive for ${composerGuest}`}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setComposerOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSendOffer}>
+              <Send className="h-3.5 w-3.5" />
+              Send & Attach Offer
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-sand-200 bg-sand-50/70 p-3.5 text-xs text-sand-700">
+            <span className="font-semibold text-sand-900">Guest:</span> {composerGuest} · Member
+            since 2024 · Past Stays: {guest.pastStays}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">Offer Title</label>
+            <Input
+              value={composerTitle}
+              onChange={(e) => setComposerTitle(e.target.value)}
+              placeholder="e.g. Complimentary Suite Upgrade + Spa Credit"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-sand-700">Category</label>
+              <select
+                value={composerCategory}
+                onChange={(e) => setComposerCategory(e.target.value)}
+                className="w-full rounded-xl border border-sand-200 bg-white p-2.5 text-sm text-sand-900 focus:border-sage-500 focus:outline-none"
+              >
+                <option value="upgrade">Room Upgrade</option>
+                <option value="fnb">Dining / F&B Credit</option>
+                <option value="spa">Spa & Wellness Voucher</option>
+                <option value="discount">Direct Rate Discount</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-sand-700">Valid Until</label>
+              <Input
+                value={composerExpiry}
+                onChange={(e) => setComposerExpiry(e.target.value)}
+                placeholder="31 Dec 2026"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">Specific Perk</label>
+            <Input
+              value={composerPerk}
+              onChange={(e) => setComposerPerk(e.target.value)}
+              placeholder="e.g. Executive Sea View Upgrade + ₹2,500 F&B credit"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">
+              Personalized Guest Message
+            </label>
+            <textarea
+              rows={4}
+              value={composerMessage}
+              onChange={(e) => setComposerMessage(e.target.value)}
+              className="w-full rounded-xl border border-sand-200 p-3 text-sm focus:border-sage-500 focus:outline-none focus:ring-1 focus:ring-sage-500"
+              placeholder="Write a warm, personalized invitation..."
+            />
+          </div>
+        </div>
+      </Drawer>
     </div>
   );
 }

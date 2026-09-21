@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowRight, BedDouble, ClipboardList, IndianRupee, Users } from "lucide-react";
+import { ArrowRight, BedDouble, ClipboardList, IndianRupee, Users, Zap } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
 import { DepartmentRevenueDonut } from "@/components/charts/department-revenue-donut";
@@ -91,6 +91,36 @@ export default function AdminDashboardPage() {
           icon={ClipboardList}
           trend={[...kpiTrends.requests]}
         />
+      </div>
+
+      {/* AI Action Queue Highlight Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gold-200/80 bg-gradient-to-r from-gold-50/80 via-white to-sage-50/40 p-4 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-500 text-white shadow-xs">
+            <Zap className="h-5 w-5" />
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-serif text-base font-semibold text-sand-950">
+                AI Action Queue · 5 Pending Suggestions
+              </span>
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                2 High Urgency
+              </span>
+            </div>
+            <p className="text-xs text-sand-600">
+              Weekend rate surge (+₹42k) and Chiller 2 predictive maintenance recommended today.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/admin/actions"
+          className="flex items-center gap-1.5 rounded-xl bg-sand-900 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-sand-800"
+        >
+          Review in Action Queue
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

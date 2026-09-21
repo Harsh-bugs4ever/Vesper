@@ -9,6 +9,9 @@ import {
   Download,
   FileText,
   Gauge,
+  Plus,
+  Printer,
+  QrCode,
   Search,
   Thermometer,
   TimerReset,
@@ -16,10 +19,12 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 import { RiskGauge, riskBand } from "@/components/charts/risk-gauge";
 import { SensorTrendChart } from "@/components/charts/sensor-trend-chart";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { Input } from "@/components/ui/input";
 import { MiniStat } from "@/components/ui/mini-stat";
@@ -73,6 +78,49 @@ export default function MaintenancePage() {
   const [risk, setRisk] = useState<RiskLevel | "all">("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(assets[0].id);
+
+  // Live Work Orders & Form Modal State
+  const [liveWorkOrders, setLiveWorkOrders] = useState(workOrders);
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [qrModalAsset, setQrModalAsset] = useState<Asset | null>(null);
+
+  // Work Order Form Inputs
+  const [woSummary, setWoSummary] = useState("Condenser coil cleaning & bearing inspection");
+  const [woPriority, setWoPriority] = useState<"urgent" | "high" | "medium" | "low">("high");
+  const [woAssignee, setWoAssignee] = useState("Cool Care Services");
+  const [woDue, setWoDue] = useState("19 Nov 2026");
+  const [woParts, setWoParts] = useState("Chiller Bearing Kit (PRT-002)");
+
+  const handleCreateWorkOrder = () => {
+    if (!woSummary.trim()) {
+      showToast({
+        title: "Please enter a summary",
+        description: "A short description of the repair or maintenance task is required.",
+        type: "warning",
+      });
+      return;
+    }
+
+    const newOrder = {
+      id: `WO-2026-0${liveWorkOrders.length + 81}`,
+      asset: selected.name,
+      summary: woSummary.trim(),
+      assignee: woAssignee,
+      raised: "Today",
+      due: woDue,
+      priority: woPriority,
+      state: "assigned" as const,
+    };
+
+    setLiveWorkOrders([newOrder, ...liveWorkOrders]);
+    setWorkOrderOpen(false);
+
+    showToast({
+      title: "Work Order Created",
+      description: `${newOrder.id} · ${newOrder.asset} assigned to ${newOrder.assignee} (due ${newOrder.due}).`,
+      type: "success",
+    });
+  };
 
   const counts = useMemo(
     () => ({
@@ -395,19 +443,26 @@ export default function MaintenancePage() {
                     </div>
                   </div>
 
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      showToast({
-                        title: "Work order created",
-                        description: `${selected.name} · assigned to Rajesh Verma for 18 Nov.`,
-                        type: "success",
-                      })
-                    }
-                  >
-                    <Wrench className="h-3.5 w-3.5" />
-                    Create Work Order
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQrModalAsset(selected)}
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
+                      Asset QR Tag
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setWoSummary(`Condenser coil cleaning & inspection for ${selected.name}`);
+                        setWorkOrderOpen(true);
+                      }}
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      Create Work Order
+                    </Button>
+                  </div>
                 </div>
               </PanelBody>
             )}
@@ -508,8 +563,20 @@ export default function MaintenancePage() {
       {tab === "work-orders" && (
         <Panel>
           <PanelHeader
-            title="Work Orders"
+            title={`Work Orders (${liveWorkOrders.length})`}
             description="Raised by engineering, by the front desk, or from an approved action card."
+            action={
+              <Button
+                size="sm"
+                onClick={() => {
+                  setWoSummary(`Preventive inspection for ${selected.name}`);
+                  setWorkOrderOpen(true);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Work Order
+              </Button>
+            }
           />
           <PanelBody className="pt-4">
             <Table>
@@ -525,7 +592,7 @@ export default function MaintenancePage() {
                 </tr>
               </THead>
               <TBody>
-                {workOrders.map((order) => (
+                {liveWorkOrders.map((order) => (
                   <TR key={order.id}>
                     <TD>
                       <span className="block font-medium tabular-nums text-sand-900">{order.id}</span>
@@ -689,6 +756,158 @@ export default function MaintenancePage() {
           </PanelBody>
         </Panel>
       )}
+
+      {/* Work Order Form Drawer */}
+      <Drawer
+        open={workOrderOpen}
+        onOpenChange={setWorkOrderOpen}
+        title="Raise Work Order"
+        description={`Log a maintenance task for ${selected.name} (${selected.id})`}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setWorkOrderOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleCreateWorkOrder}>
+              Create Work Order
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-sand-200 bg-sand-50/70 p-3.5 text-xs text-sand-700">
+            <span className="font-semibold text-sand-900">Selected Machine:</span> {selected.name} ·{" "}
+            {selected.system} ({selected.location})
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">Work Summary</label>
+            <textarea
+              rows={3}
+              value={woSummary}
+              onChange={(e) => setWoSummary(e.target.value)}
+              className="w-full rounded-xl border border-sand-200 p-3 text-sm focus:border-sage-500 focus:outline-none focus:ring-1 focus:ring-sage-500"
+              placeholder="Describe the maintenance task..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-sand-700">Priority</label>
+              <select
+                value={woPriority}
+                onChange={(e) => setWoPriority(e.target.value as "urgent" | "high" | "medium" | "low")}
+                className="w-full rounded-xl border border-sand-200 bg-white p-2.5 text-sm text-sand-900 focus:border-sage-500 focus:outline-none"
+              >
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-sand-700">Due Date</label>
+              <Input value={woDue} onChange={(e) => setWoDue(e.target.value)} placeholder="19 Nov 2026" />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">Assignee</label>
+            <select
+              value={woAssignee}
+              onChange={(e) => setWoAssignee(e.target.value)}
+              className="w-full rounded-xl border border-sand-200 bg-white p-2.5 text-sm text-sand-900 focus:border-sage-500 focus:outline-none"
+            >
+              <option value="Cool Care Services">Cool Care Services (Vendor - HVAC)</option>
+              <option value="Rajesh Verma">Rajesh Verma (Lead Engineer)</option>
+              <option value="Sameer Joshi">Sameer Joshi (Technician)</option>
+              <option value="Sterling Power">Sterling Power (Vendor - Electrical)</option>
+              <option value="Otis India">Otis India (Vendor - Elevators)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-sand-700">Parts Required</label>
+            <Input
+              value={woParts}
+              onChange={(e) => setWoParts(e.target.value)}
+              placeholder="e.g. Chiller Bearing Kit (PRT-002)"
+            />
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Machine QR Code Generator Drawer */}
+      <Drawer
+        open={qrModalAsset !== null}
+        onOpenChange={(open) => {
+          if (!open) setQrModalAsset(null);
+        }}
+        title="Machine QR Tag Generator"
+        description={qrModalAsset ? `${qrModalAsset.name} · ${qrModalAsset.id}` : undefined}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setQrModalAsset(null)}>
+              Close
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                showToast({
+                  title: "QR Label Sent to Printer",
+                  description: `Printed maintenance badge for ${qrModalAsset?.name}.`,
+                  type: "success",
+                });
+                setQrModalAsset(null);
+              }}
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print QR Label
+            </Button>
+          </>
+        }
+      >
+        {qrModalAsset && (
+          <div className="space-y-5 text-center">
+            <div className="mx-auto flex w-fit flex-col items-center rounded-2xl border-2 border-dashed border-sand-300 bg-white p-6 shadow-xs">
+              <div className="mb-3 flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-sage-700" />
+                <span className="font-serif text-sm font-bold tracking-wider text-sand-950">
+                  VESPER ENGINEERING
+                </span>
+              </div>
+
+              {/* QR Code */}
+              <div className="rounded-xl border border-sand-200 bg-white p-3 shadow-inner">
+                <QRCodeSVG
+                  value={`https://vesper.hotel/maintenance/asset/${qrModalAsset.id}`}
+                  size={180}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+
+              <div className="mt-4 space-y-1 text-center">
+                <p className="font-serif text-base font-semibold text-sand-950">
+                  {qrModalAsset.name}
+                </p>
+                <p className="font-mono text-xs font-bold text-sage-800">
+                  ID: {qrModalAsset.id}
+                </p>
+                <p className="text-xs text-sand-500">
+                  {qrModalAsset.system} · {qrModalAsset.location}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-sand-500">
+              Field engineers scan this QR code with any mobile device to immediately view real-time
+              sensor telemetry, log repair tasks, and book preventive service.
+            </p>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

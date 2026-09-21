@@ -34,6 +34,7 @@ import {
   Wallet,
   Wrench,
   X,
+  Zap,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
@@ -131,6 +132,7 @@ const NAV: NavGroup[] = [
   {
     label: "AI & Analytics",
     items: [
+      { name: "Action Queue", href: "/admin/actions", icon: Zap, roles: MANAGEMENT },
       { name: "Model Performance", href: "/admin/model-performance", icon: BrainCircuit, roles: MANAGEMENT },
       { name: "Data Insights", href: "/admin/data-insights", icon: LineChart, roles: MANAGEMENT },
       { name: "Model Settings", href: "/admin/model-settings", icon: Settings, roles: MANAGEMENT },

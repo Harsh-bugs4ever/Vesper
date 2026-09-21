@@ -113,7 +113,7 @@ export default function GuestChatPage() {
 
   const [messages, setMessages] = useState<Message[]>(THREAD);
   const [draft, setDraft] = useState("");
-  const [thinking, setThinking] = useState(true);
+  const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Keep the newest message in view as the thread grows.
@@ -125,17 +125,56 @@ export default function GuestChatPage() {
     const text = draft.trim();
     if (!text) return;
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: `m${current.length + 1}`,
-        from: "guest",
-        text,
-        time: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
-      },
-    ]);
+    const newGuestMsg: Message = {
+      id: `m${messages.length + 1}`,
+      from: "guest",
+      text,
+      time: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
+    };
+
+    setMessages((current) => [...current, newGuestMsg]);
     setDraft("");
     setThinking(true);
+
+    // Simulated AI Concierge Response Engine
+    setTimeout(() => {
+      const lower = text.toLowerCase();
+      let reply = "";
+      let sources: string[] = ["Front Desk", "Hotel Policy"];
+
+      if (lower.includes("breakfast") || lower.includes("dinner") || lower.includes("food") || lower.includes("restaurant")) {
+        reply =
+          "Breakfast is served at The Verandah from 6:30 AM to 10:30 AM (until 11:00 AM on weekends). 24/7 in-room dining is also available from our multi-cuisine and Jain menus. Would you like me to reserve a table for you?";
+        sources = ["F&B Menu", "Dining Hours", "In-Room Dining"];
+      } else if (lower.includes("checkout") || lower.includes("check out") || lower.includes("late")) {
+        reply =
+          "Standard checkout is at 11:00 AM. As a Gold Elite member, you are eligible for complimentary late checkout until 2:00 PM subject to availability. I can confirm this with the front desk for you now.";
+        sources = ["Late Checkout Policy", "Front Desk", "Guest Profile"];
+      } else if (lower.includes("spa") || lower.includes("pool") || lower.includes("massage") || lower.includes("gym")) {
+        reply =
+          "The Vesper Wellness Spa is located on Level 3 and open daily from 8:00 AM to 9:00 PM. We offer holistic Ayurvedic treatments, sauna, and massage therapies. Would you like me to book a slot for you today?";
+        sources = ["Spa Directory", "Wellness Services"];
+      } else if (lower.includes("wifi") || lower.includes("internet") || lower.includes("network")) {
+        reply =
+          "High-speed complimentary Wi-Fi is available property-wide. Please connect to 'Vesper_Guest' and enter your room number 608 and last name Kapoor. Gold Elite speeds up to 200 Mbps are enabled.";
+        sources = ["IT Policy", "Guest Services"];
+      } else {
+        reply = `Certainly, Ms. Kapoor! I have noted your inquiry regarding "${text}" and coordinated with our duty manager. We will assist you right away.`;
+        sources = ["Front Desk", "Concierge Guide"];
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: `m${current.length + 2}`,
+          from: "assistant",
+          text: reply,
+          time: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
+          sources,
+        },
+      ]);
+      setThinking(false);
+    }, 1200);
   };
 
   return (
