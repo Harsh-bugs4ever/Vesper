@@ -183,7 +183,7 @@ export default function RosterPage() {
             <div className="rounded-xl border border-sand-200 bg-sand-50/60 p-3.5">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs text-sand-600">Coverage this week</span>
-                <span className="font-serif text-lg font-semibold text-sand-950">{coverage}%</span>
+                <span className="font-sans text-lg font-semibold text-sand-950 tabular-nums">{coverage}%</span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sand-200">
                 <div

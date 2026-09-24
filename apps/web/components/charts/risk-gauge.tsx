@@ -61,7 +61,7 @@ export function RiskGauge({
       </svg>
 
       <div className="-mt-9 text-center">
-        <p className="font-serif text-3xl font-semibold text-sand-950">{clamped}%</p>
+        <p className="font-sans text-3xl font-semibold text-sand-950 tabular-nums">{clamped}%</p>
         <p className={cn("text-sm font-semibold", band.text)}>{band.label}</p>
       </div>
     </div>

@@ -468,7 +468,7 @@ export default function GuestPage() {
 
             <div className="flex items-start justify-end p-6 sm:pl-0">
               <div className="rounded-xl bg-sage-800 px-5 py-4 text-right shadow-soft">
-                <p className="font-serif text-2xl font-semibold leading-none text-gold-300">
+                <p className="font-sans text-2xl font-semibold leading-none text-gold-300 tabular-nums">
                   Room 412
                 </p>
                 <p className="mt-1.5 text-xs text-sand-200">Deluxe Ocean View</p>

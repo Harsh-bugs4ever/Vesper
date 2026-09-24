@@ -730,7 +730,7 @@ export default function StaffPage() {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-serif font-bold text-sm text-sand-950">
+                            <span className="font-sans font-bold text-sm text-sand-950 tabular-nums">
                               {task.room}
                             </span>
                             <span className="text-xs text-sand-500">· {task.roomType}</span>
@@ -859,7 +859,7 @@ export default function StaffPage() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-serif font-bold text-base text-sand-950">
+                          <span className="font-sans font-bold text-base text-sand-950 tabular-nums">
                             Room {req.room}
                           </span>
                           <span className="text-xs text-sand-500">· {req.guest}</span>
@@ -976,7 +976,7 @@ export default function StaffPage() {
                 className="p-3.5 rounded-2xl border border-sand-200 bg-white shadow-xs flex items-center justify-between gap-3 hover:border-sage-300 transition-all"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-sand-100 border border-sand-200 flex items-center justify-center font-serif font-bold text-sage-900 text-sm shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-sand-100 border border-sand-200 flex items-center justify-center font-sans font-bold text-sage-900 text-sm shrink-0 tabular-nums">
                     {room.number}
                   </div>
                   <div className="min-w-0">

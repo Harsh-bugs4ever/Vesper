@@ -65,7 +65,7 @@ export function MiniStat({
           <p className="text-xs text-sand-600">{label}</p>
           <p
             className={cn(
-              "mt-0.5 font-serif text-2xl font-semibold leading-tight text-sand-950",
+              "mt-0.5 font-sans text-2xl font-semibold leading-tight text-sand-950 tabular-nums",
               valueClassName
             )}
           >

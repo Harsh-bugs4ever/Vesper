@@ -240,7 +240,7 @@ export default function LandingPage() {
                 <span>Guest SLA</span>
                 <Clock className="w-3.5 h-3.5 text-gold-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-serif text-white">&lt; 12m</div>
+              <div className="text-2xl sm:text-3xl font-bold font-sans tabular-nums text-white">&lt; 12m</div>
               <p className="text-[11px] text-sand-300 mt-0.5">Average request fulfillment</p>
             </div>
 
@@ -249,7 +249,7 @@ export default function LandingPage() {
                 <span>AI Accuracy</span>
                 <Sparkles className="w-3.5 h-3.5 text-gold-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-serif text-white">94.2%</div>
+              <div className="text-2xl sm:text-3xl font-bold font-sans tabular-nums text-white">94.2%</div>
               <p className="text-[11px] text-sand-300 mt-0.5">Engine recommendation score</p>
             </div>
 
@@ -258,7 +258,7 @@ export default function LandingPage() {
                 <span>Safe Undo</span>
                 <RefreshCw className="w-3.5 h-3.5 text-gold-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-serif text-white">10-Sec</div>
+              <div className="text-2xl sm:text-3xl font-bold font-sans tabular-nums text-white">10-Sec</div>
               <p className="text-[11px] text-sand-300 mt-0.5">Safety window on all actions</p>
             </div>
 
@@ -267,7 +267,7 @@ export default function LandingPage() {
                 <span>RevPAR Lift</span>
                 <TrendingUp className="w-3.5 h-3.5 text-gold-400" />
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-serif text-white">+14.8%</div>
+              <div className="text-2xl sm:text-3xl font-bold font-sans tabular-nums text-white">+14.8%</div>
               <p className="text-[11px] text-sand-300 mt-0.5">Adaptive pricing & margin</p>
             </div>
           </div>

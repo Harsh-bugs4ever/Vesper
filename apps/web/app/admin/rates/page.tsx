@@ -202,7 +202,7 @@ export default function RateManagementPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl border border-sand-200 bg-white p-4">
                     <p className="text-xs text-sand-600">Current Rate</p>
-                    <p className="mt-1 font-serif text-2xl font-semibold text-sand-950">
+                    <p className="mt-1 font-sans text-2xl font-semibold text-sand-950 tabular-nums">
                       ₹{rateRecommendation.currentRate.toLocaleString("en-IN")}
                     </p>
                     <p className="mt-0.5 text-xs text-sand-500">per night</p>
@@ -211,11 +211,11 @@ export default function RateManagementPage() {
                   <div className="rounded-xl border border-sage-300 bg-sage-50 p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs text-sage-800">Suggested Rate</p>
-                      <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-xs font-semibold text-sage-800">
+                      <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-xs font-semibold text-sage-800 tabular-nums">
                         +{rateRecommendation.upliftPct}%
                       </span>
                     </div>
-                    <p className="mt-1 font-serif text-2xl font-semibold text-sage-900">
+                    <p className="mt-1 font-sans text-2xl font-semibold text-sage-900 tabular-nums">
                       ₹{rateRecommendation.suggestedRate.toLocaleString("en-IN")}
                     </p>
                     <p className="mt-0.5 text-xs text-sage-700">per night</p>
@@ -224,7 +224,7 @@ export default function RateManagementPage() {
 
                 <div className="border-t border-sand-200/80 pt-4">
                   <p className="text-xs text-sand-600">Expected Impact</p>
-                  <p className="mt-0.5 font-serif text-2xl font-semibold text-emerald-700">
+                  <p className="mt-0.5 font-sans text-2xl font-semibold text-emerald-700 tabular-nums">
                     +₹{rateRecommendation.expectedImpact.toLocaleString("en-IN")}
                   </p>
                   <p className="mt-0.5 text-xs text-sand-500">{rateRecommendation.impactBasis}</p>

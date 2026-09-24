@@ -427,7 +427,7 @@ export default function ResortSettingsPage() {
                       </div>
 
                       <div className="text-right">
-                        <span className="font-serif text-base font-bold text-sage-900 block">
+                        <span className="font-sans text-base font-bold text-sage-900 block tabular-nums">
                           {cat.count} Keys
                         </span>
                         <span className="text-[10px] text-sand-500 font-medium">
@@ -439,7 +439,7 @@ export default function ResortSettingsPage() {
 
                   <div className="pt-2 border-t border-sand-200/80 flex items-center justify-between text-xs font-semibold text-sand-800">
                     <span>Total Key Inventory:</span>
-                    <span className="text-sage-900 font-serif text-lg font-bold">355 Rooms</span>
+                    <span className="text-sage-900 font-sans text-lg font-bold tabular-nums">355 Rooms</span>
                   </div>
                 </CardContent>
               </Card>
@@ -564,13 +564,13 @@ export default function ResortSettingsPage() {
                 <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-sand-50 border border-sand-200">
                   <div>
                     <span className="text-sand-500 text-[11px] block">Mapped Rooms</span>
-                    <span className="font-serif text-lg font-bold text-sand-950">
+                    <span className="font-sans text-lg font-bold text-sand-950 tabular-nums">
                       355 / 355 Rooms
                     </span>
                   </div>
                   <div>
                     <span className="text-sand-500 text-[11px] block">Active Guest Stays</span>
-                    <span className="font-serif text-lg font-bold text-sage-800">
+                    <span className="font-sans text-lg font-bold text-sage-800 tabular-nums">
                       112 Occupied
                     </span>
                   </div>
@@ -640,13 +640,13 @@ export default function ResortSettingsPage() {
                 <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-sand-50 border border-sand-200">
                   <div>
                     <span className="text-sand-500 text-[11px] block">Smart Thermostats</span>
-                    <span className="font-serif text-lg font-bold text-sand-950">
+                    <span className="font-sans text-lg font-bold text-sand-950 tabular-nums">
                       145 Online
                     </span>
                   </div>
                   <div>
                     <span className="text-sand-500 text-[11px] block">HVAC Plant Chillers</span>
-                    <span className="font-serif text-lg font-bold text-sand-950">
+                    <span className="font-sans text-lg font-bold text-sand-950 tabular-nums">
                       12 / 12 Online
                     </span>
                   </div>

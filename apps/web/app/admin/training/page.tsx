@@ -141,13 +141,13 @@ function EngineCard({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-sand-200/80 bg-sand-50/60 p-3">
             <p className="text-[11px] text-sand-500">Accuracy</p>
-            <p className="mt-0.5 font-serif text-lg font-semibold text-sand-950">
+            <p className="mt-0.5 font-sans text-lg font-semibold text-sand-950 tabular-nums">
               {engine.accuracy > 0 ? `${engine.accuracy}%` : "—"}
             </p>
           </div>
           <div className="rounded-xl border border-sand-200/80 bg-sand-50/60 p-3">
             <p className="text-[11px] text-sand-500">Confidence</p>
-            <p className="mt-0.5 font-serif text-lg font-semibold text-sand-950">{engine.confidenceThreshold}%</p>
+            <p className="mt-0.5 font-sans text-lg font-semibold text-sand-950 tabular-nums">{engine.confidenceThreshold}%</p>
           </div>
           <div className="rounded-xl border border-sand-200/80 bg-sand-50/60 p-3">
             <p className="text-[11px] text-sand-500">Last Trained</p>
@@ -326,7 +326,7 @@ export default function LearningPage() {
             </span>
             <div>
               <p className="text-sm text-sand-600">Production Ready</p>
-              <p className="font-serif text-2xl font-semibold text-sand-950">{readyCount}</p>
+              <p className="font-sans text-2xl font-semibold text-sand-950 tabular-nums">{readyCount}</p>
             </div>
           </div>
         </Panel>
@@ -337,7 +337,7 @@ export default function LearningPage() {
             </span>
             <div>
               <p className="text-sm text-sand-600">In Shadow Mode</p>
-              <p className="font-serif text-2xl font-semibold text-sand-950">{shadowCount}</p>
+              <p className="font-sans text-2xl font-semibold text-sand-950 tabular-nums">{shadowCount}</p>
             </div>
           </div>
         </Panel>
@@ -348,7 +348,7 @@ export default function LearningPage() {
             </span>
             <div>
               <p className="text-sm text-sand-600">Cold Start</p>
-              <p className="font-serif text-2xl font-semibold text-sand-950">{coldCount}</p>
+              <p className="font-sans text-2xl font-semibold text-sand-950 tabular-nums">{coldCount}</p>
             </div>
           </div>
         </Panel>
@@ -359,7 +359,7 @@ export default function LearningPage() {
             </span>
             <div>
               <p className="text-sm text-sand-600">Avg. Accuracy</p>
-              <p className="font-serif text-2xl font-semibold text-sand-950">
+              <p className="font-sans text-2xl font-semibold text-sand-950 tabular-nums">
                 {Math.round(
                   engineStates.filter((e) => e.accuracy > 0).reduce((sum, e) => sum + e.accuracy, 0) /
                     engineStates.filter((e) => e.accuracy > 0).length

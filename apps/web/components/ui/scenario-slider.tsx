@@ -47,7 +47,7 @@ export function ScenarioSlider({
         </label>
         <span
           className={cn(
-            "font-serif text-lg font-semibold tabular-nums",
+            "font-sans text-lg font-semibold tabular-nums",
             value > 0 ? "text-sage-700" : value < 0 ? "text-rose-600" : "text-sand-600"
           )}
         >

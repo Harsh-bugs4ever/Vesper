@@ -380,7 +380,7 @@ export default function UsersAndPermissionsPage() {
               <span className="text-[11px] font-semibold text-sand-500 uppercase block">
                 Total Staff Roster
               </span>
-              <span className="text-xl font-bold text-sand-950 font-serif mt-0.5 block">
+              <span className="text-xl font-bold text-sand-950 font-sans mt-0.5 block tabular-nums">
                 180 Personnel
               </span>
             </div>
@@ -389,7 +389,7 @@ export default function UsersAndPermissionsPage() {
               <span className="text-[11px] font-semibold text-sand-500 uppercase block">
                 Active On Shift
               </span>
-              <span className="text-xl font-bold text-emerald-700 font-serif mt-0.5 flex items-center gap-1.5">
+              <span className="text-xl font-bold text-emerald-700 font-sans mt-0.5 flex items-center gap-1.5 tabular-nums">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 44 Active
               </span>
@@ -399,7 +399,7 @@ export default function UsersAndPermissionsPage() {
               <span className="text-[11px] font-semibold text-sand-500 uppercase block">
                 Resort Departments
               </span>
-              <span className="text-xl font-bold text-sand-950 font-serif mt-0.5 block">
+              <span className="text-xl font-bold text-sand-950 font-sans mt-0.5 block tabular-nums">
                 6 Divisions
               </span>
             </div>
@@ -408,7 +408,7 @@ export default function UsersAndPermissionsPage() {
               <span className="text-[11px] font-semibold text-sand-500 uppercase block">
                 PMS / HR Sync
               </span>
-              <span className="text-xl font-bold text-sage-800 font-serif mt-0.5 block">
+              <span className="text-xl font-bold text-sage-800 font-sans mt-0.5 block tabular-nums">
                 100% Synced
               </span>
             </div>

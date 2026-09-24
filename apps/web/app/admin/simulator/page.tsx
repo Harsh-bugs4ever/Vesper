@@ -301,7 +301,7 @@ export default function SimulatorPage() {
                   className="rounded-xl border border-sand-200/80 bg-white p-4"
                 >
                   <p className="text-xs text-sand-600">{metric.label}</p>
-                  <p className="mt-1 font-serif text-2xl font-semibold leading-tight text-sand-950">
+                  <p className="mt-1 font-sans text-2xl font-semibold leading-tight text-sand-950 tabular-nums">
                     {metric.value}
                   </p>
                   <p className="mt-0.5 text-xs text-sand-500">{metric.versus}</p>

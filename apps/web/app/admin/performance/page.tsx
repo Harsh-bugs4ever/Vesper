@@ -197,7 +197,7 @@ export default function PerformancePage() {
                       </TD>
                       <TD className="text-sand-600">{person.department}</TD>
                       <TD align="right">
-                        <span className="font-serif text-base font-semibold text-sand-950">
+                        <span className="font-sans text-base font-semibold text-sand-950 tabular-nums">
                           {person.score?.toFixed(2)}
                         </span>
                         {person.thinEvidence && (
@@ -307,7 +307,7 @@ export default function PerformancePage() {
           <div className="space-y-6">
             <div className="rounded-xl border border-sand-200 bg-sand-50/60 p-4">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-serif text-3xl font-semibold text-sand-950">
+                <span className="font-sans text-3xl font-semibold text-sand-950 tabular-nums">
                   {selected.score?.toFixed(2) ?? "—"}
                 </span>
                 <span

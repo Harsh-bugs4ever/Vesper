@@ -42,7 +42,7 @@ export function DepartmentRevenueDonut({ data }: { data: DepartmentSlice[] }) {
         </ResponsiveContainer>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-serif text-xl font-semibold text-sand-950">{formatLakh(total)}</span>
+          <span className="font-sans text-xl font-semibold text-sand-950 tabular-nums">{formatLakh(total)}</span>
           <span className="text-xs text-sand-500">Total Revenue</span>
         </div>
       </div>

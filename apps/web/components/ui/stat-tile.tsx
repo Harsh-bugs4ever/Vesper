@@ -79,7 +79,7 @@ export function StatTile({
           </span>
 
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-3xl font-semibold leading-tight tracking-tight text-sand-950">
+            <p className="font-sans text-3xl font-semibold leading-tight tracking-tight text-sand-950 tabular-nums">
               {value}
             </p>
             <p className="mt-0.5 text-sm text-sand-600">{label}</p>
@@ -105,7 +105,7 @@ export function StatTile({
 
         <div className="min-w-0 flex-1">
           <p className="text-sm text-sand-600">{label}</p>
-          <p className="mt-1 font-serif text-3xl font-semibold tracking-tight text-sand-950">{value}</p>
+          <p className="mt-1 font-sans text-3xl font-semibold tracking-tight text-sand-950 tabular-nums">{value}</p>
 
           <div className="mt-2 flex items-end justify-between gap-3">
             <div className="min-w-0">

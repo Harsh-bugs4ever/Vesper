@@ -142,25 +142,25 @@ function Resort3DSceneInner() {
           <div className="flex items-center gap-2 text-xs text-sand-500">
             <Thermometer className="h-3.5 w-3.5" /> Avg. Room Temp
           </div>
-          <p className="mt-1 font-serif text-lg font-semibold text-sand-950">23.4°C</p>
+          <p className="mt-1 font-sans text-lg font-semibold text-sand-950 tabular-nums">23.4°C</p>
         </div>
         <div className="rounded-xl border border-sand-200/80 bg-white p-3">
           <div className="flex items-center gap-2 text-xs text-sand-500">
             <Wifi className="h-3.5 w-3.5" /> IoT Sensors Online
           </div>
-          <p className="mt-1 font-serif text-lg font-semibold text-emerald-800">145 / 145</p>
+          <p className="mt-1 font-sans text-lg font-semibold text-emerald-800 tabular-nums">145 / 145</p>
         </div>
         <div className="rounded-xl border border-sand-200/80 bg-white p-3">
           <div className="flex items-center gap-2 text-xs text-sand-500">
             <Activity className="h-3.5 w-3.5" /> HVAC Status
           </div>
-          <p className="mt-1 font-serif text-lg font-semibold text-sand-950">12 / 12 Online</p>
+          <p className="mt-1 font-sans text-lg font-semibold text-sand-950 tabular-nums">12 / 12 Online</p>
         </div>
         <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3">
           <div className="flex items-center gap-2 text-xs text-amber-600">
             <Zap className="h-3.5 w-3.5" /> Active Alerts
           </div>
-          <p className="mt-1 font-serif text-lg font-semibold text-amber-900">1 Anomaly</p>
+          <p className="mt-1 font-sans text-lg font-semibold text-amber-900 tabular-nums">1 Anomaly</p>
         </div>
       </div>
     </div>
