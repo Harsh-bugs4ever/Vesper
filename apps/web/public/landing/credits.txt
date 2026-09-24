@@ -1,0 +1,32 @@
+VESPER LANDING PHOTOGRAPHY
+Downloaded 22 September 2026 for the requested academic demonstration.
+Source credits identify provenance; no new image licence is granted by this file.
+
+Existing /jw-marriott-hero.jpg: retained from the supplied project; original photographer/credit not provided.
+
+arrival-pool.png: supplied by the user for the landing page; original photographer/credit not provided.
+login-retreat.png: original image generated for this project with OpenAI ImageGen on 24 September 2026. It depicts a generic coastal resort and is not a photograph of JW Marriott Mumbai Juhu.
+
+lobby.jpg
+https://familytravelgenie.com/media/wp-uploads/2024/01/JW-Marriott-Mumbai-Juhu-Lobby-Interior.jpg
+
+room.jpg
+https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-twin-deluxe-5333-hor-wide.jpg?output-quality=85&downsize=1920px:*
+
+pool.jpg
+https://cache.marriott.com/is/image/marriotts7prod/bomjw-pool-7760:Wide-Hor?wid=1920&fit=constrain
+
+dining.jpg
+https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-lotus-cafe-4414-hor-wide.jpg?output-quality=85&downsize=1920px:*
+
+beach.jpg
+https://images.unsplash.com/photo-1633791636335-bf74f38cf0db?auto=format&fit=crop&w=1920&q=85&fm=jpg
+
+spa.jpg
+https://luxurylaunches.in/wp-content/uploads/2015/09/Quan-Spa-Treatment-Room-JW-Marriott-Mumbai.jpg
+
+Source pages:
+Rooms, pool, dining: https://www.marriott.com/en-us/hotels/bomjw-jw-marriott-mumbai-juhu/photos/
+Lobby: https://familytravelgenie.com/jw-marriott-mumbai-juhu/
+Spa: https://luxurylaunches.in/unwind-in-luxury-with-mumbais-much-kneaded-quan-fusion-at-the-jw-marriott-mumbai-juhu/
+Beach: https://thelandofwanderlust.com/web-stories/15/ (Unsplash-hosted photograph)

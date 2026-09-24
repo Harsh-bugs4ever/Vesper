@@ -196,7 +196,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [backendUser, signIn],
   );
 
-  const login = useCallback((newRole: UserRole) => switchRole(newRole), [switchRole]);
+  // The role picker is a local demo entry point. Do not let an existing connected
+  // session override the selected role or trigger a background seeded-account login.
+  const login = useCallback((newRole: UserRole) => {
+    if (!DEMO_USERS[newRole]) return;
+    tokens.clear();
+    setBackendUser(null);
+    setBackendProperty(null);
+    setProperties([]);
+    setError(null);
+    setRole(newRole);
+    window.localStorage.setItem(STORAGE_KEY, newRole);
+  }, []);
 
   const logout = useCallback(() => {
     void authApi.logout();
