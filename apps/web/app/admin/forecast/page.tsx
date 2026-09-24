@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadForecast } from "@/lib/api/overviews";
 
-export default function ForecastPage() {
-  return (
-    <SectionPlaceholder
-      title="Forecast"
-      description="Demand out to 90 days, and the what-if levers around it."
-      day="Day 6–9"
-      covers={[
-        "90-day demand forecast with confidence band",
-        "Price, staffing and promo simulator",
-        "Event and holiday calendar overlay",
-        "Cold-start readiness per engine",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Forecast" description="90-day demand outlook with confidence ranges and projected daily rates." queryKey="forecast" load={loadForecast} />;
 }

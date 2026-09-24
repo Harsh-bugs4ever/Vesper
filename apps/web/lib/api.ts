@@ -17,6 +17,7 @@ export const API_URL =
 
 const ACCESS_KEY = "vesper_access_token";
 const REFRESH_KEY = "vesper_refresh_token";
+const GUEST_KEY = "vesper_guest_token";
 
 /** Endpoints reachable without a token; a 401 on these must not trigger a refresh. */
 const PUBLIC_PATHS = ["/auth/login", "/auth/refresh", "/guest/session"];
@@ -70,6 +71,20 @@ export const tokens = {
     if (typeof window === "undefined") return;
     window.localStorage.removeItem(ACCESS_KEY);
     window.localStorage.removeItem(REFRESH_KEY);
+  },
+};
+
+/** A room QR session is separate from a staff account session. */
+export const guestTokens = {
+  access(): string | null {
+    if (typeof window === "undefined") return null;
+    return window.sessionStorage.getItem(GUEST_KEY);
+  },
+  set(token: string) {
+    if (typeof window !== "undefined") window.sessionStorage.setItem(GUEST_KEY, token);
+  },
+  clear() {
+    if (typeof window !== "undefined") window.sessionStorage.removeItem(GUEST_KEY);
   },
 };
 
@@ -128,7 +143,7 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = tokens.access();
+  const token = path.startsWith("/guest/") && path !== "/guest/session" ? guestTokens.access() : tokens.access();
   if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
@@ -151,7 +166,7 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
 
   // One refresh attempt, then give up. Anything else risks a loop.
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
-  if (response.status === 401 && !retrying && !anonymous && !isPublic) {
+  if (response.status === 401 && !retrying && !anonymous && !isPublic && !path.startsWith("/guest/")) {
     if (await refreshAccessToken()) {
       return request<T>(path, options, true);
     }
@@ -285,7 +300,7 @@ export const auth = {
       room_id: roomId,
       qr_secret: qrSecret,
     });
-    tokens.set(session.token);
+    guestTokens.set(session.token);
     return session;
   },
 

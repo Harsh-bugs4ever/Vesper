@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/auth-context";
+import { LiveRequests } from "@/components/connected/live-requests";
 import { format } from "date-fns";
 import { CheckCircle2, ClipboardList, Timer, TriangleAlert } from "lucide-react";
 
@@ -37,6 +39,11 @@ function isOverdue(request: GuestRequest) {
 }
 
 export default function RequestsPage() {
+  const { isConnected } = useAuth();
+  return isConnected ? <LiveRequests /> : <DemoRequestsPage />;
+}
+
+function DemoRequestsPage() {
   const { showToast, showUndoToast } = useToast();
 
   const [requests, setRequests] = useState<GuestRequest[]>([]);

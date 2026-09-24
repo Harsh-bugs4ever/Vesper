@@ -35,6 +35,7 @@ import { FilterChips } from "@/components/ui/filter-chips";
 import { useToast } from "@/components/ui/toast";
 import { StaffBottomNav, type StaffTab } from "@/components/layout/staff-bottom-nav";
 import { useAuth } from "@/components/auth/auth-context";
+import { LiveStaff } from "@/components/connected/live-staff";
 import {
   getStoredRequests,
   subscribeRequests,
@@ -76,6 +77,11 @@ type RoomFilter = "all" | "dirty" | "cleaning" | "ready";
 type RequestFilter = "all" | "new" | "accepted" | "done";
 
 export default function StaffPage() {
+  const { isConnected } = useAuth();
+  return isConnected ? <LiveStaff /> : <DemoStaffPage />;
+}
+
+function DemoStaffPage() {
   const { user } = useAuth();
   const { showToast, showUndoToast } = useToast();
 

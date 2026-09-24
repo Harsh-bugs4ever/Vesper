@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadFeedback } from "@/lib/api/overviews";
 
-export default function FeedbackPage() {
-  return (
-    <SectionPlaceholder
-      title="Guest Feedback"
-      description="What guests said, by department and over time."
-      day="Day 8"
-      covers={[
-        "Sentiment trend per department",
-        "Review and in-stay rating stream",
-        "At-risk guests and retention offers",
-        "Guest DNA preference profiles",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Guest feedback" description="Sentiment trends and review volume across departments." queryKey="feedback" load={loadFeedback} />;
 }

@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, QrCode, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 import { type UserRole } from "@/lib/auth";
@@ -37,13 +39,33 @@ const views: {
 ];
 
 export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
-  const { login } = useAuth();
+  const { login, signIn } = useAuth();
+  const router = useRouter();
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [signInError, setSignInError] = useState("");
 
   const enter = (role: UserRole, destination: string) => {
     login(role);
     // A full navigation restores the chosen role before protected dashboard routes
     // render, so their guards never see the previous user's role.
     window.location.assign(destination);
+  };
+
+  const submitCredentials = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSignInError("");
+    setSubmitting(true);
+    try {
+      const user = await signIn(email.trim(), password);
+      router.push(user.role === "employee" ? "/staff" : "/admin");
+    } catch (error) {
+      setSignInError(error instanceof Error ? error.message : "Could not sign in.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -117,8 +139,48 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
             ))}
           </div>
 
-          <p className="mt-8 text-center text-xs leading-5 text-sage-600 lg:text-left">
-            Academic project · These views use simulated data.
+          <div className="mt-8 border-t border-sand-200 pt-6">
+            <button
+              type="button"
+              onClick={() => setShowCredentials((value) => !value)}
+              aria-expanded={showCredentials}
+              className="text-sm font-medium text-sage-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
+            >
+              {showCredentials ? "Hide account sign in" : "Have a staff account? Sign in"}
+            </button>
+            {showCredentials && (
+              <form onSubmit={submitCredentials} className="mt-5 space-y-4">
+                <label className="block text-xs font-medium text-sage-800">
+                  Work email
+                  <input
+                    type="email"
+                    autoComplete="username"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-sage-800">
+                  Password
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
+                  />
+                </label>
+                {signInError && <p role="alert" className="text-sm text-rose-700">{signInError}</p>}
+                <button type="submit" disabled={submitting} className="w-full rounded-lg bg-sage-700 px-4 py-3 text-sm font-medium text-white hover:bg-sage-800 disabled:opacity-50">
+                  {submitting ? "Signing in…" : "Sign in to live data"}
+                </button>
+              </form>
+            )}
+          </div>
+          <p className="mt-6 text-center text-xs leading-5 text-sage-600 lg:text-left">
+            Role previews use simulated data. Account sign in connects to the resort API.
           </p>
         </div>
       </div>

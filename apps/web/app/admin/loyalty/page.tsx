@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadLoyalty } from "@/lib/api/overviews";
 
-export default function LoyaltyPage() {
-  return (
-    <SectionPlaceholder
-      title="Loyalty"
-      description="Tiers, points and what they unlock."
-      day="Day 9"
-      covers={[
-        "Tier membership and progression",
-        "Points earned and redeemed",
-        "Tier benefits per property",
-        "Enrolment and churn",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Loyalty" description="Guest tiers and VIP coverage from the guest directory." queryKey="loyalty" load={loadLoyalty} />;
 }

@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadSuppliers } from "@/lib/api/overviews";
 
-export default function SuppliersPage() {
-  return (
-    <SectionPlaceholder
-      title="Suppliers"
-      description="Who we buy from, and how fast they deliver."
-      day="Day 5"
-      covers={[
-        "Supplier register and contacts",
-        "Lead times and delivery reliability",
-        "Contracted rates per item",
-        "Contract renewal dates",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Suppliers" description="Supplier coverage, lead times and low-stock exposure." queryKey="suppliers" load={loadSuppliers} />;
 }

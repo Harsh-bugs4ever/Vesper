@@ -109,8 +109,8 @@ export default function MaintenancePage() {
       assignee: woAssignee,
       raised: "Today",
       due: woDue,
-      priority: woPriority,
-      state: "assigned" as const,
+      priority: woPriority === "low" ? "Low" as const : woPriority === "medium" ? "Medium" as const : "High" as const,
+      state: "Open" as const,
     };
 
     setLiveWorkOrders([newOrder, ...liveWorkOrders]);

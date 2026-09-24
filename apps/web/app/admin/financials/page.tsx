@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadFinancials } from "@/lib/api/overviews";
 
-export default function FinancialsPage() {
-  return (
-    <SectionPlaceholder
-      title="Financials"
-      description="Revenue, cost and margin across the property."
-      day="Day 6–9"
-      covers={[
-        "Revenue by department and outlet",
-        "Cost of sale and payroll against budget",
-        "RevPAR, GOPPAR and margin trends",
-        "Export for the monthly pack",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Financials" description="Booked room value and reservation status from the live system." queryKey="financials" load={loadFinancials} />;
 }

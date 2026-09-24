@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadDemandCalendar } from "@/lib/api/overviews";
 
-export default function DemandCalendarPage() {
-  return (
-    <SectionPlaceholder
-      title="Demand Calendar"
-      description="Every night in the window, priced against forecast demand."
-      day="Day 6"
-      covers={[
-        "Night-by-night demand heatmap",
-        "Event and holiday overlay",
-        "Sold-out and pressure markers",
-        "Jump straight to a date's rate",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Demand calendar" description="Nightly rates and projected occupancy by room category." queryKey="demand-calendar" load={loadDemandCalendar} />;
 }

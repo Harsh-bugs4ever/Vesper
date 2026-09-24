@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadPayroll } from "@/lib/api/overviews";
 
-export default function PayrollPage() {
-  return (
-    <SectionPlaceholder
-      title="Payroll"
-      description="Hours worked, overtime and what it costs."
-      day="Day 9"
-      covers={[
-        "Hours from attendance check-ins",
-        "Overtime and shift differentials",
-        "Department cost against budget",
-        "Export for the payroll run",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Attendance and payroll" description="Recorded attendance and hours available for payroll preparation." queryKey="payroll" load={loadPayroll} />;
 }

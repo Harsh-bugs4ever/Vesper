@@ -24,7 +24,7 @@ import { SectionTabs } from "@/components/ui/section-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { formatLakh } from "@/lib/chart-theme";
+import { chartColors, formatLakh } from "@/lib/chart-theme";
 import {
   SOLD_OUT_THRESHOLD,
   competitors,

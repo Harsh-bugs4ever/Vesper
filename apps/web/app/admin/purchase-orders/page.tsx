@@ -1,19 +1,7 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { LivePurchaseOrders } from "@/components/connected/live-purchase-orders";
 
-export default function PurchaseOrdersPage() {
-  return (
-    <SectionPlaceholder
-      title="Purchase Orders"
-      description="What has been ordered and what has arrived."
-      day="Day 5"
-      covers={[
-        "Draft, dispatched and received orders",
-        "Orders raised from low stock",
-        "Goods-received matching",
-        "Spend against budget by category",
-      ]}
-    />
-  );
+export default function Page() {
+  return <LivePurchaseOrders />;
 }

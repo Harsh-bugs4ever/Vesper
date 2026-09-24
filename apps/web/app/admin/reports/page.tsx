@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadReports } from "@/lib/api/overviews";
 
-export default function ReportsPage() {
-  return (
-    <SectionPlaceholder
-      title="Reports"
-      description="Demand, pace and performance against last year."
-      day="Day 6"
-      covers={[
-        "30-day demand forecast with confidence band",
-        "Pace and pick-up against budget",
-        "Segment and channel mix",
-        "Engine accuracy over time",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Operational reports" description="Current totals from reservations, service requests and purchasing." queryKey="reports" load={loadReports} />;
 }

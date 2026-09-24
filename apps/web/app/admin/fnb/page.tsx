@@ -1,19 +1,8 @@
-import React from "react";
+"use client";
 
-import { SectionPlaceholder } from "@/components/ui/section-placeholder";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadFoodAndBeverage } from "@/lib/api/overviews";
 
-export default function FnbPage() {
-  return (
-    <SectionPlaceholder
-      title="Food & Beverage"
-      description="Outlet covers, kitchen throughput and the room service order book."
-      day="Day 5–6"
-      covers={[
-        "Outlet covers and average spend",
-        "Kitchen order queue and prep times",
-        "Auto-deduction of ingredients on completed orders",
-        "Purchase suggestions from low stock",
-      ]}
-    />
-  );
+export default function Page() {
+  return <ConnectedOverview title="Food & Beverage" description="Room-service order book and service performance." queryKey="fnb" load={loadFoodAndBeverage} />;
 }
