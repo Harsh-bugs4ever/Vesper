@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   MapPin,
@@ -13,10 +15,16 @@ import Link from "next/link";
 import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
 
 export function StaffHeader() {
-  const { user } = useAuth();
+  const { user, isConnected, isReady, sessionExpired } = useAuth();
   const { showToast } = useToast();
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const attendance = useQuery({
+    queryKey: ["staff-header-attendance", user.id],
+    enabled: isConnected,
+    queryFn: () => api.get<{ checked_in_at: string; checked_out_at: string | null }[]>("/attendance/me", { days: 1 }),
+  });
+  const liveOnDuty = attendance.data?.some((record) => record.checked_out_at == null) ?? false;
 
   const toggleAttendance = () => {
     const newState = !isOnDuty;
@@ -36,6 +44,8 @@ export function StaffHeader() {
     }
   };
 
+  if (!isReady || sessionExpired) return <header className="h-16 border-b border-sand-200 bg-white" aria-hidden="true" />;
+
   return (
     <>
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-sand-200 px-4 py-3 shadow-soft">
@@ -43,27 +53,30 @@ export function StaffHeader() {
           {/* Staff Info */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-sage-100 border border-sage-300 flex items-center justify-center font-bold text-sage-800 text-sm shadow-xs">
-              RP
+              {user.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-sand-950">{user.name}</h2>
                 <Badge variant="sage" className="text-[10px] py-0 px-1.5">
-                  {user.department || "Housekeeping"}
+                  {user.department || "Staff"}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-sand-500 mt-0.5">
+              {!isConnected && <div className="flex items-center gap-2 text-[11px] text-sand-500 mt-0.5">
                 <span className="flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-sage-600" />
                   Floor 4 · Ocean Wing
                 </span>
-              </div>
+              </div>}
             </div>
           </div>
 
           {/* Attendance Toggle & Role Switch */}
           <div className="flex items-center gap-2">
-            <button
+            {isConnected ? <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${liveOnDuty ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-sand-200 bg-sand-100 text-sand-600"}`}>
+              <span className={`h-2 w-2 rounded-full ${liveOnDuty ? "bg-emerald-500" : "bg-sand-400"}`} />
+              {attendance.isPending ? "Checking shift" : attendance.isError ? "Shift unavailable" : liveOnDuty ? "On duty" : "Off duty"}
+            </span> : <button
               onClick={toggleAttendance}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shadow-xs ${
                 isOnDuty
@@ -77,7 +90,7 @@ export function StaffHeader() {
                 }`}
               />
               <span>{isOnDuty ? "On Duty" : "Clock In"}</span>
-            </button>
+            </button>}
 
             <Link
               href="/staff/reviews"

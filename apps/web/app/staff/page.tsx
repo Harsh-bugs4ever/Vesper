@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import Link from "next/link";
 import {
   Clock,
   QrCode,
@@ -77,7 +78,9 @@ type RoomFilter = "all" | "dirty" | "cleaning" | "ready";
 type RequestFilter = "all" | "new" | "accepted" | "done";
 
 export default function StaffPage() {
-  const { isConnected } = useAuth();
+  const { isConnected, isReady, sessionExpired } = useAuth();
+  if (!isReady) return <p role="status" className="py-12 text-center text-sm text-sage-700">Restoring your session…</p>;
+  if (sessionExpired) return <p className="py-12 text-center text-sm text-sage-700">Your session has ended. <Link href="/login" className="underline">Sign in again</Link>.</p>;
   return isConnected ? <LiveStaff /> : <DemoStaffPage />;
 }
 

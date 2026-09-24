@@ -77,16 +77,16 @@ export const performanceApi = {
 
 export const guestRatingApi = {
   /** Who this guest may rate. Requires a room token. */
-  rateable: () => api.get<RateableStaffResponse[]>("/staff-reviews/rateable"),
+  rateable: () => api.guestGet<RateableStaffResponse[]>("/staff-reviews/rateable"),
 
   submit: (body: { staff_id: string; rating: number; comment?: string; request_id?: string }) =>
-    api.post<{ id: string; staff_id: string; rating: number; created_at: string }>(
+    api.guestPost<{ id: string; staff_id: string; rating: number; created_at: string }>(
       "/staff-reviews",
       body
     ),
 
   mine: () =>
-    api.get<{ id: string; staff_id: string; rating: number; comment: string | null }[]>(
+    api.guestGet<{ id: string; staff_id: string; rating: number; comment: string | null }[]>(
       "/staff-reviews/mine"
     ),
 };

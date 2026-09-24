@@ -3,7 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { guestRatingApi, guestReviewApi, type RateableStaffResponse } from "@/lib/api/performance";
-import { ApiError, tokens } from "@/lib/api";
+import { ApiError, guestTokens, tokens } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-context";
 
 /**
  * The two review directions, from the guest's phone and from the staff portal.
@@ -22,20 +23,22 @@ const DEMO_RATEABLE: RateableStaffResponse[] = [
 ];
 
 export function useRateableStaff() {
+  const guestToken = guestTokens.access();
   const query = useQuery({
-    queryKey: ["rateable-staff"],
-    enabled: tokens.access() !== null,
+    queryKey: ["rateable-staff", guestToken],
+    enabled: guestToken !== null,
     queryFn: guestRatingApi.rateable,
     // A guest without a valid room token is the normal case in a demo, not an error
     // worth retrying three times.
     retry: false,
   });
 
-  const isDemo = query.data === undefined;
+  const isDemo = guestToken === null;
   return {
-    staff: query.data ?? DEMO_RATEABLE,
+    staff: isDemo ? DEMO_RATEABLE : query.data ?? [],
     isDemo,
-    isLoading: query.isLoading && tokens.access() !== null,
+    isLoading: query.isLoading && !isDemo,
+    error: query.error,
   };
 }
 
@@ -44,7 +47,7 @@ export function useRateStaff() {
 
   return useMutation({
     mutationFn: async (input: { staffId: string; rating: number; comment?: string }) => {
-      if (tokens.access() === null) {
+      if (guestTokens.access() === null) {
         // No room token: the demo path. Pause briefly so the pending state is visible,
         // then resolve — but say so, so the UI can avoid claiming it reached anyone.
         await new Promise((resolve) => setTimeout(resolve, 400));
@@ -65,17 +68,19 @@ export function useRateStaff() {
 
 /** Stays departing today that this staff member may still review. */
 export function useDepartingStays() {
+  const { isConnected, user } = useAuth();
   const query = useQuery({
-    queryKey: ["departing-stays"],
-    enabled: tokens.access() !== null,
+    queryKey: ["departing-stays", user.propertyId, user.id],
+    enabled: isConnected,
     queryFn: guestReviewApi.departing,
     retry: false,
   });
 
   return {
     stays: query.data ?? [],
-    isDemo: query.data === undefined,
-    isLoading: query.isLoading && tokens.access() !== null,
+    isDemo: !isConnected,
+    isLoading: query.isLoading && isConnected,
+    error: query.error,
   };
 }
 

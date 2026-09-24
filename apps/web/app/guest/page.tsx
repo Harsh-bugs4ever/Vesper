@@ -391,13 +391,13 @@ export default function GuestPage() {
     rateStaff.mutate(
       { staffId, rating },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setSubmitted((current) => ({ ...current, [staffId]: true }));
           setSaving(null);
           showToast({
             title: "Thank you",
-            description: `Your rating for ${name} has been passed to their manager.`,
-            type: "success",
+            description: result.delivered ? `Your rating for ${name} has been passed to their manager.` : "This preview did not send a rating to the resort.",
+            type: result.delivered ? "success" : "default",
           });
         },
         onError: (error) => {

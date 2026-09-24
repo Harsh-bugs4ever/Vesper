@@ -59,7 +59,7 @@ function useDismiss(onDismiss: () => void) {
 }
 
 export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
-  const { user, logout, property: branch, properties } = useAuth();
+  const { user, logout, property: branch, properties, isConnected } = useAuth();
   const router = useRouter();
 
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -72,7 +72,7 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
   const property = properties.find((item) => item.id === selectedId) ?? properties[0];
 
   const menuRef = useDismiss(useCallback(() => setOpenMenu(null), []));
-  const unread = NOTIFICATIONS.filter((item) => item.unread).length;
+  const unread = isConnected ? 0 : NOTIFICATIONS.filter((item) => item.unread).length;
 
   const initials = user.name
     .split(" ")
@@ -95,8 +95,10 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
           {/* Property switcher */}
           <div className="relative">
             <button
-              onClick={() => setOpenMenu(openMenu === "property" ? null : "property")}
-              className="flex items-center gap-2.5 rounded-xl border border-sand-200 bg-white px-3 py-2 text-left transition-colors hover:bg-sand-50"
+              onClick={() => !isConnected && setOpenMenu(openMenu === "property" ? null : "property")}
+              disabled={isConnected}
+              title={isConnected ? "Your account is scoped to this property" : "Choose a demo property"}
+              className="flex items-center gap-2.5 rounded-xl border border-sand-200 bg-white px-3 py-2 text-left transition-colors hover:bg-sand-50 disabled:cursor-default"
               aria-expanded={openMenu === "property"}
             >
               <Building2 className="h-4 w-4 shrink-0 text-sand-500" />
@@ -106,10 +108,10 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
                 </span>
                 <span className="block text-xs text-sand-500">{property.locality}</span>
               </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-sand-400" />
+              {!isConnected && <ChevronDown className="h-4 w-4 shrink-0 text-sand-400" />}
             </button>
 
-            {openMenu === "property" && (
+            {!isConnected && openMenu === "property" && (
               <div className="animate-in fade-in zoom-in-95 absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-sand-200 bg-white p-1.5 shadow-elevated">
                 {properties.map((item) => (
                   <button
@@ -132,7 +134,7 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
           </div>
 
           {/* Search */}
-          <div className="ml-auto hidden max-w-md flex-1 md:block">
+          {!isConnected && <div className="ml-auto hidden max-w-md flex-1 md:block">
             <label className="relative block">
               <span className="sr-only">Search bookings, guests and rooms</span>
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
@@ -142,10 +144,10 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
                 className="w-full rounded-xl border border-sand-200 bg-white py-2.5 pl-10 pr-3 text-sm text-sand-900 placeholder:text-sand-400 focus:border-sage-500 focus:outline-none focus:ring-1 focus:ring-sage-500"
               />
             </label>
-          </div>
+          </div>}
 
           {/* Alerts */}
-          <div className="relative ml-auto md:ml-0">
+          {!isConnected && <div className="relative ml-auto md:ml-0">
             <button
               onClick={() => setOpenMenu(openMenu === "alerts" ? null : "alerts")}
               className="relative rounded-xl p-2.5 text-sand-600 transition-colors hover:bg-sand-100 hover:text-sand-900"
@@ -182,7 +184,7 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
                 </ul>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Profile */}
           <div className="relative">

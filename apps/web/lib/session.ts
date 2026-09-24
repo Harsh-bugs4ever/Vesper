@@ -72,7 +72,7 @@ export function toUiUser(
     roleTitle: ROLE_TITLES[user.role] ?? user.role,
     department: department?.name,
     propertyId: user.property_id,
-    propertyName: options.propertyName ?? DEMO_USERS[role].propertyName,
+      propertyName: options.propertyName ?? `Property ${user.property_id.slice(0, 8)}`,
     permissions: user.permissions,
   };
 }

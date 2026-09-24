@@ -21,16 +21,25 @@ export function RoleGuard({
   fallbackUrl = "/access-denied",
   renderInlineFallback = false,
 }: RoleGuardProps) {
-  const { role, user } = useAuth();
+  const { role, user, isReady, sessionExpired } = useAuth();
   const router = useRouter();
 
   const isAllowed = allowedRoles.includes(role);
 
   useEffect(() => {
-    if (!isAllowed && !renderInlineFallback) {
+    if (isReady && sessionExpired) {
+      router.replace("/login");
+    } else if (isReady && !isAllowed && !renderInlineFallback) {
       router.replace(fallbackUrl);
     }
-  }, [isAllowed, renderInlineFallback, fallbackUrl, router]);
+  }, [isReady, sessionExpired, isAllowed, renderInlineFallback, fallbackUrl, router]);
+
+  if (!isReady) {
+    return <div className="min-h-[50vh] flex items-center justify-center p-6 text-xs text-sand-500" role="status">Restoring your session…</div>;
+  }
+  if (sessionExpired) {
+    return <div className="min-h-[50vh] flex items-center justify-center p-6 text-sm text-sand-600" role="status">Your session has ended. Taking you to sign in…</div>;
+  }
 
   if (!isAllowed) {
     if (renderInlineFallback) {

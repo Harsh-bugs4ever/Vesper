@@ -7,8 +7,8 @@
  * `user.permissions` is whatever the backend actually granted.
  *
  * **Demo** — the original hardcoded users, still there. The design work does not need a
- * running backend, and a demo can carry on if the API is down. `switchRole` keeps
- * working in both: connected, it signs in as that role's seeded account.
+ * running backend, and a demo can carry on if the API is down. Switching demo roles
+ * explicitly leaves the connected session, so preview data never inherits a live token.
  *
  * Components see one shape either way, and `hasPermission` is the honest question in
  * both — the difference is only where the list came from.
@@ -39,10 +39,12 @@ interface AuthContextType {
    * demo mode, and the reason this is not left null.
    */
   property: Property;
-  /** Every property this deployment serves, for the header's switcher. */
+  /** Properties the current UI can select. A live token is scoped to one property. */
   properties: PropertyOption[];
   /** True once a real backend session is established. */
   isConnected: boolean;
+  isReady: boolean;
+  sessionExpired: boolean;
   isLoading: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<User>;
@@ -62,15 +64,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY = "vesper_auth_role";
 const STORAGE_KEY_PERMISSIONS = "vesper_role_permissions";
 
-/** The seeded account behind each demo role — see scripts/seed.py. */
-export const DEMO_CREDENTIALS: Partial<Record<UserRole, { email: string; password: string }>> = {
-  general_manager: { email: "gm@vesper.demo", password: "vesper123" },
-  system_admin: { email: "owner@vesper.demo", password: "vesper123" },
-  dept_manager_hk: { email: "exec@vesper.demo", password: "vesper123" },
-  dept_manager_fb: { email: "chef@vesper.demo", password: "vesper123" },
-  employee: { email: "hk1@vesper.demo", password: "vesper123" },
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>("general_manager");
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(DEFAULT_ROLE_PERMISSIONS);
@@ -80,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Restore whatever was in play before a refresh: a real session if the stored token
   // is still good, otherwise the demo role & permissions matrix.
@@ -118,8 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (branches.length) setProperties(branches);
           }
         } catch {
-          // An expired or revoked token just means demo mode; not worth an error.
+          // Never turn an expired live session into an unlabeled demo dashboard.
           tokens.clear();
+          window.localStorage.removeItem(STORAGE_KEY);
+          if (!cancelled) setSessionExpired(true);
         }
       }
       if (!cancelled) setMounted(true);
@@ -142,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
       const uiUser = toUiUser(me, { departments, propertyName: branch?.name });
       setBackendUser(uiUser);
+      setSessionExpired(false);
       setRole(uiUser.role);
       if (branch) setBackendProperty(branch);
       if (branches.length) setProperties(branches);
@@ -178,29 +175,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const switchRole = useCallback(
-    (newRole: UserRole) => {
-      if (!DEMO_USERS[newRole]) return;
-      setRole(newRole);
-      window.localStorage.setItem(STORAGE_KEY, newRole);
-
-      // Connected: actually become that person, so the permissions are real.
-      const credentials = DEMO_CREDENTIALS[newRole];
-      if (backendUser && credentials) {
-        void signIn(credentials.email, credentials.password).catch(() => {
-          // Falls back to the mock view for that role rather than stranding the user.
-          setBackendUser(null);
-        });
-      }
-    },
-    [backendUser, signIn],
-  );
+  const switchRole = useCallback((newRole: UserRole) => {
+    if (!DEMO_USERS[newRole]) return;
+    void authApi.logout();
+    setSessionExpired(false);
+    setBackendUser(null);
+    setBackendProperty(null);
+    setProperties([]);
+    setError(null);
+    setRole(newRole);
+    window.localStorage.setItem(STORAGE_KEY, newRole);
+  }, []);
 
   // The role picker is a local demo entry point. Do not let an existing connected
   // session override the selected role or trigger a background seeded-account login.
   const login = useCallback((newRole: UserRole) => {
     if (!DEMO_USERS[newRole]) return;
-    tokens.clear();
+    void authApi.logout();
+    setSessionExpired(false);
     setBackendUser(null);
     setBackendProperty(null);
     setProperties([]);
@@ -212,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     void authApi.logout();
     setBackendUser(null);
+    setSessionExpired(false);
     // The branch came with the session, so it goes with it. Leaving it behind would
     // show a signed-out screen the name of a property nobody is authenticated to.
     setBackendProperty(null);
@@ -240,16 +233,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextType>(() => {
     // Before mount, render the default GM view to avoid a hydration mismatch.
     const effective = mounted ? user : DEMO_USERS.general_manager;
-    const branch = mounted ? (backendProperty ?? DEMO_PROPERTY) : DEMO_PROPERTY;
+    const branch = mounted
+      ? backendProperty ?? (backendUser ? { ...DEMO_PROPERTY, id: backendUser.propertyId, name: backendUser.propertyName, location: "Location unavailable" } : DEMO_PROPERTY)
+      : DEMO_PROPERTY;
     return {
       user: effective,
       role: mounted ? role : "general_manager",
       rolePermissions,
       property: branch,
-      // Before the list arrives, the one property we can name is our own — better than
-      // an empty switcher that looks broken.
-      properties: properties.length ? properties : [{ id: branch.id, name: branch.name, locality: branch.location }],
+      // Do not let the header appear to switch live properties while the bearer token
+      // and every API call remain scoped to the original property.
+      properties: backendUser ? [{ id: branch.id, name: branch.name, locality: branch.location }] : properties.length ? properties : [{ id: branch.id, name: branch.name, locality: branch.location }],
       isConnected: backendUser !== null,
+      isReady: mounted,
+      sessionExpired,
       isLoading,
       error,
       signIn,
@@ -275,6 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     backendUser,
     isLoading,
     error,
+    sessionExpired,
     signIn,
     login,
     logout,

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
+import { LiveDashboard } from "@/components/connected/live-dashboard";
 import { DepartmentRevenueDonut } from "@/components/charts/department-revenue-donut";
 import { OccupancyForecastChart } from "@/components/charts/occupancy-forecast-chart";
 import { ActivityFeed } from "@/components/ui/activity-feed";
@@ -51,6 +52,11 @@ function greetingFor(date: Date): string {
 }
 
 export default function AdminDashboardPage() {
+  const { isConnected } = useAuth();
+  return isConnected ? <LiveDashboard /> : <DemoDashboardPage />;
+}
+
+function DemoDashboardPage() {
   const { user } = useAuth();
   const [revenuePeriod, setRevenuePeriod] = useState<string>(PERIODS[0]);
   const [categoryPeriod, setCategoryPeriod] = useState<string>(PERIODS[0]);

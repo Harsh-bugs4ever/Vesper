@@ -64,7 +64,7 @@ export default function StaffReviewsPage() {
   const [comments, setComments] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Record<string, boolean>>({});
 
-  const { stays: liveStays, isDemo, isLoading } = useDepartingStays();
+  const { stays: liveStays, isDemo, isLoading, error: staysError } = useDepartingStays();
   const reviewGuest = useReviewGuest();
 
   const departing: DepartingStay[] = isDemo
@@ -92,12 +92,12 @@ export default function StaffReviewsPage() {
     reviewGuest.mutate(
       { stayId: stay.stayId, rating, comment: comments[stay.stayId] || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setDone((current) => ({ ...current, [stay.stayId]: true }));
           showToast({
-            title: `Review recorded for ${stay.guest}`,
-            description: "Final once submitted. The guest never sees it.",
-            type: "success",
+            title: result.delivered ? `Review recorded for ${stay.guest}` : "Demo review completed",
+            description: result.delivered ? "Final once submitted. The guest never sees it." : "This preview did not send a review to the resort.",
+            type: result.delivered ? "success" : "default",
           });
         },
         onError: (error) => {
@@ -151,6 +151,8 @@ export default function StaffReviewsPage() {
           ))}
         </div>
       )}
+
+      {staysError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{reviewErrorMessage(staysError)}</p>}
 
       <ul className="space-y-3">
         {departing.map((stay) => {

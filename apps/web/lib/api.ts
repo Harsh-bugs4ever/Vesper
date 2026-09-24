@@ -20,7 +20,7 @@ const REFRESH_KEY = "vesper_refresh_token";
 const GUEST_KEY = "vesper_guest_token";
 
 /** Endpoints reachable without a token; a 401 on these must not trigger a refresh. */
-const PUBLIC_PATHS = ["/auth/login", "/auth/refresh", "/guest/session"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/guest/session"];
 
 export interface ApiErrorBody {
   code: string;
@@ -128,11 +128,13 @@ interface RequestOptions {
   params?: Record<string, string | number | boolean | undefined | null>;
   /** Send without a token — only for the QR session call. */
   anonymous?: boolean;
+  /** Send the stay-scoped room token, including on guest routes outside /guest. */
+  guest?: boolean;
   signal?: AbortSignal;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}, retrying = false): Promise<T> {
-  const { method = "GET", body, params, anonymous = false, signal } = options;
+  const { method = "GET", body, params, anonymous = false, guest = false, signal } = options;
 
   const url = new URL(`${API_URL}${path}`);
   if (params) {
@@ -143,7 +145,8 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = path.startsWith("/guest/") && path !== "/guest/session" ? guestTokens.access() : tokens.access();
+  const guestRequest = guest || (path.startsWith("/guest/") && path !== "/guest/session");
+  const token = guestRequest ? guestTokens.access() : tokens.access();
   if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
@@ -166,7 +169,7 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
 
   // One refresh attempt, then give up. Anything else risks a loop.
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
-  if (response.status === 401 && !retrying && !anonymous && !isPublic && !path.startsWith("/guest/")) {
+  if (response.status === 401 && !retrying && !anonymous && !isPublic && !guestRequest) {
     if (await refreshAccessToken()) {
       return request<T>(path, options, true);
     }
@@ -210,6 +213,8 @@ export const api = {
   /** Unauthenticated — the room QR is the credential. */
   anonymous: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body, anonymous: true }),
+  guestGet: <T>(path: string) => request<T>(path, { guest: true }),
+  guestPost: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body, guest: true }),
 };
 
 // --- shapes the backend returns ----------------------------------------------------
@@ -282,14 +287,15 @@ export const auth = {
 
   async logout(): Promise<void> {
     const refreshToken = tokens.refresh();
+    // Clear this browser's session before the network request. A slow logout must
+    // never erase tokens from a subsequent sign-in.
+    tokens.clear();
     try {
       // Best effort: the server revokes the session, but a failure here must not leave
       // the user stuck on a screen they have already left.
       if (refreshToken) await api.post("/auth/logout", { refresh_token: refreshToken });
     } catch {
       /* ignore */
-    } finally {
-      tokens.clear();
     }
   },
 
