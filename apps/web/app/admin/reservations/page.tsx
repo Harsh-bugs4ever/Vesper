@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { chartColors, formatLakh } from "@/lib/chart-theme";
+import { formatLakh } from "@/lib/chart-theme";
 import { bookingStateMeta, bookings } from "@/lib/demo/frontdesk";
 import { occupancyForecast } from "@/lib/demo/dashboard";
 import { cn } from "@/lib/utils";
@@ -113,14 +113,11 @@ export default function ReservationsPage() {
             action={
               <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-0.5 w-5 rounded-full"
-                    style={{ backgroundColor: chartColors.forest }}
-                  />
+                  <span className="h-0.5 w-5 rounded-full bg-forest-600" />
                   Forecast
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-3 w-5 rounded-sm" style={{ backgroundColor: chartColors.band }} />
+                  <span className="h-3 w-5 rounded-sm bg-sand-200" />
                   Confidence range
                 </span>
               </div>

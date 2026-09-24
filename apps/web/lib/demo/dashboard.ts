@@ -137,4 +137,49 @@ export const kpiTrends = {
   requests: [6, 5, 8, 7, 9, 9, 12],
 } as const;
 
+export interface SystemAlert {
+  id: string;
+  title: string;
+  detail: string;
+  level: "critical" | "warning" | "info";
+  time: string;
+  source: string;
+  actionUrl?: string;
+  actionLabel?: string;
+}
+
+export const systemAlerts: SystemAlert[] = [
+  {
+    id: "alt-1",
+    title: "Chiller 2 Vibration Anomaly",
+    detail: "Bearing vibration 4.8 mm/s exceeding 3.5 mm/s limit. Predictive failure model projects breakdown within 72 hours.",
+    level: "critical",
+    time: "10m ago",
+    source: "IoT BMS",
+    actionUrl: "/admin/maintenance",
+    actionLabel: "Inspect Asset",
+  },
+  {
+    id: "alt-2",
+    title: "Weekend Demand Surge (+38%)",
+    detail: "Booking velocity outpaced forecast for 26-28 Sep. Dynamic pricing suggests +₹1,200 ADR increase on Deluxe keys.",
+    level: "warning",
+    time: "25m ago",
+    source: "Revenue Engine",
+    actionUrl: "/admin/rates",
+    actionLabel: "Adjust Rates",
+  },
+  {
+    id: "alt-3",
+    title: "VIP Arrival: Ambassador Suite #501",
+    detail: "Mr. Aditya Singhania arriving in 45m. Pre-arrival champagne setup and room inspection awaiting duty manager sign-off.",
+    level: "info",
+    time: "42m ago",
+    source: "Front Desk",
+    actionUrl: "/admin/front-desk",
+    actionLabel: "View Stay",
+  },
+];
+
 export const roomsIcon = BedDouble;
+

@@ -25,6 +25,7 @@ import { RiskGauge, riskBand } from "@/components/charts/risk-gauge";
 import { SensorTrendChart } from "@/components/charts/sensor-trend-chart";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { Input } from "@/components/ui/input";
 import { MiniStat } from "@/components/ui/mini-stat";
@@ -198,7 +199,12 @@ export default function MaintenancePage() {
               />
 
               {visible.length === 0 ? (
-                <p className="py-10 text-center text-sm text-sand-500">No assets match that search.</p>
+                <EmptyState
+                  icon={Search}
+                  title="No assets match search"
+                  description="Try adjusting your keyword or risk filter to locate equipment."
+                  className="py-12"
+                />
               ) : (
                 <ul className="divide-y divide-sand-100">
                   {visible.map((asset) => {
@@ -327,17 +333,11 @@ export default function MaintenancePage() {
                     action={
                       <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
                         <span className="flex items-center gap-1.5">
-                          <span
-                            className="h-0.5 w-5 rounded-full"
-                            style={{ backgroundColor: chartColors.forest }}
-                          />
+                          <span className="h-0.5 w-5 rounded-full bg-forest-600" />
                           Temperature (°C)
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: chartColors.gold }}
-                          />
+                          <span className="h-2 w-2 rounded-full bg-gold-500" />
                           Anomaly
                         </span>
                       </div>

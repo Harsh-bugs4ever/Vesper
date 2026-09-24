@@ -17,7 +17,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { PeriodSelect } from "@/components/ui/period-select";
 import { useToast } from "@/components/ui/toast";
-import { chartColors } from "@/lib/chart-theme";
 import {
   SHIFTS,
   WEEK,
@@ -108,17 +107,11 @@ export default function RosterPage() {
             action={
               <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: chartColors.band }}
-                  />
+                  <span className="h-2.5 w-2.5 rounded-full bg-sand-300" />
                   Required Staff
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: chartColors.forest }}
-                  />
+                  <span className="h-2.5 w-2.5 rounded-full bg-forest-600" />
                   Scheduled Staff
                 </span>
               </div>

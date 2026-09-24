@@ -24,7 +24,7 @@ import { SectionTabs } from "@/components/ui/section-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { chartColors, formatLakh } from "@/lib/chart-theme";
+import { formatLakh } from "@/lib/chart-theme";
 import {
   SOLD_OUT_THRESHOLD,
   competitors,
@@ -159,24 +159,15 @@ export default function RateManagementPage() {
                 action={
                   <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-sand-600">
                     <span className="flex items-center gap-1.5">
-                      <span
-                        className="h-0.5 w-5 rounded-full"
-                        style={{ backgroundColor: chartColors.forest }}
-                      />
+                      <span className="h-0.5 w-5 rounded-full bg-forest-600" />
                       Forecast
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span
-                        className="h-3 w-5 rounded-sm"
-                        style={{ backgroundColor: chartColors.band }}
-                      />
+                      <span className="h-3 w-5 rounded-sm bg-sand-200" />
                       Confidence range
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span
-                        className="h-0 w-5 border-t-2 border-dashed"
-                        style={{ borderColor: chartColors.gold }}
-                      />
+                      <span className="h-0 w-5 border-t-2 border-dashed border-gold-500" />
                       Sold-out threshold
                     </span>
                   </div>

@@ -137,17 +137,11 @@ export default function ModelPerformancePage() {
             action={
               <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: chartColors.forest }}
-                  />
+                  <span className="h-2.5 w-2.5 rounded-full bg-forest-600" />
                   Predicted Occupancy
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: chartColors.gold }}
-                  />
+                  <span className="h-2.5 w-2.5 rounded-full bg-gold-500" />
                   Actual Occupancy
                 </span>
               </div>

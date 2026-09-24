@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { CheckCircle2, ClipboardList, Timer, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
@@ -187,9 +188,12 @@ export default function RequestsPage() {
           </div>
 
           {visible.length === 0 ? (
-            <p className="py-10 text-center text-sm text-sand-500">
-              Nothing here — every request in this view has been handled.
-            </p>
+            <EmptyState
+              icon={CheckCircle2}
+              title="All requests handled"
+              description="Nothing here — every request matching this view has been resolved."
+              className="py-12"
+            />
           ) : (
             <ul className="space-y-3">
               {visible.map((request) => {

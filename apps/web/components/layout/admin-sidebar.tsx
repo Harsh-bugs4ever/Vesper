@@ -107,7 +107,7 @@ const NAV: NavGroup[] = [
       { name: "Attendance", href: "/admin/staff", icon: Users },
       { name: "Performance", href: "/admin/performance", icon: Award },
       { name: "Payroll", href: "/admin/payroll", icon: ReceiptText, roles: MANAGEMENT },
-      { name: "Training", href: "/admin/training", icon: GraduationCap },
+      { name: "AI Learning", href: "/admin/training", icon: GraduationCap },
     ],
   },
   {
@@ -122,7 +122,7 @@ const NAV: NavGroup[] = [
   {
     label: "Property",
     items: [
-      { name: "Rooms & Inventory", href: "/admin/rooms", icon: Boxes },
+      { name: "Resort Twin (3D)", href: "/admin/rooms", icon: Boxes },
       { name: "Inventory", href: "/admin/inventory", icon: Package },
       { name: "Suppliers", href: "/admin/suppliers", icon: Truck },
       { name: "Purchase Orders", href: "/admin/purchase-orders", icon: ReceiptText },
