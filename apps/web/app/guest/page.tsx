@@ -2,25 +2,34 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Check,
-  ChevronRight,
-  ConciergeBell,
-  Loader2,
-  Sparkle,
-  SprayCan,
-  TriangleAlert,
-  Waves,
-  Plus,
-  Minus,
-  ShoppingBag,
-  Clock,
+  ArrowLeft,
   Camera,
-  Utensils,
+  Check,
   CheckCircle2,
-  X,
+  ChevronRight,
+  Clock,
+  ConciergeBell,
+  CreditCard,
+  Loader2,
+  Minus,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Scan,
+  ShieldCheck,
+  ShoppingBag,
+  Smartphone,
+  Sparkle,
+  Sparkles,
+  SprayCan,
   Star,
+  TriangleAlert,
+  Utensils,
+  Waves,
+  X,
 } from "lucide-react";
 
+import { VesperMark } from "@/components/layout/vesper-mark";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { StarRating } from "@/components/ui/star-rating";
@@ -172,6 +181,11 @@ export default function GuestPage() {
   const [cartInstructions, setCartInstructions] = useState("");
   const [menuCategory, setMenuCategory] = useState<"all" | "all-day" | "beverages" | "desserts">("all");
 
+  // Room Service UPI Payment & Scanner flow states
+  const [orderStage, setOrderStage] = useState<"menu" | "payment" | "verifying" | "success">("menu");
+  const [paymentTxnId, setPaymentTxnId] = useState("");
+  const [lastPaymentMethod, setLastPaymentMethod] = useState("UPI QR");
+
   // Housekeeping request form state
   const [housekeepingType, setHousekeepingType] = useState("Full Room Turnover & Fresh Linens");
   const [housekeepingTime, setHousekeepingTime] = useState("Immediate (Within 20 mins)");
@@ -261,39 +275,58 @@ export default function GuestPage() {
   const cartGst = Math.round(cartSubtotal * 0.05);
   const cartTotal = cartSubtotal + cartGst;
 
-  // Submit Room Service Order
-  const handlePlaceOrder = () => {
+  // Room Service Payment & Order Flow
+  const handleProceedToPayment = () => {
     if (totalCartCount === 0) return;
+    setOrderStage("payment");
+  };
 
-    const summaryItems = Object.entries(cart)
-      .map(([id, qty]) => {
-        const item = MENU_ITEMS.find((m) => m.id === id);
-        return `${item?.name} ×${qty}`;
-      })
-      .join(", ");
+  const handleProcessPayment = (methodName: string = "UPI QR") => {
+    setLastPaymentMethod(methodName);
+    setOrderStage("verifying");
+    const txnId = `UPI${Math.floor(100000000000 + Math.random() * 900000000000)}`;
+    setPaymentTxnId(txnId);
 
-    const newReq = addGuestRequest({
-      room: "412",
-      guest: "In-Room Guest",
-      channel: "Room Service",
-      summary: summaryItems,
-      detail: cartInstructions ? `Notes: ${cartInstructions}` : "Standard preparation.",
-      value: cartTotal,
-      sla: 30,
-      state: "new",
-    });
+    setTimeout(() => {
+      const summaryItems = Object.entries(cart)
+        .map(([id, qty]) => {
+          const item = MENU_ITEMS.find((m) => m.id === id);
+          return `${item?.name} ×${qty}`;
+        })
+        .join(", ");
 
-    setActiveRequest(newReq);
-    setCart({});
-    setCartInstructions("");
+      const newReq = addGuestRequest({
+        room: "412",
+        guest: "In-Room Guest",
+        channel: "Room Service",
+        summary: summaryItems,
+        detail: `Paid via ${methodName} (Ref #${txnId}). ${cartInstructions ? `Notes: ${cartInstructions}` : "Standard preparation."}`,
+        value: cartTotal,
+        sla: 30,
+        state: "new",
+      });
+
+      setActiveRequest(newReq);
+      setOrderStage("success");
+      setServiceRating(0);
+
+      showToast({
+        title: "Payment Received & Order Placed",
+        description: `₹${cartTotal.toLocaleString()} paid via ${methodName}. Sent to kitchen.`,
+        type: "success",
+      });
+    }, 1300);
+  };
+
+  const handleCloseRoomService = () => {
     setActiveDrawer(null);
-    setServiceRating(0);
-
-    showToast({
-      title: "Order Placed Successfully",
-      description: `Your order for ${summaryItems} has been sent to the kitchen.`,
-      type: "success",
-    });
+    setTimeout(() => {
+      setOrderStage("menu");
+      if (orderStage === "success") {
+        setCart({});
+        setCartInstructions("");
+      }
+    }, 300);
   };
 
   // Submit Housekeeping Request
@@ -706,16 +739,32 @@ export default function GuestPage() {
         </footer>
       </main>
 
-      {/* 1. ROOM SERVICE MENU & CART DRAWER */}
+      {/* 1. ROOM SERVICE MENU & UPI PAYMENT DRAWER */}
       <Drawer
         open={activeDrawer === "room-service"}
         onOpenChange={(open) => {
-          if (!open) setActiveDrawer(null);
+          if (!open) handleCloseRoomService();
         }}
-        title="Room Service Menu"
-        description="Freshly prepared culinary offerings delivered to Room 412."
+        title={
+          orderStage === "payment"
+            ? "Pay for Room Service"
+            : orderStage === "verifying"
+            ? "Verifying Payment"
+            : orderStage === "success"
+            ? "Order Confirmed"
+            : "Room Service Menu"
+        }
+        description={
+          orderStage === "payment"
+            ? "Scan UPI QR code or choose your UPI app to complete payment for Room 412."
+            : orderStage === "verifying"
+            ? "Waiting for UPI bank authorization..."
+            : orderStage === "success"
+            ? "UPI payment received. Dispatched to the kitchen."
+            : "Freshly prepared culinary offerings delivered to Room 412."
+        }
         footer={
-          totalCartCount > 0 ? (
+          orderStage === "menu" && totalCartCount > 0 ? (
             <div className="w-full space-y-3">
               <div className="flex items-center justify-between text-xs text-sand-600">
                 <span>Subtotal ({totalCartCount} items)</span>
@@ -730,118 +779,359 @@ export default function GuestPage() {
                 <span>₹{cartTotal.toLocaleString()}</span>
               </div>
               <Button
-                onClick={handlePlaceOrder}
-                className="w-full bg-sage-700 hover:bg-sage-800 text-white font-semibold py-2.5 rounded-xl shadow-soft"
+                onClick={handleProceedToPayment}
+                className="w-full bg-sage-700 hover:bg-sage-800 text-white font-semibold py-2.5 rounded-xl shadow-soft flex items-center justify-center gap-2"
               >
-                Place Order (₹{cartTotal.toLocaleString()})
+                <QrCode className="w-4 h-4" />
+                Proceed to UPI Payment (₹{cartTotal.toLocaleString()})
               </Button>
             </div>
           ) : undefined
         }
       >
-        <div className="space-y-4">
-          {/* Menu Category Selector */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
-            {[
-              { id: "all", label: "All Items" },
-              { id: "all-day", label: "All Day Dining" },
-              { id: "beverages", label: "Beverages" },
-              { id: "desserts", label: "Desserts" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setMenuCategory(cat.id as any)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full border text-xs font-medium whitespace-nowrap transition-colors",
-                  menuCategory === cat.id
-                    ? "bg-sage-700 border-sage-700 text-white"
-                    : "bg-white border-sand-200 text-sand-700 hover:bg-sand-50"
-                )}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
+        {orderStage === "menu" ? (
+          <div className="space-y-4">
+            {/* Menu Category Selector */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: "all", label: "All Items" },
+                { id: "all-day", label: "All Day Dining" },
+                { id: "beverages", label: "Beverages" },
+                { id: "desserts", label: "Desserts" },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setMenuCategory(cat.id as any)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full border text-xs font-medium whitespace-nowrap transition-colors",
+                    menuCategory === cat.id
+                      ? "bg-sage-700 border-sage-700 text-white"
+                      : "bg-white border-sand-200 text-sand-700 hover:bg-sand-50"
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Menu Items List */}
-          <div className="divide-y divide-sand-100">
-            {filteredMenuItems.map((item) => {
-              const qty = cart[item.id] || 0;
-              return (
-                <div key={item.id} className="py-3.5 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "w-2 h-2 rounded-full",
-                          item.veg ? "bg-emerald-600" : "bg-rose-600"
+            {/* Menu Items List */}
+            <div className="divide-y divide-sand-100">
+              {filteredMenuItems.map((item) => {
+                const qty = cart[item.id] || 0;
+                return (
+                  <div key={item.id} className="py-3.5 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "w-2 h-2 rounded-full",
+                            item.veg ? "bg-emerald-600" : "bg-rose-600"
+                          )}
+                        />
+                        <h4 className="text-sm font-bold text-sand-950 font-serif">{item.name}</h4>
+                        {item.tag && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-gold-100 text-gold-900 border border-gold-200">
+                            {item.tag}
+                          </span>
                         )}
-                      />
-                      <h4 className="text-sm font-bold text-sand-950 font-serif">{item.name}</h4>
-                      {item.tag && (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-gold-100 text-gold-900 border border-gold-200">
-                          {item.tag}
-                        </span>
+                      </div>
+                      <p className="text-xs text-sand-600 mt-1 leading-relaxed">{item.desc}</p>
+                      <span className="text-xs font-bold text-sand-950 mt-1 block">
+                        ₹{item.price.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Quantity Counter */}
+                    <div className="flex items-center gap-2 shrink-0 bg-sand-100/80 rounded-lg p-1">
+                      {qty > 0 ? (
+                        <>
+                          <button
+                            onClick={() => updateCartQuantity(item.id, -1)}
+                            className="w-6 h-6 rounded bg-white text-sand-700 flex items-center justify-center hover:bg-sand-200 transition-colors shadow-2xs"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-bold text-sand-950 w-4 text-center tabular-nums">
+                            {qty}
+                          </span>
+                          <button
+                            onClick={() => updateCartQuantity(item.id, 1)}
+                            className="w-6 h-6 rounded bg-sage-700 text-white flex items-center justify-center hover:bg-sage-800 transition-colors shadow-2xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => updateCartQuantity(item.id, 1)}
+                          className="h-7 px-2.5 text-xs bg-white text-sage-800 font-semibold hover:bg-sage-50 border border-sand-200"
+                        >
+                          Add
+                        </Button>
                       )}
                     </div>
-                    <p className="text-xs text-sand-600 mt-1 leading-relaxed">{item.desc}</p>
-                    <span className="text-xs font-bold text-sand-950 mt-1 block">
-                      ₹{item.price.toLocaleString()}
-                    </span>
                   </div>
-
-                  {/* Quantity Counter */}
-                  <div className="flex items-center gap-2 shrink-0 bg-sand-100/80 rounded-lg p-1">
-                    {qty > 0 ? (
-                      <>
-                        <button
-                          onClick={() => updateCartQuantity(item.id, -1)}
-                          className="w-6 h-6 rounded bg-white text-sand-700 flex items-center justify-center hover:bg-sand-200 transition-colors shadow-2xs"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-xs font-bold text-sand-950 w-4 text-center tabular-nums">
-                          {qty}
-                        </span>
-                        <button
-                          onClick={() => updateCartQuantity(item.id, 1)}
-                          className="w-6 h-6 rounded bg-sage-700 text-white flex items-center justify-center hover:bg-sage-800 transition-colors shadow-2xs"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => updateCartQuantity(item.id, 1)}
-                        className="h-7 px-2.5 text-xs bg-white text-sage-800 font-semibold hover:bg-sage-50 border border-sand-200"
-                      >
-                        Add
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Cart Special Instructions */}
-          {totalCartCount > 0 && (
-            <div className="pt-3 border-t border-sand-100">
-              <label className="text-xs font-semibold text-sand-800 block mb-1">
-                Special Dietary or Delivery Notes
-              </label>
-              <textarea
-                rows={2}
-                value={cartInstructions}
-                onChange={(e) => setCartInstructions(e.target.value)}
-                placeholder="e.g., Deliver to balcony table, no onions, extra ice..."
-                className="w-full px-3 py-2 rounded-xl border border-sand-200 text-xs bg-sand-50/50"
-              />
+                );
+              })}
             </div>
-          )}
-        </div>
+
+            {/* Cart Special Instructions */}
+            {totalCartCount > 0 && (
+              <div className="pt-3 border-t border-sand-100">
+                <label className="text-xs font-semibold text-sand-800 block mb-1">
+                  Special Dietary or Delivery Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={cartInstructions}
+                  onChange={(e) => setCartInstructions(e.target.value)}
+                  placeholder="e.g., Deliver to balcony table, no onions, extra ice..."
+                  className="w-full px-3 py-2 rounded-xl border border-sand-200 text-xs bg-sand-50/50"
+                />
+              </div>
+            )}
+          </div>
+        ) : orderStage === "payment" ? (
+          <div className="space-y-4">
+            {/* Header bar */}
+            <div className="flex items-center justify-between pb-2 border-b border-sand-200">
+              <button
+                onClick={() => setOrderStage("menu")}
+                className="flex items-center gap-1.5 text-xs font-medium text-sand-600 hover:text-sand-950 transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to Cart
+              </button>
+              <span className="text-[11px] font-semibold text-sage-800 bg-sage-50 px-2.5 py-0.5 rounded-full border border-sage-200">
+                Delivering to Room 412
+              </span>
+            </div>
+
+            {/* Bill Summary Card */}
+            <div className="rounded-xl border border-sand-200 bg-sand-50/70 p-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-sand-500 block">Total Amount to Pay</span>
+                  <span className="font-serif text-xl font-bold text-sand-950">
+                    ₹{cartTotal.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    Verified Merchant
+                  </span>
+                  <p className="text-[10px] text-sand-400 mt-1">Vesper Beach Resort · ICICI</p>
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-sand-200/80 text-[11px] text-sand-600 truncate">
+                Items:{" "}
+                {Object.entries(cart)
+                  .map(([id, qty]) => {
+                    const item = MENU_ITEMS.find((m) => m.id === id);
+                    return `${item?.name} ×${qty}`;
+                  })
+                  .join(", ")}
+              </div>
+            </div>
+
+            {/* Scan QR Section */}
+            <div className="rounded-2xl border border-gold-200/90 bg-white p-4 text-center shadow-xs space-y-3">
+              <div className="relative inline-block mx-auto rounded-xl p-3 bg-sand-50/60 border border-sand-200">
+                {/* High Quality Authentic SVG QR Code */}
+                <svg
+                  className="w-44 h-44 mx-auto"
+                  viewBox="0 0 200 200"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect width="200" height="200" rx="10" fill="white" />
+                  {/* Top Left Detection Marker */}
+                  <rect x="16" y="16" width="44" height="44" rx="6" stroke="#1c1917" strokeWidth="6" fill="white" />
+                  <rect x="28" y="28" width="20" height="20" rx="3" fill="#1c1917" />
+                  {/* Top Right Detection Marker */}
+                  <rect x="140" y="16" width="44" height="44" rx="6" stroke="#1c1917" strokeWidth="6" fill="white" />
+                  <rect x="152" y="28" width="20" height="20" rx="3" fill="#1c1917" />
+                  {/* Bottom Left Detection Marker */}
+                  <rect x="16" y="140" width="44" height="44" rx="6" stroke="#1c1917" strokeWidth="6" fill="white" />
+                  <rect x="28" y="152" width="20" height="20" rx="3" fill="#1c1917" />
+
+                  {/* Timing lines */}
+                  <line x1="68" y1="28" x2="132" y2="28" stroke="#1c1917" strokeWidth="4" strokeDasharray="6 6" />
+                  <line x1="28" y1="68" x2="28" y2="132" stroke="#1c1917" strokeWidth="4" strokeDasharray="6 6" />
+
+                  {/* Data Matrix Dots */}
+                  <rect x="68" y="44" width="8" height="8" fill="#1c1917" />
+                  <rect x="84" y="44" width="16" height="8" fill="#1c1917" />
+                  <rect x="116" y="44" width="12" height="8" fill="#1c1917" />
+                  <rect x="44" y="68" width="12" height="12" fill="#1c1917" />
+                  <rect x="64" y="68" width="8" height="12" fill="#1c1917" />
+                  <rect x="128" y="68" width="16" height="12" fill="#1c1917" />
+                  <rect x="152" y="68" width="12" height="12" fill="#1c1917" />
+                  <rect x="44" y="88" width="8" height="16" fill="#1c1917" />
+                  <rect x="60" y="88" width="12" height="8" fill="#1c1917" />
+                  <rect x="132" y="88" width="20" height="16" fill="#1c1917" />
+                  <rect x="160" y="88" width="12" height="16" fill="#1c1917" />
+                  <rect x="44" y="112" width="16" height="12" fill="#1c1917" />
+                  <rect x="68" y="112" width="12" height="16" fill="#1c1917" />
+                  <rect x="124" y="112" width="12" height="8" fill="#1c1917" />
+                  <rect x="144" y="112" width="16" height="16" fill="#1c1917" />
+                  <rect x="68" y="140" width="12" height="16" fill="#1c1917" />
+                  <rect x="88" y="140" width="16" height="8" fill="#1c1917" />
+                  <rect x="112" y="140" width="20" height="12" fill="#1c1917" />
+                  <rect x="140" y="140" width="16" height="16" fill="#1c1917" />
+                  <rect x="164" y="140" width="12" height="8" fill="#1c1917" />
+                  <rect x="68" y="164" width="20" height="12" fill="#1c1917" />
+                  <rect x="96" y="164" width="12" height="8" fill="#1c1917" />
+                  <rect x="116" y="164" width="16" height="12" fill="#1c1917" />
+                  <rect x="148" y="164" width="24" height="12" fill="#1c1917" />
+
+                  {/* Center Brand Badge */}
+                  <rect x="76" y="76" width="48" height="48" rx="8" fill="#1c1917" stroke="#d97706" strokeWidth="2" />
+                  <path d="M100 84L103 95L114 98L103 101L100 112L97 101L86 98L97 95Z" fill="#f59e0b" />
+                  <text x="100" y="119" textAnchor="middle" fill="#fef3c7" fontSize="7" fontWeight="bold" letterSpacing="0.5">
+                    UPI
+                  </text>
+                </svg>
+
+                {/* Pulsing scanning beam line */}
+                <div className="pointer-events-none absolute inset-x-4 top-4 bottom-4 overflow-hidden rounded-lg">
+                  <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-pulse" />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-sand-900">
+                  Scan with any UPI App to Pay
+                </p>
+                <p className="text-[11px] text-sand-500 mt-0.5">
+                  Open Google Pay, PhonePe, Paytm, or BHIM and point your camera at this QR code.
+                </p>
+              </div>
+
+              {/* Supported Apps Chips */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                {[
+                  { name: "GPay", color: "bg-blue-50 text-blue-800 border-blue-200" },
+                  { name: "PhonePe", color: "bg-purple-50 text-purple-800 border-purple-200" },
+                  { name: "Paytm", color: "bg-sky-50 text-sky-800 border-sky-200" },
+                  { name: "BHIM", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+                  { name: "CRED", color: "bg-sand-100 text-sand-800 border-sand-300" },
+                ].map((app) => (
+                  <span
+                    key={app.name}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-semibold border",
+                      app.color
+                    )}
+                  >
+                    {app.name}
+                  </span>
+                ))}
+              </div>
+
+              {/* Simulate Scan Button */}
+              <Button
+                onClick={() => handleProcessPayment("UPI QR Code")}
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2.5 rounded-xl shadow-soft flex items-center justify-center gap-2"
+              >
+                <Smartphone className="w-4 h-4" />
+                Simulate QR Scan & Pay ₹{cartTotal.toLocaleString()}
+              </Button>
+            </div>
+
+            {/* Fallback Option */}
+            <div className="pt-2 border-t border-sand-200/80 text-center">
+              <button
+                onClick={() => handleProcessPayment("Room Folio Charge")}
+                className="text-xs font-medium text-sand-600 hover:text-sand-950 underline transition"
+              >
+                Or charge ₹{cartTotal.toLocaleString()} to Room 412 folio (Pay at Checkout)
+              </button>
+            </div>
+          </div>
+        ) : orderStage === "verifying" ? (
+          <div className="flex h-full flex-col items-center justify-center py-12 px-4 text-center space-y-4">
+            <div className="relative flex h-20 w-20 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-30" />
+              <div className="h-16 w-16 rounded-full border-4 border-emerald-200 border-t-emerald-600 animate-spin" />
+              <ShieldCheck className="absolute h-7 w-7 text-emerald-600" />
+            </div>
+
+            <div>
+              <h3 className="font-serif text-lg font-bold text-sand-950">
+                Authorizing UPI Transaction
+              </h3>
+              <p className="text-xs text-sand-500 mt-1 max-w-xs">
+                Communicating with NPCI payment switch and verifying ₹{cartTotal.toLocaleString()} for Room 412...
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-sand-200 bg-sand-50 p-3 text-left w-full max-w-xs text-xs space-y-1">
+              <div className="flex justify-between text-sand-500">
+                <span>Method</span>
+                <span className="font-medium text-sand-900">{lastPaymentMethod}</span>
+              </div>
+              <div className="flex justify-between text-sand-500">
+                <span>Transaction Ref</span>
+                <span className="font-mono text-[11px] text-sand-700">{paymentTxnId}</span>
+              </div>
+              <div className="flex justify-between text-sand-500">
+                <span>Status</span>
+                <span className="text-amber-700 font-medium">Processing...</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Success Screen */
+          <div className="flex h-full flex-col items-center justify-center py-8 px-4 text-center space-y-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm animate-in zoom-in-75">
+              <Check className="h-8 w-8 stroke-[3]" />
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200 mb-2">
+                UPI Payment Confirmed
+              </span>
+              <h3 className="font-serif text-xl font-bold text-sand-950">
+                Order Sent to Kitchen!
+              </h3>
+              <p className="text-xs text-sand-500 mt-1 max-w-xs">
+                Your payment of ₹{cartTotal.toLocaleString()} was received successfully. The culinary team is preparing your order for Room 412.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-sand-200 bg-sand-50/80 p-3.5 text-left w-full max-w-sm text-xs space-y-1.5">
+              <div className="flex justify-between text-sand-500">
+                <span>Payment Ref</span>
+                <span className="font-mono text-[11px] font-semibold text-sand-900">
+                  {paymentTxnId}
+                </span>
+              </div>
+              <div className="flex justify-between text-sand-500">
+                <span>Paid via</span>
+                <span className="font-medium text-sand-900">{lastPaymentMethod}</span>
+              </div>
+              <div className="flex justify-between text-sand-500">
+                <span>Destination</span>
+                <span className="font-medium text-sand-900">Room 412 (Balcony table)</span>
+              </div>
+              <div className="flex justify-between text-sand-500">
+                <span>Est. Delivery</span>
+                <span className="font-semibold text-sage-900">20–30 Minutes</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleCloseRoomService}
+              className="w-full max-w-sm bg-sage-800 hover:bg-sage-900 text-white font-semibold py-2.5 rounded-xl shadow-soft"
+            >
+              Track Order on Dashboard
+            </Button>
+          </div>
+        )}
       </Drawer>
 
       {/* 2. HOUSEKEEPING REQUEST DRAWER */}
