@@ -4,44 +4,37 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
   BedDouble,
-  Bell,
+  Brain,
   CheckCircle2,
   ChevronRight,
-  ClipboardList,
+  Clock,
+  FileText,
   IndianRupee,
-  Info,
-  Radio,
+  Package,
+  Shield,
+  SlidersHorizontal,
+  Smile,
+  Sparkles,
+  TrendingUp,
   Users,
+  Wrench,
   Zap,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
 import { LiveDashboard } from "@/components/connected/live-dashboard";
-import { DepartmentRevenueDonut } from "@/components/charts/department-revenue-donut";
 import { OccupancyForecastChart } from "@/components/charts/occupancy-forecast-chart";
-import { ActivityFeed } from "@/components/ui/activity-feed";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { PeriodSelect } from "@/components/ui/period-select";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { formatLakh } from "@/lib/chart-theme";
-import {
-  kpiTrends,
-  liveActivity,
-  occupancyForecast,
-  revenueByDepartment,
-  systemAlerts,
-  topRoomCategories,
-  type SystemAlert,
-} from "@/lib/demo/dashboard";
 import { StatTile } from "@/components/ui/stat-tile";
+import { occupancyForecast, kpiTrends } from "@/lib/demo/dashboard";
+import { initialActions, type ActionItem } from "@/lib/demo/actions";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-
-const PERIODS = ["This Month", "Last Month", "This Quarter"] as const;
-
 
 /** "Good morning" before noon, "Good afternoon" until 5, "Good evening" after. */
 function greetingFor(date: Date): string {
@@ -58,45 +51,57 @@ export default function AdminDashboardPage() {
 
 function DemoDashboardPage() {
   const { user } = useAuth();
-  const [revenuePeriod, setRevenuePeriod] = useState<string>(PERIODS[0]);
-  const [categoryPeriod, setCategoryPeriod] = useState<string>(PERIODS[0]);
-  const [activeRightTab, setActiveRightTab] = useState<"feed" | "alerts">("feed");
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+  const { showToast } = useToast();
+  const [actions, setActions] = useState<ActionItem[]>(initialActions.slice(0, 3));
 
-  // Rendered client-side, so "today" is the viewer's today — correct for a duty manager
-  // reading this at the desk, which is the only place this screen is used.
   const today = new Date();
   const firstName = user.name.split(" ")[0];
-  const activeAlerts = systemAlerts.filter((a) => !dismissedAlerts.includes(a.id));
 
+  const handleAction = (id: string, type: "approve" | "dismiss") => {
+    const act = actions.find((a) => a.id === id);
+    setActions((prev) => prev.filter((a) => a.id !== id));
+    if (act) {
+      showToast({
+        title: type === "approve" ? `Approved: ${act.title}` : `Dismissed Action`,
+        description:
+          type === "approve"
+            ? `Recommendation applied. Safe undo window open for 10s.`
+            : `Logged to AI training feedback loop.`,
+        type: type === "approve" ? "success" : "default",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Header & Quick Strategy Actions */}
       <PageHeader
         title={`${greetingFor(today)}, ${firstName}`}
-        description={`Here's what's happening at ${user.propertyName} today.`}
+        description={`Executive governance cockpit for ${user.propertyName}.`}
         meta={format(today, "EEE, d MMM yyyy")}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/revenue-insights"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-200 bg-white px-3.5 py-2 text-xs font-semibold text-sand-800 shadow-xs transition-colors hover:bg-sand-50 hover:text-sand-950"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-sage-600" />
+              Open Revenue Simulator →
+            </Link>
+          </div>
+        }
       />
 
-      {/* Today at a glance */}
+      {/* 1. Primary Executive KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="Occupancy Rate"
-          value="78%"
-          change="+6%"
-          comparison="vs. last week"
+          value="291 / 355"
+          change="82%"
+          comparison="vs. 76% target"
           tone="sage"
           icon={Users}
           trend={[...kpiTrends.occupancy]}
-        />
-        <StatTile
-          label="Average Daily Rate (ADR)"
-          value="₹9,400"
-          change="+8%"
-          comparison="vs. last week"
-          tone="sand"
-          icon={BedDouble}
-          trend={[...kpiTrends.adr]}
         />
         <StatTile
           label="Today's Revenue"
@@ -108,234 +113,301 @@ function DemoDashboardPage() {
           trend={[...kpiTrends.revenue]}
         />
         <StatTile
-          label="Open Requests"
-          value="12"
-          change="+3"
-          comparison="vs. yesterday"
-          direction="up"
-          intent="bad"
-          tone="rose"
-          icon={ClipboardList}
-          trend={[...kpiTrends.requests]}
+          label="ADR / RevPAR"
+          value="₹9,400"
+          change="RevPAR ₹7,708"
+          comparison="+8% RevPAR growth"
+          tone="sand"
+          icon={BedDouble}
+          trend={[...kpiTrends.adr]}
+        />
+        <StatTile
+          label="Guest Satisfaction"
+          value="4.4 / 5"
+          change="+0.2"
+          comparison="this month (89% positive)"
+          tone="emerald"
+          icon={Smile}
+          trend={[82, 84, 85, 87, 88, 87, 89]}
         />
       </div>
 
-      {/* AI Action Queue Highlight Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gold-200/80 bg-gradient-to-r from-gold-50/80 via-white to-sage-50/40 p-4 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-500 text-white shadow-xs">
-            <Zap className="h-5 w-5" />
-          </span>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-serif text-base font-semibold text-sand-950">
-                AI Action Queue · 5 Pending Suggestions
+      {/* 2. 14-Day Occupancy Forecast */}
+      <Panel>
+        <PanelHeader
+          title="14-Day Occupancy Forecast"
+          description="Expected occupancy trend & likely demand range across the next two weeks"
+          action={
+            <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-0.5 w-5 rounded-full bg-forest-600" />
+                Forecast Curve
               </span>
-              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
-                2 High Urgency
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-3 w-5 rounded-sm bg-sand-200" />
+                Confidence Range
               </span>
             </div>
-            <p className="text-xs text-sand-600">
-              Weekend rate surge (+₹42k) and Chiller 2 predictive maintenance recommended today.
-            </p>
-          </div>
-        </div>
+          }
+        />
+        <PanelBody className="pt-4">
+          <OccupancyForecastChart data={occupancyForecast} />
+        </PanelBody>
+      </Panel>
 
-        <Link
-          href="/admin/actions"
-          className="flex items-center gap-1.5 rounded-xl bg-sand-900 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-sand-800"
-        >
-          Review in Action Queue
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Forecast, then the two breakdowns beneath it */}
-        <div className="space-y-4 lg:col-span-2">
-          <Panel>
-            <PanelHeader
-              title="Occupancy Forecast"
-              description="Expected occupancy for the next 14 days"
-              action={
-                <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-0.5 w-5 rounded-full bg-forest-600" />
-                    Forecast
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-5 rounded-sm bg-sand-200" />
-                    Confidence range
-                  </span>
-                </div>
-              }
-            />
-            <PanelBody className="pt-4">
-              <OccupancyForecastChart data={occupancyForecast} />
-            </PanelBody>
-          </Panel>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Panel>
-              <PanelHeader
-                title="Revenue by Department"
-                action={
-                  <PeriodSelect value={revenuePeriod} onChange={setRevenuePeriod} options={PERIODS} />
-                }
-              />
-              <PanelBody className="pt-4">
-                <DepartmentRevenueDonut data={revenueByDepartment} />
-              </PanelBody>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title="Top Room Categories"
-                action={
-                  <PeriodSelect value={categoryPeriod} onChange={setCategoryPeriod} options={PERIODS} />
-                }
-              />
-              <PanelBody className="pt-4">
-                <Table>
-                  <THead>
-                    <tr>
-                      <TH>Room Category</TH>
-                      <TH align="right">Occupancy</TH>
-                      <TH align="right">ADR</TH>
-                      <TH align="right">Revenue</TH>
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {topRoomCategories.map((row) => (
-                      <TR key={row.category}>
-                        <TD className="font-medium text-sand-900">{row.category}</TD>
-                        <TD align="right">{row.occupancy}%</TD>
-                        <TD align="right">₹{row.adr.toLocaleString("en-IN")}</TD>
-                        <TD align="right">{formatLakh(row.revenue)}</TD>
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              </PanelBody>
-            </Panel>
-          </div>
-        </div>
-
-        {/* Live activity & Operational alerts */}
+      {/* 3 & 4. Attention Required & AI Action Center Grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* 3. Attention Required Summary */}
         <Panel className="flex flex-col">
-          <div className="flex items-center justify-between border-b border-sand-200/80 px-4 pt-3 pb-2.5">
-            <div className="flex items-center gap-1 bg-sand-100/70 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setActiveRightTab("feed")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all",
-                  activeRightTab === "feed"
-                    ? "bg-white text-sand-950 shadow-xs"
-                    : "text-sand-600 hover:text-sand-900"
-                )}
-              >
-                <Radio className="h-3.5 w-3.5 text-sage-600" />
-                Live Feed
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveRightTab("alerts")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all",
-                  activeRightTab === "alerts"
-                    ? "bg-white text-sand-950 shadow-xs"
-                    : "text-sand-600 hover:text-sand-900"
-                )}
-              >
-                <Bell className="h-3.5 w-3.5 text-rose-600" />
-                Alerts
-                {activeAlerts.length > 0 && (
-                  <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
-                    {activeAlerts.length}
-                  </span>
-                )}
-              </button>
-            </div>
+          <PanelHeader
+            title="Attention Required"
+            description="Operational exceptions & items requiring management escalation"
+          />
+          <PanelBody className="flex-1 space-y-3 pt-2">
+            <Link
+              href="/admin/maintenance"
+              className="flex items-center justify-between rounded-xl border border-rose-200/80 bg-rose-50/50 p-3.5 transition-colors hover:bg-rose-50"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-100 text-rose-700 font-semibold text-sm">
+                  2
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-sand-950">Critical Maintenance</p>
+                  <p className="text-xs text-sand-600">Chiller 2 vibration anomaly & Laundry Washer 1 leakage</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sand-400" />
+            </Link>
 
-            {activeRightTab === "feed" ? (
+            <Link
+              href="/admin/inventory"
+              className="flex items-center justify-between rounded-xl border border-amber-200/80 bg-amber-50/50 p-3.5 transition-colors hover:bg-amber-50"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-800 font-semibold text-sm">
+                  4
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-sand-950">Low-Stock Alerts</p>
+                  <p className="text-xs text-sand-600">Basmati Rice, Olive Oil, Toiletries, Linen Detergent below minimum</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sand-400" />
+            </Link>
+
+            <Link
+              href="/admin/requests"
+              className="flex items-center justify-between rounded-xl border border-blue-200/80 bg-blue-50/50 p-3.5 transition-colors hover:bg-blue-50"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-800 font-semibold text-sm">
+                  2
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-sand-950">Overdue Guest Requests</p>
+                  <p className="text-xs text-sand-600">Room 304 extra towels & Room 512 AC inspection past SLA</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sand-400" />
+            </Link>
+
+            <Link
+              href="/admin/roster"
+              className="flex items-center justify-between rounded-xl border border-purple-200/80 bg-purple-50/50 p-3.5 transition-colors hover:bg-purple-50"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 text-purple-800 font-semibold text-sm">
+                  3
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-sand-950">Staffing Gaps</p>
+                  <p className="text-xs text-sand-600">Sunday peak checkout shift housekeeping coverage short by 2</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sand-400" />
+            </Link>
+          </PanelBody>
+        </Panel>
+
+        {/* 4. AI Action Center — Prominent Preview */}
+        <Panel className="flex flex-col">
+          <PanelHeader
+            title="AI Action Center"
+            description="Prioritized recommendations score by Confidence × Impact × Urgency"
+            action={
               <Link
-                href="/admin/requests"
-                className="flex items-center gap-1 text-xs font-medium text-sage-700 transition-colors hover:text-sage-900"
+                href="/admin/actions"
+                className="flex items-center gap-1 text-xs font-semibold text-sage-800 hover:text-sage-950"
               >
-                View all
+                View all actions
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
-            ) : (
-              <span className="text-[11px] text-sand-500 font-medium">Real-time IoT & AI</span>
-            )}
-          </div>
-
-          <PanelBody className="flex-1 pt-4">
-            {activeRightTab === "feed" ? (
-              <ActivityFeed items={liveActivity} />
-            ) : (
-              <div className="space-y-3">
-                {activeAlerts.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
-                    <p className="mt-2 text-sm font-semibold text-sand-900">All systems optimal</p>
-                    <p className="text-xs text-sand-500">No active alerts requiring attention.</p>
-                  </div>
-                ) : (
-                  activeAlerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className={cn(
-                        "rounded-xl border p-3.5 transition-all",
-                        alert.level === "critical" && "border-rose-200 bg-rose-50/50",
-                        alert.level === "warning" && "border-amber-200 bg-amber-50/50",
-                        alert.level === "info" && "border-blue-200 bg-blue-50/50"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          {alert.level === "critical" && <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />}
-                          {alert.level === "warning" && <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />}
-                          {alert.level === "info" && <Info className="h-4 w-4 text-blue-600 shrink-0" />}
-                          <span className="font-serif text-sm font-semibold text-sand-950">
-                            {alert.title}
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-sand-500 shrink-0">{alert.time}</span>
-                      </div>
-                      <p className="mt-1.5 text-xs text-sand-700 leading-relaxed">{alert.detail}</p>
-                      <div className="mt-2.5 flex items-center justify-between border-t border-sand-200/50 pt-2 text-[11px]">
-                        <span className="rounded bg-sand-200/60 px-1.5 py-0.5 font-mono text-[10px] text-sand-700">
-                          {alert.source}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDismissedAlerts((prev) => [...prev, alert.id])}
-                            className="text-sand-500 hover:text-sand-700 font-medium"
-                          >
-                            Dismiss
-                          </button>
-                          {alert.actionUrl && (
-                            <Link
-                              href={alert.actionUrl}
-                              className="font-semibold text-sage-800 hover:text-sage-950 flex items-center gap-0.5"
-                            >
-                              {alert.actionLabel || "Review"}
-                              <ChevronRight className="h-3 w-3" />
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
+            }
+          />
+          <PanelBody className="flex-1 space-y-3 pt-2">
+            {actions.length === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
+                <p className="mt-2 text-sm font-semibold text-sand-900">Action Queue Clear</p>
+                <p className="text-xs text-sand-500">All high-priority recommendations have been addressed.</p>
               </div>
+            ) : (
+              actions.map((act) => (
+                <div
+                  key={act.id}
+                  className="rounded-xl border border-sand-200/90 bg-sand-50/40 p-3.5 transition-all hover:border-sand-300"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif text-sm font-semibold text-sand-950">{act.title}</span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                            act.urgency === "high"
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-amber-100 text-amber-800"
+                          )}
+                        >
+                          {act.urgency}
+                        </span>
+                      </div>
+                      <p className="text-xs text-sand-600">
+                        Confidence: <span className="font-semibold text-sand-900">{act.confidence}%</span> · Impact:{" "}
+                        <span className="font-semibold text-emerald-700">₹{act.impactAmount.toLocaleString("en-IN")}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-end gap-2 border-t border-sand-200/60 pt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleAction(act.id, "dismiss")}
+                      className="rounded-lg border border-sand-200 bg-white px-2.5 py-1 text-xs font-medium text-sand-600 hover:bg-sand-50 hover:text-sand-900"
+                    >
+                      Dismiss
+                    </button>
+                    <Link
+                      href="/admin/actions"
+                      className="rounded-lg border border-sage-200 bg-sage-50 px-2.5 py-1 text-xs font-semibold text-sage-800 hover:bg-sage-100"
+                    >
+                      Review
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleAction(act.id, "approve")}
+                      className="rounded-lg bg-sand-900 px-3 py-1 text-xs font-semibold text-white shadow-xs hover:bg-sand-800"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </PanelBody>
         </Panel>
       </div>
+
+      {/* 5 - 8. Property Health Summaries (Exception & High-Level Metrics Only) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 5. Stock Summary */}
+        <Link
+          href="/admin/inventory"
+          className="group rounded-2xl border border-sand-200/90 bg-white p-4 transition-all hover:border-sand-400 shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-sand-500">Low Stock</span>
+            <Package className="h-4 w-4 text-sand-400 group-hover:text-sand-700" />
+          </div>
+          <p className="mt-2 font-serif text-2xl font-bold text-sand-950">4 Items</p>
+          <p className="mt-1 text-xs text-sand-600">Requires reorder attention →</p>
+        </Link>
+
+        {/* 6. Staff Summary */}
+        <Link
+          href="/admin/roster"
+          className="group rounded-2xl border border-sand-200/90 bg-white p-4 transition-all hover:border-sand-400 shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-sand-500">Workforce</span>
+            <Users className="h-4 w-4 text-sand-400 group-hover:text-sand-700" />
+          </div>
+          <p className="mt-2 font-serif text-2xl font-bold text-sand-950">172 Hours</p>
+          <p className="mt-1 text-xs text-sand-600">3 staffing gaps flagged →</p>
+        </Link>
+
+        {/* 7. Front Desk Summary */}
+        <Link
+          href="/admin/front-desk"
+          className="group rounded-2xl border border-sand-200/90 bg-white p-4 transition-all hover:border-sand-400 shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-sand-500">Front Desk</span>
+            <BedDouble className="h-4 w-4 text-sand-400 group-hover:text-sand-700" />
+          </div>
+          <p className="mt-2 font-serif text-2xl font-bold text-sand-950">42 Arrivals</p>
+          <p className="mt-1 text-xs text-sand-600">38 departures · 6 late checkouts →</p>
+        </Link>
+
+        {/* 8. Maintenance Exception */}
+        <Link
+          href="/admin/maintenance"
+          className="group rounded-2xl border border-sand-200/90 bg-white p-4 transition-all hover:border-sand-400 shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-sand-500">Maintenance</span>
+            <Wrench className="h-4 w-4 text-sand-400 group-hover:text-sand-700" />
+          </div>
+          <p className="mt-2 font-serif text-2xl font-bold text-sand-950">2 Critical</p>
+          <p className="mt-1 text-xs text-sand-600">1 urgent work-order required →</p>
+        </Link>
+      </div>
+
+      {/* 10 & 11. AI System Health & System Activity Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center gap-6 text-xs">
+          {/* AI Health Status */}
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-semibold text-sand-950">AI System:</span>
+            <span className="text-sand-700">4/4 Engines Operational</span>
+            <span className="rounded bg-sand-100 px-1.5 py-0.5 font-mono text-[10px] text-sand-800">
+              Accuracy 91%
+            </span>
+            <span className="rounded bg-purple-50 border border-purple-200 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+              Shadow Mode: OFF
+            </span>
+          </div>
+
+          {/* Audit & System Activity */}
+          <div className="flex items-center gap-2 border-l border-sand-200 pl-6">
+            <Activity className="h-3.5 w-3.5 text-sage-600" />
+            <span className="font-semibold text-sand-950">System Activity:</span>
+            <span className="text-sand-700">12 decisions today</span>
+            <span className="text-sand-500">· Last action 4m ago</span>
+          </div>
+        </div>
+
+        {/* Quick Links */}
+        <div className="flex items-center gap-3 text-xs">
+          <Link
+            href="/admin/users"
+            className="flex items-center gap-1 font-semibold text-sage-800 hover:text-sage-950"
+          >
+            <Shield className="h-3.5 w-3.5" />
+            Audit Log
+          </Link>
+          <span className="text-sand-300">|</span>
+          <Link
+            href="/admin/settings"
+            className="flex items-center gap-1 font-semibold text-sage-800 hover:text-sage-950"
+          >
+            Settings
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
+
