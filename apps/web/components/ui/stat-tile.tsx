@@ -6,12 +6,16 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { chartColors } from "@/lib/chart-theme";
 import { cn } from "@/lib/utils";
 
-export type StatTone = "sage" | "sand" | "forest" | "rose";
+export type StatTone = "sage" | "sand" | "forest" | "rose" | "emerald" | "gold" | "amber" | "blue";
 
 const tones: Record<StatTone, { chip: string; line: string }> = {
   sage: { chip: "bg-sage-50 text-sage-700", line: chartColors.forest },
   sand: { chip: "bg-sand-100 text-sand-700", line: chartColors.sand },
   forest: { chip: "bg-emerald-50 text-emerald-800", line: chartColors.forest },
+  emerald: { chip: "bg-emerald-50 text-emerald-800", line: chartColors.forest },
+  gold: { chip: "bg-amber-50 text-amber-800", line: chartColors.gold },
+  amber: { chip: "bg-amber-50 text-amber-800", line: chartColors.gold },
+  blue: { chip: "bg-sky-50 text-sky-800", line: chartColors.slate },
   rose: { chip: "bg-rose-50 text-rose-700", line: chartColors.rose },
 };
 
@@ -50,7 +54,7 @@ export function StatTile({
   variant?: "label-first" | "value-first";
   icon: React.ComponentType<{ className?: string }>;
 }) {
-  const t = tones[tone];
+  const t = tones[tone] ?? tones.sage;
   const resolved = intent ?? (direction === "up" ? "good" : "bad");
   const Arrow = direction === "up" ? ArrowUp : ArrowDown;
 
