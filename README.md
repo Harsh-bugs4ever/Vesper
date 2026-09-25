@@ -353,16 +353,13 @@ make dev                         # uvicorn app.main:app --reload on :8000
 | Guest QR page | http://localhost:3000/r/<room-token> |
 | API and docs | http://localhost:8000/docs |
 
-`make help` lists the rest — `make test`, `make contracts`, `make simulate`,
-`make reseed`.
+`make help` lists the rest — `make backend` (backend only), `make frontend` (web app only), `make test`, `make contracts`, `make simulate`, `make reseed`.
 
 ---
 
 ## 9. Previous work
 
-Vesper is the production rebuild of our HackCelestial 3.0 prototype
-([Harsh-bugs4ever/HackCelestial](https://github.com/Harsh-bugs4ever/HackCelestial)),
-built for Problem Statement 4 by Team VOID. That prototype proved the AI action-card
+Built for Problem Statement 4 by Team VOID. That prototype proved the AI action-card
 idea on a single FastAPI monolith with four engines. Vesper keeps the decision layer and
 rebuilds everything around it: real roles and an audit trail, staff screens, guest QR
 ordering, live inventory, and context boundaries that can scale past one property — held

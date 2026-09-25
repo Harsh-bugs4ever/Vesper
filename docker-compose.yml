@@ -7,17 +7,30 @@
 # deployment change rather than a rewrite.
 
 services:
+
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    networks:
+      - redis-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    ports:
+      - "5540:5540"
+    networks:
+      - redis-network
+    depends_on:
+      redis:
+        condition: service_healthy
 
   backend:
     build:
@@ -30,42 +43,63 @@ services:
       VESPER_ENVIRONMENT: ${VESPER_ENVIRONMENT:-development}
       VESPER_PROPERTY_TIMEZONE: ${VESPER_PROPERTY_TIMEZONE:-Asia/Kolkata}
       VESPER_CORS_ORIGINS: ${VESPER_CORS_ORIGINS:-http://localhost:3000}
-      # Stamped on every event this process publishes and on every service token it
-      # mints, where thirteen different names used to appear.
+
+      # Stamped on every event this process publishes and on every service token
+      # it mints, where thirteen different names used to appear.
       VESPER_SERVICE_NAME: vesper-backend
+
       VESPER_GROQ_API_KEY: ${VESPER_GROQ_API_KEY:-}
       VESPER_CONCIERGE_MODEL: ${VESPER_CONCIERGE_MODEL:-llama-3.3-70b-versatile}
+
     ports:
       - "8000:8000"
+
     volumes:
       # Issue photos are written here and served straight back off it.
       - uploads:/data/uploads
+
     depends_on:
       redis:
         condition: service_healthy
+
     healthcheck:
-      # /ready, not /health: it reports on Postgres and Redis, so the web app does not
-      # come up in front of a backend that cannot answer anything yet.
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys,json; sys.exit(0 if json.load(urllib.request.urlopen('http://localhost:8000/ready')).get('ready') else 1)\""]
+      # /ready reports on Postgres and Redis.
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys,json; sys.exit(0 if json.load(urllib.request.urlopen('http://localhost:8000/ready')).get('ready') else 1)\""
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
+
     restart: unless-stopped
+
+    networks:
+      - redis-network
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+
     environment:
-      # Reached from the browser, so this is the host's address, not a compose hostname.
+      # Browser reaches the backend through the host.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+
     ports:
       - "3000:3000"
+
     depends_on:
       backend:
         condition: service_healthy
+
     restart: unless-stopped
+
+networks:
+  redis-network:
+    driver: bridge
 
 volumes:
   redis-data:

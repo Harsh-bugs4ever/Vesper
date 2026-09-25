@@ -3,7 +3,7 @@
 COMPOSE := docker compose
 PY := python
 
-.PHONY: help up down logs build ps migrate migration db-init db-reset seed reseed contracts simulate dev dev-api dev-web test clean
+.PHONY: help up down logs build ps migrate migration db-init db-reset seed reseed contracts simulate dev dev-api dev-web backend frontend web test clean
 
 # Opening a new terminal window. Both halves are started this way by `make dev`.
 # Paths inside are relative on purpose: Start-Process gives the new window the
@@ -63,6 +63,19 @@ dev: ## Run the backend and the web app, each in its own terminal
 	@echo ""
 	@echo "  sign in with owner@vesper.demo / vesper123"
 	@echo "  close either window to stop that half"
+
+backend: ## Run only the backend in a new terminal window
+	@$(NEW_WINDOW)'if (Test-Path ''.\venv\Scripts\Activate.ps1'') { & ''.\venv\Scripts\Activate.ps1'' }; python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000'"
+	@echo ""
+	@echo "  backend   http://127.0.0.1:8000/docs"
+	@echo ""
+
+frontend: web ## Run only the web app in a new terminal window
+web: ## Run only the web app in a new terminal window
+	@$(NEW_WINDOW)'Set-Location ''apps\web''; if (-not (Test-Path ''node_modules'')) { Write-Host ''installing web dependencies, first run only'' -ForegroundColor Yellow; npm install }; npm run dev'"
+	@echo ""
+	@echo "  frontend  http://localhost:3000"
+	@echo ""
 
 dev-api: ## Run only the backend, in this terminal
 	$(PY) -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000

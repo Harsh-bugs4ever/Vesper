@@ -9,6 +9,7 @@ back out into its own process would still get it.
 """
 import logging
 import sys
+import time
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -22,6 +23,8 @@ from .config import settings
 from .db import get_engine
 from .errors import install_error_handlers
 from .events import Envelope, bus
+
+request_log = logging.getLogger("vesper.request")
 
 
 def configure_logging(service: str) -> None:
@@ -92,11 +95,36 @@ def create_app(
     install_error_handlers(app)
 
     @app.middleware("http")
-    async def request_id(request: Request, call_next):
+    async def request_id_and_logging(request: Request, call_next):
         rid = request.headers.get("x-request-id") or uuid4().hex
-        response = await call_next(request)
-        response.headers["x-request-id"] = rid
-        return response
+        start_time = time.perf_counter()
+        try:
+            response = await call_next(request)
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            response.headers["x-request-id"] = rid
+            log_level = logging.DEBUG if request.url.path in ("/health", "/ready") else logging.INFO
+            request_log.log(
+                log_level,
+                "%s %s -> %d (%.2fms) [rid=%s]",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+                rid,
+            )
+            return response
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            request_log.error(
+                "%s %s failed: %s (%.2fms) [rid=%s]",
+                request.method,
+                request.url.path,
+                exc,
+                duration_ms,
+                rid,
+                exc_info=True,
+            )
+            raise
 
     @app.get("/health", tags=["system"])
     def health() -> dict:

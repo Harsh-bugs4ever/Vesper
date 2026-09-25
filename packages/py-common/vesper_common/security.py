@@ -5,6 +5,13 @@ Two kinds of principal:
   * guest  — no account at all, a token minted from a room QR and valid only while that
              room is occupied (guest-service revalidates the stay on every call)
 """
+import bcrypt
+
+if not hasattr(bcrypt, "__about__"):
+    class _BcryptAbout:
+        __version__ = getattr(bcrypt, "__version__", "4.0.0")
+    bcrypt.__about__ = _BcryptAbout()  # type: ignore[attr-defined]
+
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
