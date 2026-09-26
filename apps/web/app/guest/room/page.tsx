@@ -18,6 +18,7 @@ import { api, auth, guestTokens, type GuestSession } from "@/lib/api";
 import { GuestAmenitiesSection } from "@/components/guest/guest-amenities-section";
 import { GuestAiConciergeDrawer } from "@/components/guest/guest-ai-concierge-drawer";
 import { GuestRoomQrCard } from "@/components/guest/guest-room-qr-card";
+import { cn } from "@/lib/utils";
 
 type MenuItem = {
   id: string;

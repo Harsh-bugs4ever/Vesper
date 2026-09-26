@@ -82,8 +82,9 @@ export function GmDashboard() {
   });
   const propertyOverview = useQuery({
     queryKey: ["gm-property-overview", user?.propertyId],
-    queryFn: () => api.get<{ departments: { department_id: string; department_name: string; open_requests: number; open_tasks: number; attendance_today: number }[]; generated_at: string }>("/dashboard/overview"),
+    queryFn: () => api.get<{ departments: { department_id: string; department_name: string; open_requests: number; overdue_requests: number; open_tasks: number; overdue_tasks: number; attendance_today: number }[]; generated_at: string }>("/dashboard/overview"),
     enabled: Boolean(user?.propertyId),
+    refetchInterval: 60_000,
   });
 
   // 1. Fetch live aggregated executive dashboard
@@ -165,6 +166,8 @@ export function GmDashboard() {
     })) ?? [];
 
   const unavailable = dashboard?.unavailable ?? [];
+  const departmentRows = propertyOverview.data?.departments ?? [];
+  const maxDepartmentLoad = Math.max(1, ...departmentRows.map((department) => department.open_tasks + department.open_requests));
 
   return (
     <div className="space-y-6">
@@ -197,14 +200,28 @@ export function GmDashboard() {
           {selectedDepartment === "all" ? (
             propertyOverview.isLoading ? <p role="status">Loading department comparison…</p> :
             propertyOverview.isError ? <p role="alert">Department comparison is unavailable.</p> :
-            <div className="space-y-2 text-sm">
-              {(propertyOverview.data?.departments ?? []).map((department) => (
-                <div key={department.department_id} className="flex flex-wrap justify-between gap-2 border-b border-sand-100 py-2">
-                  <span className="font-medium">{department.department_name}</span>
-                  <span>Present: {department.attendance_today} · Open tasks: {department.open_tasks} · Guest requests: {department.open_requests}</span>
-                </div>
-              ))}
-              {propertyOverview.data?.departments.length === 0 && <p>No department records are available.</p>}
+            <div className="space-y-3 text-sm">
+              <p className="text-xs text-sand-500">Open work by department. Amber shows overdue items that need attention first.</p>
+              {[...departmentRows].sort((a, b) => (b.overdue_tasks + b.overdue_requests) - (a.overdue_tasks + a.overdue_requests)).map((department) => {
+                const active = department.open_tasks + department.open_requests;
+                const overdue = department.overdue_tasks + department.overdue_requests;
+                return (
+                  <div key={department.department_id} className="space-y-1 border-b border-sand-100 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="font-medium text-sand-950">{department.department_name}</span>
+                      <span className="text-xs text-sand-600">{active} open · {department.attendance_today} present{overdue > 0 ? ` · ${overdue} overdue` : ""}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-sand-100" role="img" aria-label={`${department.department_name}: ${active} open items, ${overdue} overdue`}>
+                      <div className="flex h-full" style={{ width: `${Math.max(active > 0 ? 4 : 0, active / maxDepartmentLoad * 100)}%` }}>
+                        <div className="h-full bg-amber-500" style={{ width: `${active ? overdue / active * 100 : 0}%` }} />
+                        <div className="h-full flex-1 bg-sage-600" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-sand-500">{department.open_tasks} staff tasks · {department.open_requests} guest requests</p>
+                  </div>
+                );
+              })}
+              {departmentRows.length === 0 && <p>No department records are available.</p>}
               {propertyOverview.data?.generated_at && <p className="text-xs text-sand-500">Updated {new Date(propertyOverview.data.generated_at).toLocaleString()}</p>}
             </div>
           ) : departmentOverview.isLoading ? <p role="status">Loading selected department…</p> :

@@ -29,7 +29,7 @@ export function useRateStaff() {
     mutationFn: async (input: { staffId: string; rating: number; comment?: string }) => {
       if (guestTokens.access() === null) {
         throw new ApiError(401, {
-          error: "unauthorized",
+          code: "unauthorized",
           message: "A valid guest room session token is required to submit a staff rating.",
         });
       }
@@ -70,7 +70,7 @@ export function useReviewGuest() {
     mutationFn: async (input: { stayId: string; rating: number; comment?: string }) => {
       if (tokens.access() === null) {
         throw new ApiError(401, {
-          error: "unauthorized",
+          code: "unauthorized",
           message: "An active staff session is required to submit a guest review.",
         });
       }
