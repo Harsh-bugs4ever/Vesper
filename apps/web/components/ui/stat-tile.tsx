@@ -6,11 +6,16 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { chartColors } from "@/lib/chart-theme";
 import { cn } from "@/lib/utils";
 
-<<<<<<< HEAD
-export type StatTone = "sage" | "sand" | "forest" | "rose" | "emerald" | "purple";
-=======
-export type StatTone = "sage" | "sand" | "forest" | "rose" | "emerald" | "gold" | "amber" | "blue";
->>>>>>> 9d584b467ab95665485067f3a0cd2e55232200ba
+export type StatTone =
+  | "sage"
+  | "sand"
+  | "forest"
+  | "rose"
+  | "emerald"
+  | "gold"
+  | "amber"
+  | "blue"
+  | "purple";
 
 const tones: Record<StatTone, { chip: string; line: string }> = {
   sage: { chip: "bg-sage-50 text-sage-700", line: chartColors.forest },
@@ -21,7 +26,6 @@ const tones: Record<StatTone, { chip: string; line: string }> = {
   amber: { chip: "bg-amber-50 text-amber-800", line: chartColors.gold },
   blue: { chip: "bg-sky-50 text-sky-800", line: chartColors.slate },
   rose: { chip: "bg-rose-50 text-rose-700", line: chartColors.rose },
-  emerald: { chip: "bg-emerald-50 text-emerald-800", line: chartColors.forest },
   purple: { chip: "bg-purple-50 text-purple-700", line: chartColors.forest },
 };
 

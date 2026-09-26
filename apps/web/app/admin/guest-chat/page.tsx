@@ -1,734 +1,872 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Activity,
-  BookOpen,
-  Bot,
-  BrainCircuit,
-  CalendarCheck,
+  AlertCircle,
+  AlertTriangle,
+  ArrowUpRight,
+  Bell,
+  Check,
   CheckCircle2,
   Clock,
   ConciergeBell,
-  Cpu,
-  Database,
   FileText,
   Gift,
-  Layers,
-  MoreHorizontal,
-  NotebookPen,
-  Paperclip,
-  RotateCcw,
+  Phone,
+  RefreshCw,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
-  SquareCheck,
-  Trash2,
+  SprayCan,
   User,
-  UserRound,
+  UserCheck,
   UtensilsCrossed,
-  Wifi,
-  Zap,
+  Waves,
+  Wind,
+  Wrench,
+  XCircle,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
-import { VesperMark } from "@/components/layout/vesper-mark";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
+import {
+  getStoredChatThreads,
+  subscribeChatThreads,
+  resolveRoomIssue,
+  escalateRoomIssue,
+  updateAssignedTeam,
+  addMessageToRoomThread,
+  type GuestChatThread,
+  type RoomIssue,
+} from "@/lib/demo/guest-chats";
 import { cn } from "@/lib/utils";
 
-interface Message {
-  id: string;
-  from: "user" | "assistant";
-  text: string;
-  time: string;
-  sources?: string[];
-}
-
-const SOURCE_ICONS: Record<string, typeof BookOpen> = {
-  "Live Inventory": BookOpen,
-  "Rate Policy": FileText,
-  "Late Checkout Policy": FileText,
-  "Front Desk": ConciergeBell,
-  "Front Desk SOP": ConciergeBell,
-  "F&B Menu": UtensilsCrossed,
-  "Guest Preferences": UserRound,
-  "In-Room Dining": UtensilsCrossed,
-  "Dining Hours": Clock,
-  "Culinary Guidelines": UtensilsCrossed,
-  "Spa Directory": Sparkles,
-  "Wellness Services": Sparkles,
-  "IT Policy": Wifi,
-  "Guest Services": ConciergeBell,
-  "Housekeeping Dispatch": Layers,
-  "SLA Guidelines": CheckCircle2,
-  "Transport Desk": FileText,
-  "Concierge Guide": BookOpen,
-  "Loyalty Matrix": ShieldCheck,
-  "Hotel Knowledge Base": Database,
-  "Operations SOP": BrainCircuit,
+const CATEGORY_META: Record<
+  RoomIssue["category"],
+  { icon: typeof Wrench; color: string; badge: string }
+> = {
+  Maintenance: {
+    icon: Wrench,
+    color: "text-amber-700 bg-amber-50 border-amber-200",
+    badge: "Engineering & Maintenance",
+  },
+  Housekeeping: {
+    icon: SprayCan,
+    color: "text-sage-700 bg-sage-50 border-sage-200",
+    badge: "Housekeeping",
+  },
+  "F&B": {
+    icon: UtensilsCrossed,
+    color: "text-gold-800 bg-gold-50 border-gold-200",
+    badge: "Food & Beverage",
+  },
+  "Front Desk": {
+    icon: ConciergeBell,
+    color: "text-sky-800 bg-sky-50 border-sky-200",
+    badge: "Front Desk & Concierge",
+  },
+  Wellness: {
+    icon: Sparkles,
+    color: "text-purple-800 bg-purple-50 border-purple-200",
+    badge: "Spa & Wellness",
+  },
 };
 
-const SUGGESTED_PROMPTS = [
+const GUEST_FILES: Record<
+  string,
   {
-    icon: Sparkles,
-    label: "Room Upgrade Availability",
-    prompt: "Do we have sea-facing rooms available for an upgrade tonight?",
+    name: string;
+    room: string;
+    roomType: string;
+    vip: string;
+    checkIn: string;
+    checkOut: string;
+    spend: string;
+    phone: string;
+    email: string;
+    preferences: string[];
+    recentActivity: { label: string; time: string; live?: boolean }[];
+  }
+> = {
+  "412": {
+    name: "In-Room Guest",
+    room: "412",
+    roomType: "Deluxe Ocean View",
+    vip: "In-House Guest",
+    checkIn: "24 Sep 2026",
+    checkOut: "27 Sep 2026",
+    spend: "₹48,200",
+    phone: "+91 98201 55412",
+    email: "guest.room412@vesper.demo",
+    preferences: [
+      "High floor",
+      "Extra bath towels",
+      "Late checkout requested",
+      "Ocean view preference",
+    ],
+    recentActivity: [
+      { label: "Reported AC cooling issue", time: "12:33 PM", live: true },
+      { label: "In-room dining menu viewed", time: "12:20 PM", live: false },
+      { label: "Room service order placed (₹1,300)", time: "10:24 AM", live: false },
+      { label: "Check-in completed", time: "24 Sep, 02:30 PM", live: false },
+    ],
   },
-  {
-    icon: Clock,
-    label: "Late Checkout Policy",
-    prompt: "What is the late checkout policy for Gold Elite guests?",
+  "305": {
+    name: "Priya Patel",
+    room: "305",
+    roomType: "Garden Villa",
+    vip: "Platinum Elite",
+    checkIn: "25 Sep 2026",
+    checkOut: "29 Sep 2026",
+    spend: "₹1,18,000",
+    phone: "+91 99300 88305",
+    email: "priya.patel@patelholdings.com",
+    preferences: [
+      "Strict Jain diet (Sattvic cookware)",
+      "Private garden setup",
+      "Daily herbal tea at 7:00 AM",
+      "Airport luxury transfer",
+    ],
+    recentActivity: [
+      { label: "Dietary inquiry escalated to Chef", time: "11:32 AM", live: true },
+      { label: "Breakfast buffet at The Verandah", time: "08:15 AM", live: false },
+      { label: "Check-in completed", time: "25 Sep, 01:15 PM", live: false },
+    ],
   },
-  {
-    icon: UtensilsCrossed,
-    label: "Jain & Dietary Dining",
-    prompt: "What are the Jain meal options and dinner timings at The Verandah?",
+  "204": {
+    name: "Kavya Iyer",
+    room: "204",
+    roomType: "Deluxe Pool View",
+    vip: "In-House Guest",
+    checkIn: "25 Sep 2026",
+    checkOut: "28 Sep 2026",
+    spend: "₹34,000",
+    phone: "+91 98111 20400",
+    email: "kavya.iyer@gmail.com",
+    preferences: ["Hypoallergenic pillows", "Pool access card", "Morning newspaper"],
+    recentActivity: [
+      { label: "Extra towels requested via AI", time: "11:15 AM", live: true },
+      { label: "Turndown requested", time: "Yesterday", live: false },
+    ],
   },
-  {
-    icon: ConciergeBell,
-    label: "Spa & Wellness Hours",
-    prompt: "What are the spa operating hours and available wellness treatments?",
+  "608": {
+    name: "Ananya Kapoor",
+    room: "608",
+    roomType: "Executive Sea View",
+    vip: "Gold Elite",
+    checkIn: "18 Nov 2026",
+    checkOut: "21 Nov 2026",
+    spend: "₹62,700",
+    phone: "+91 98765 43210",
+    email: "ananya.kapoor@gmail.com",
+    preferences: [
+      "Sea-facing room",
+      "Late checkout (2:00 PM)",
+      "Jain meal (no onion/garlic)",
+      "High-speed Wi-Fi",
+      "Extra pillows",
+    ],
+    recentActivity: [
+      { label: "Late checkout confirmed until 2:00 PM", time: "11:44 AM", live: false },
+      { label: "Room service order (Club sandwich)", time: "17 Nov, 08:12 PM", live: false },
+    ],
   },
-  {
-    icon: Wifi,
-    label: "Guest Wi-Fi Setup",
-    prompt: "What are the Wi-Fi network credentials and speed limits for in-house guests?",
+  "514": {
+    name: "Rohan Verma",
+    room: "514",
+    roomType: "Premier Sunset Suite",
+    vip: "Silver Elite",
+    checkIn: "26 Sep 2026",
+    checkOut: "28 Sep 2026",
+    spend: "₹39,500",
+    phone: "+91 97690 12514",
+    email: "rohan.v@techcorp.io",
+    preferences: ["Sunset balcony", "Spa & Ayurvedic wellness", "Late breakfast box"],
+    recentActivity: [
+      { label: "Ayurvedic massage booked for 4:00 PM", time: "10:52 AM", live: false },
+      { label: "Check-in completed", time: "26 Sep, 11:30 AM", live: false },
+    ],
   },
-];
+};
 
-const GUEST_PREFERENCES = [
-  "Sea-facing room",
-  "Late checkout",
-  "Jain meal (no onion/garlic)",
-  "High-speed Wi-Fi",
-  "Extra pillows",
-];
-
-const GUEST_ACTIVITY = [
-  { label: "Upgrade inquiry", time: "10:14 AM", live: true },
-  { label: "Late checkout request", time: "10:15 AM", live: true },
-  { label: "Jain meal request", time: "10:16 AM", live: true },
-  { label: "Room service order", time: "17 Nov, 08:12 PM", live: false },
-  { label: "Check-in completed", time: "18 Nov, 02:05 PM", live: false },
-];
-
-export default function GuestChatPage() {
+export default function GeneralManagerGuestIssuesPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
 
-  const userName = user?.name || "Arjun Mehta";
-  const userRole = user?.roleTitle || "General Manager";
-  const userInitials =
-    userName
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "AM";
+  const managerName = user?.name || "Arjun Mehta";
+  const managerRole = user?.roleTitle || "General Manager";
 
-  // Clean initial state without dummy chats
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState("");
-  const [thinking, setThinking] = useState(false);
-  const [rightTab, setRightTab] = useState<"ai-intel" | "guest-file">("ai-intel");
-  const endRef = useRef<HTMLDivElement>(null);
+  const [threads, setThreads] = useState<GuestChatThread[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState("412");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "escalated" | "resolved">("all");
+  const [resolutionNoteInput, setResolutionNoteInput] = useState("");
+  const [messageToRoomInput, setMessageToRoomInput] = useState("");
+  const [rightTab, setRightTab] = useState<"guest-profile" | "history">("guest-profile");
 
-  // Keep newest message in view
+  // Sync threads from stored threads
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages, thinking]);
-
-  const handleSend = (textToSend?: string) => {
-    const text = (textToSend ?? draft).trim();
-    if (!text || thinking) return;
-
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      from: "user",
-      text,
-      time: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
+    const update = (allThreads?: GuestChatThread[]) => {
+      const current = allThreads || getStoredChatThreads();
+      setThreads(current);
     };
+    update();
+    const unsub = subscribeChatThreads(update);
+    return unsub;
+  }, []);
 
-    setMessages((current) => [...current, userMessage]);
-    if (!textToSend) {
-      setDraft("");
-    }
-    setThinking(true);
+  const activeThread = threads.find((t) => t.room === selectedRoom) || threads[0];
+  const issue = activeThread?.currentIssue;
 
-    // AI Concierge Engine responds to user queries
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      let reply = "";
-      let sources: string[] = ["Front Desk", "Hotel Knowledge Base"];
+  // Filter threads based on problem resolution status
+  const filteredThreads = threads.filter((t) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "pending")
+      return t.currentIssue.status === "open" || t.currentIssue.status === "in_progress";
+    if (statusFilter === "escalated") return t.currentIssue.status === "escalated";
+    if (statusFilter === "resolved") return t.currentIssue.status === "resolved";
+    return true;
+  });
 
-      if (
-        lower.includes("upgrade") ||
-        lower.includes("sea-facing") ||
-        lower.includes("sea facing") ||
-        lower.includes("suite") ||
-        lower.includes("view")
-      ) {
-        reply =
-          "We currently have 2 Executive Sea View Suites available for an upgrade tonight. The prevailing upgrade rate is ₹4,500 + taxes per night. As a Gold Elite guest, complimentary Executive Lounge access and buffet breakfast at The Verandah are included. Would you like me to process this room upgrade?";
-        sources = ["Live Inventory", "Rate Policy", "Loyalty Matrix"];
-      } else if (
-        lower.includes("checkout") ||
-        lower.includes("check out") ||
-        lower.includes("late")
-      ) {
-        reply =
-          "Standard checkout is at 11:00 AM. In-house Gold Elite guests are eligible for complimentary late checkout until 2:00 PM, subject to room availability. For extensions up to 6:00 PM, a half-day tariff of ₹2,500 + taxes applies.";
-        sources = ["Late Checkout Policy", "Front Desk SOP", "Guest Services"];
-      } else if (
-        lower.includes("jain") ||
-        lower.includes("breakfast") ||
-        lower.includes("dinner") ||
-        lower.includes("food") ||
-        lower.includes("restaurant") ||
-        lower.includes("dining") ||
-        lower.includes("meal")
-      ) {
-        reply =
-          "The Verandah offers an authentic Sattvic & Jain culinary selection prepared strictly without onion, garlic, or root vegetables. Breakfast buffet runs from 6:30 AM to 10:30 AM (until 11:00 AM on weekends), and dinner begins at 7:00 PM. 24/7 in-room dining is also available.";
-        sources = ["F&B Menu", "Dining Hours", "In-Room Dining"];
-      } else if (
-        lower.includes("spa") ||
-        lower.includes("pool") ||
-        lower.includes("massage") ||
-        lower.includes("gym") ||
-        lower.includes("wellness")
-      ) {
-        reply =
-          "Vesper Wellness Spa & Gym is located on Level 3. The fitness center and pool are open daily from 6:00 AM to 10:00 PM, while holistic Ayurvedic therapies and massage slots are available from 8:00 AM to 9:00 PM. Shall I reserve a slot for you?";
-        sources = ["Spa Directory", "Wellness Services"];
-      } else if (
-        lower.includes("wifi") ||
-        lower.includes("internet") ||
-        lower.includes("network") ||
-        lower.includes("password")
-      ) {
-        reply =
-          "High-speed property-wide Wi-Fi is complimentary for all in-house guests. Connect to network 'Vesper_Guest' and authenticate with the guest room number and last name. Gold Elite members receive unthrottled bandwidth up to 200 Mbps.";
-        sources = ["IT Policy", "Guest Services"];
-      } else if (
-        lower.includes("pillow") ||
-        lower.includes("towel") ||
-        lower.includes("clean") ||
-        lower.includes("housekeeping")
-      ) {
-        reply =
-          "Housekeeping dispatch is active on all guest floors. A floor attendant can deliver extra hypoallergenic pillows, fresh bath sheets, or evening turndown service within 10 minutes.";
-        sources = ["Housekeeping Dispatch", "SLA Guidelines"];
-      } else if (
-        lower.includes("airport") ||
-        lower.includes("cab") ||
-        lower.includes("taxi") ||
-        lower.includes("car")
-      ) {
-        reply =
-          "Chhatrapati Shivaji Maharaj International Airport (BOM) is approximately 30 minutes away. Our luxury hotel BMW 5-Series transfer can be scheduled for ₹3,200 net. City cabs can also pull up to the main porch.";
-        sources = ["Transport Desk", "Concierge Guide"];
-      } else {
-        reply = `I have received your inquiry: "${text}". Based on current property policies and live hotel systems, all services are operating normally. I can dispatch an action to Front Desk, Housekeeping, or F&B as needed. How would you like to proceed?`;
-        sources = ["Hotel Knowledge Base", "Front Desk", "Operations SOP"];
-      }
+  // Action: Mark Problem Resolved
+  const handleResolveProblem = () => {
+    if (!activeThread) return;
+    const note =
+      resolutionNoteInput.trim() ||
+      `Issue verified and resolved for Room ${activeThread.room} by ${managerName}.`;
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: `msg-${Date.now() + 1}`,
-          from: "assistant",
-          text: reply,
-          time: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
-          sources,
-        },
-      ]);
-      setThinking(false);
-    }, 900);
-  };
+    resolveRoomIssue(activeThread.room, note, `${managerName} (${managerRole})`);
+    setResolutionNoteInput("");
 
-  const handleClearChat = () => {
-    setMessages([]);
     showToast({
-      title: "Chat cleared",
-      description: "Chat history has been reset.",
-      type: "default",
+      title: `Room ${activeThread.room} Problem Resolved`,
+      description: note,
+      type: "success",
     });
   };
+
+  // Action: Escalate
+  const handleEscalateProblem = () => {
+    if (!activeThread) return;
+    escalateRoomIssue(
+      activeThread.room,
+      `Escalated by ${managerName} for urgent duty management attention.`
+    );
+    showToast({
+      title: `Room ${activeThread.room} Escalated`,
+      description: "Marked high priority. Department head notified.",
+      type: "warning",
+    });
+  };
+
+  // Action: Reassign / Expedite
+  const handleExpediteTeam = (teamName: string) => {
+    if (!activeThread) return;
+    updateAssignedTeam(activeThread.room, teamName);
+    showToast({
+      title: "Team Dispatched & Priority Escalated",
+      description: `${teamName} dispatched to Room ${activeThread.room}.`,
+      type: "success",
+    });
+  };
+
+  // Action: Send Manager Message to Room
+  const handleSendMessageToRoom = () => {
+    if (!messageToRoomInput.trim() || !activeThread) return;
+
+    const timeStr = new Date().toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+    addMessageToRoomThread(activeThread.room, {
+      id: `staff-msg-${Date.now()}`,
+      from: "staff",
+      senderName: managerName,
+      senderRole: managerRole,
+      text: messageToRoomInput.trim(),
+      time: timeStr,
+      type: "text",
+    });
+
+    setMessageToRoomInput("");
+
+    showToast({
+      title: `Update Sent to Room ${activeThread.room}`,
+      description: `Guest in Room ${activeThread.room} received your message.`,
+      type: "success",
+    });
+  };
+
+  // Action: Service Recovery Offering
+  const handleOfferRecovery = (offer: string) => {
+    if (!activeThread) return;
+    const timeStr = new Date().toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+    addMessageToRoomThread(activeThread.room, {
+      id: `staff-recovery-${Date.now()}`,
+      from: "staff",
+      senderName: managerName,
+      senderRole: managerRole,
+      text: `Dear Guest, to ensure your comfort, we have arranged: ${offer}. Please let our Front Desk know if we can do anything further.`,
+      time: timeStr,
+      type: "text",
+    });
+
+    showToast({
+      title: `Service Recovery Dispatched`,
+      description: `${offer} applied for Room ${activeThread.room}.`,
+      type: "success",
+    });
+  };
+
+  const guestDetails =
+    GUEST_FILES[activeThread?.room || "412"] || {
+      name: activeThread?.guestName || "In-Room Guest",
+      room: activeThread?.room || "412",
+      roomType: activeThread?.roomType || "Deluxe Ocean View",
+      vip: activeThread?.vipStatus || "In-House Guest",
+      checkIn: "24 Sep 2026",
+      checkOut: "27 Sep 2026",
+      spend: "₹45,000",
+      phone: "+91 98200 11412",
+      email: "guest@vesper.demo",
+      preferences: ["High floor", "Daily housekeeping"],
+      recentActivity: [{ label: "Reported room issue", time: "Just now", live: true }],
+    };
+
+  const categoryMeta = issue ? CATEGORY_META[issue.category] : CATEGORY_META.Maintenance;
+  const CategoryIcon = categoryMeta.icon;
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Guest Chat & AI Concierge"
-        description="Autonomous AI Agent resolving guest requests, policy queries, and operations in real time"
+        title="Guest Room Issues & Inquiries"
+        description="Review problems reported by in-house guests and execute manager resolutions directly"
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-        {/* Chat Thread Panel */}
-        <Panel className="flex h-[720px] flex-col">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand-200/80 px-5 py-4">
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gold-400/40 bg-gradient-to-br from-gold-100 to-sand-50 shadow-xs">
-                <VesperMark className="h-6 w-6 text-gold-600" />
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
-                </span>
-              </div>
+      {/* High-Level Issue Status KPI Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Panel className="p-4">
+          <div className="flex items-center justify-between text-xs text-sand-500">
+            <span>Pending Guest Issues</span>
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+          </div>
+          <p className="mt-2 font-sans text-2xl font-semibold text-sand-950">
+            {threads.filter((t) => t.currentIssue.status === "open" || t.currentIssue.status === "in_progress").length}
+          </p>
+          <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Requiring resolution
+          </span>
+        </Panel>
+
+        <Panel className="p-4">
+          <div className="flex items-center justify-between text-xs text-sand-500">
+            <span>Escalated to Manager</span>
+            <ShieldAlert className="h-4 w-4 text-rose-600" />
+          </div>
+          <p className="mt-2 font-sans text-2xl font-semibold text-rose-700">
+            {threads.filter((t) => t.currentIssue.status === "escalated").length}
+          </p>
+          <span className="mt-1 text-[11px] text-rose-600 font-medium">
+            High priority / VIP attention
+          </span>
+        </Panel>
+
+        <Panel className="p-4">
+          <div className="flex items-center justify-between text-xs text-sand-500">
+            <span>Resolved Today</span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          </div>
+          <p className="mt-2 font-sans text-2xl font-semibold text-emerald-800">
+            {threads.filter((t) => t.currentIssue.status === "resolved").length}
+          </p>
+          <span className="mt-1 text-[11px] text-emerald-700 font-medium">
+            100% SLA compliance
+          </span>
+        </Panel>
+
+        <Panel className="p-4">
+          <div className="flex items-center justify-between text-xs text-sand-500">
+            <span>Average Resolution SLA</span>
+            <Clock className="h-4 w-4 text-sage-600" />
+          </div>
+          <p className="mt-2 font-sans text-2xl font-semibold text-sand-950">14 mins</p>
+          <span className="mt-1 text-[11px] text-sand-500">
+            Under 20m target
+          </span>
+        </Panel>
+      </div>
+
+      {/* Main Layout: Room Problem List on Left + Problem Detail & Manager Resolution Center */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_340px]">
+        {/* Left: In-House Guest Room Problems List */}
+        <Panel className="flex h-[760px] flex-col">
+          <div className="border-b border-sand-200/80 p-3.5">
+            <div className="flex items-center justify-between">
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-serif text-lg font-semibold leading-tight text-sand-950">
-                    Vesper AI Agent
-                  </p>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                    AI Agent Active
-                  </span>
-                </div>
-                <p className="text-xs text-sand-500">
-                  Autonomous Hotel Concierge · Groq Llama 3.3
-                </p>
+                <h2 className="font-serif text-sm font-semibold text-sand-950">
+                  Guest Room Problems
+                </h2>
+                <p className="text-[11px] text-sand-500">Click a room to view issue & resolve</p>
               </div>
+              <span className="rounded-full bg-sand-100 px-2 py-0.5 text-[10px] font-semibold text-sand-700">
+                {threads.length} Rooms
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              {messages.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearChat}
-                  className="text-sand-600 hover:text-sand-900 hover:bg-sand-100"
+            {/* Filter Tabs */}
+            <div className="mt-3 flex gap-1 rounded-lg bg-sand-100/70 p-1 text-[11px]">
+              {[
+                { id: "all", label: "All" },
+                { id: "pending", label: "Pending" },
+                { id: "escalated", label: "Escalated" },
+                { id: "resolved", label: "Resolved" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id as typeof statusFilter)}
+                  className={cn(
+                    "flex-1 rounded-md py-1 font-medium transition",
+                    statusFilter === tab.id
+                      ? "bg-white text-sand-950 shadow-3xs"
+                      : "text-sand-600 hover:text-sand-900"
+                  )}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1 text-sand-400" />
-                  Clear Chat
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  showToast({
-                    title: "Escalated to Front Desk",
-                    description: "Duty Manager has been notified to follow up on this thread.",
-                    type: "success",
-                  })
-                }
-              >
-                <UserRound className="h-3.5 w-3.5 mr-1" />
-                Escalate to Front Desk
-              </Button>
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-            {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center py-8 px-4 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-gold-200/80 bg-gradient-to-br from-gold-100 via-sand-50 to-sand-100 shadow-sm">
-                  <VesperMark className="h-8 w-8 text-gold-600" />
-                </div>
-                <h3 className="mb-1 font-serif text-xl font-medium text-sand-900">
-                  How can Vesper AI help you today?
-                </h3>
-                <p className="mb-6 max-w-md text-xs text-sand-500 sm:text-sm">
-                  The AI Concierge responds with verified property policies, live room inventory,
-                  Jain dining options, and operational dispatch.
-                </p>
+          {/* List of Room Issues */}
+          <div className="flex-1 space-y-2 overflow-y-auto p-2.5">
+            {filteredThreads.map((thread) => {
+              const isSelected = thread.room === selectedRoom;
+              const itmIssue = thread.currentIssue;
+              const meta = CATEGORY_META[itmIssue.category];
+              const Icon = meta.icon;
 
-                <div className="w-full max-w-lg space-y-2">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-sand-400">
-                    Suggested Inquiries
-                  </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {SUGGESTED_PROMPTS.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.label}
-                          onClick={() => handleSend(item.prompt)}
-                          className="group flex items-center gap-2.5 rounded-xl border border-sand-200/90 bg-white/90 p-3 text-left transition hover:border-gold-300 hover:bg-gold-50/40 hover:shadow-xs"
-                        >
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sand-100 text-sand-600 transition-colors group-hover:bg-gold-100 group-hover:text-gold-700">
-                            <Icon className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-sand-800 group-hover:text-sand-950">
-                              {item.label}
-                            </p>
-                            <p className="truncate text-[11px] text-sand-400">{item.prompt}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              messages.map((message) =>
-                message.from === "user" ? (
-                  <div key={message.id} className="flex items-start justify-end gap-2.5">
-                    <div className="max-w-[78%]">
-                      <div className="rounded-2xl rounded-tr-sm bg-sand-900 px-4 py-3 text-white shadow-xs">
-                        <p className="text-sm leading-relaxed">{message.text}</p>
-                      </div>
-                      <div className="mt-1 flex items-center justify-end gap-1.5 text-xs text-sand-400">
-                        <span>{userName}</span>
-                        <span>·</span>
-                        <span>{message.time}</span>
+              const isResolved = itmIssue.status === "resolved";
+              const isEscalated = itmIssue.status === "escalated";
+
+              return (
+                <button
+                  key={thread.room}
+                  onClick={() => setSelectedRoom(thread.room)}
+                  className={cn(
+                    "w-full rounded-xl p-3 text-left transition-all border",
+                    isSelected
+                      ? "border-gold-400/90 bg-gold-50/80 shadow-xs ring-1 ring-gold-400/30"
+                      : "border-sand-200/80 bg-white hover:bg-sand-50/80"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sage-800 text-[11px] font-bold text-gold-300">
+                        {thread.room}
+                      </span>
+                      <div>
+                        <p className="font-semibold text-xs text-sand-950 leading-none">
+                          Room {thread.room}
+                        </p>
+                        <p className="text-[10px] text-sand-500 mt-0.5">{thread.guestName}</p>
                       </div>
                     </div>
+
                     <span
-                      title={`${userName} (${userRole})`}
-                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sand-200 text-xs font-semibold text-sand-800"
-                    >
-                      {userInitials}
-                    </span>
-                  </div>
-                ) : (
-                  <div key={message.id} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-200/80 bg-gold-50 shadow-xs">
-                      <VesperMark className="h-4 w-4 text-gold-600" />
-                    </span>
-
-                    <div className="max-w-[78%]">
-                      <div className="rounded-2xl rounded-tl-sm border border-sand-200 bg-white px-4 py-3 shadow-xs">
-                        <div className="mb-1 flex items-center gap-1.5">
-                          <span className="text-xs font-semibold text-sand-900">
-                            Vesper AI Agent
-                          </span>
-                          <span className="rounded bg-gold-100 px-1.5 py-0.5 text-[10px] font-medium text-gold-800">
-                            Concierge
-                          </span>
-                        </div>
-                        <p className="text-sm leading-relaxed text-sand-900">{message.text}</p>
-                      </div>
-
-                      {message.sources && message.sources.length > 0 && (
-                        <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                          {message.sources.map((source) => {
-                            const Icon = SOURCE_ICONS[source] ?? FileText;
-                            return (
-                              <li
-                                key={source}
-                                className="flex items-center gap-1.5 rounded-lg border border-sand-200 bg-sand-50/90 px-2 py-1 text-xs text-sand-600"
-                              >
-                                <Icon className="h-3 w-3 shrink-0 text-sand-400" />
-                                {source}
-                              </li>
-                            );
-                          })}
-                        </ul>
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                        isResolved && "bg-emerald-100 text-emerald-800",
+                        isEscalated && "bg-rose-100 text-rose-800 animate-pulse",
+                        !isResolved && !isEscalated && "bg-amber-100 text-amber-900"
                       )}
+                    >
+                      {itmIssue.status === "open"
+                        ? "Open"
+                        : itmIssue.status === "in_progress"
+                        ? "In Progress"
+                        : itmIssue.status === "escalated"
+                        ? "Escalated"
+                        : "Resolved"}
+                    </span>
+                  </div>
 
-                      <p className="mt-1 text-xs text-sand-400">{message.time}</p>
+                  {/* Problem Headline */}
+                  <div className="mt-2.5 rounded-lg bg-sand-50/80 p-2 border border-sand-200/60">
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-sand-600">
+                      <Icon className="h-3 w-3 shrink-0 text-sand-500" />
+                      <span>{meta.badge}</span>
+                      <span className="text-sand-300">&bull;</span>
+                      <span className="text-sand-400">{itmIssue.reportedAt}</span>
                     </div>
+                    <p className="mt-1 line-clamp-2 text-xs font-medium text-sand-900 leading-snug">
+                      {itmIssue.title}
+                    </p>
                   </div>
-                )
-              )
-            )}
-
-            {thinking && (
-              <div className="flex items-start gap-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-200/80 bg-gold-50">
-                  <VesperMark className="h-4 w-4 text-gold-600" />
-                </span>
-                <div
-                  className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-sand-200 bg-white px-4 py-3 shadow-xs"
-                  role="status"
-                  aria-label="Vesper AI is typing"
-                >
-                  <span className="text-xs text-sand-500">Retrieving sources</span>
-                  <div className="flex items-center gap-1">
-                    {[0, 1, 2].map((dot) => (
-                      <span
-                        key={dot}
-                        className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-500"
-                        style={{ animationDelay: `${dot * 150}ms` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div ref={endRef} />
-          </div>
-
-          {/* Input Box */}
-          <div className="flex items-center gap-2 border-t border-sand-200/80 px-5 py-4">
-            <button
-              className="rounded-xl border border-sand-200 p-2.5 text-sand-500 transition-colors hover:bg-sand-50"
-              aria-label="Attach a file"
-              onClick={() =>
-                showToast({
-                  title: "Document Attachment",
-                  description: "Upload policy documents or guest folios to analyze.",
-                  type: "default",
-                })
-              }
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
-
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Ask Vesper AI about room upgrades, Jain food, policies..."
-              aria-label="Message"
-              className="flex-1 rounded-xl border border-sand-200 bg-white px-4 py-2.5 text-sm text-sand-900 placeholder:text-sand-400 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500"
-            />
-
-            <button
-              onClick={() => handleSend()}
-              disabled={draft.trim() === "" || thinking}
-              className="rounded-xl bg-gold-600 p-2.5 text-white shadow-xs transition-colors hover:bg-gold-700 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Send message"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+                </button>
+              );
+            })}
           </div>
         </Panel>
 
-        {/* Right Context Panel (AI Intelligence & In-House Guest File) */}
+        {/* Center: Selected Room Problem Overview & Manager Resolution Actions */}
+        <Panel className="flex h-[760px] flex-col overflow-y-auto">
+          {/* Header */}
+          <div className="border-b border-sand-200/80 px-6 py-4 bg-white sticky top-0 z-10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sage-800 text-gold-300 font-sans font-bold text-lg shadow-xs">
+                  {activeThread?.room}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-serif text-lg font-semibold text-sand-950">
+                      Room {activeThread?.room} &mdash; {activeThread?.guestName}
+                    </h3>
+                    <span className="rounded-full border border-sand-200 bg-sand-50 px-2 py-0.5 text-[11px] font-medium text-sand-700">
+                      {activeThread?.roomType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-sand-500 mt-0.5">
+                    VIP: <span className="font-semibold text-gold-800">{activeThread?.vipStatus}</span> &bull; Check-in: {activeThread?.checkIn} &bull; Check-out: {activeThread?.checkOut}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border",
+                    issue?.status === "resolved" && "bg-emerald-50 text-emerald-800 border-emerald-200",
+                    issue?.status === "escalated" && "bg-rose-50 text-rose-800 border-rose-200 animate-pulse",
+                    issue?.status !== "resolved" && issue?.status !== "escalated" && "bg-amber-50 text-amber-800 border-amber-200"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      issue?.status === "resolved" && "bg-emerald-600",
+                      issue?.status === "escalated" && "bg-rose-600",
+                      issue?.status !== "resolved" && issue?.status !== "escalated" && "bg-amber-500"
+                    )}
+                  />
+                  {issue?.status === "open"
+                    ? "Open Issue"
+                    : issue?.status === "in_progress"
+                    ? "In Progress"
+                    : issue?.status === "escalated"
+                    ? "Escalated to GM"
+                    : "Resolved"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* The Specific Problem Card */}
+            <div className="rounded-2xl border border-sand-200/90 bg-gradient-to-br from-sand-50/90 via-white to-sand-50/40 p-5 shadow-xs">
+              <div className="flex items-center justify-between border-b border-sand-200/70 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg border", categoryMeta.color)}>
+                    <CategoryIcon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-sand-500">
+                      Problem Reported by Guest
+                    </span>
+                    <p className="text-xs font-medium text-sand-800">{categoryMeta.badge}</p>
+                  </div>
+                </div>
+
+                <div className="text-right text-xs">
+                  <span className="text-sand-400 text-[10px]">Reported At</span>
+                  <p className="font-semibold text-sand-900">{issue?.reportedAt}</p>
+                </div>
+              </div>
+
+              {/* Problem Title & Detailed Statement */}
+              <div className="mt-4 space-y-2">
+                <h4 className="font-serif text-xl font-semibold text-sand-950 leading-tight">
+                  &ldquo;{issue?.title}&rdquo;
+                </h4>
+                <p className="text-sm text-sand-700 leading-relaxed bg-white/80 p-3 rounded-xl border border-sand-200/60">
+                  {issue?.description}
+                </p>
+              </div>
+
+              {/* Action taken by AI Concierge summary */}
+              <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3 text-xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-emerald-950">AI Concierge Autonomous Action</p>
+                  <p className="text-emerald-800 text-[11px] mt-0.5">{issue?.aiActionTaken}</p>
+                </div>
+                {issue?.ticketId && (
+                  <span className="shrink-0 font-mono text-[10px] font-bold rounded bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                    {issue.ticketId}
+                  </span>
+                )}
+              </div>
+
+              {/* Assigned Team & SLA */}
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs border-t border-sand-200/60 pt-3">
+                <div>
+                  <span className="text-sand-400 text-[11px]">Assigned Department / Staff</span>
+                  <p className="font-semibold text-sand-900 mt-0.5">{issue?.assignedTeam}</p>
+                </div>
+                <div>
+                  <span className="text-sand-400 text-[11px]">Department SLA Guarantee</span>
+                  <p className="font-semibold text-sand-900 mt-0.5">{issue?.slaMinutes} Minutes Target</p>
+                </div>
+              </div>
+
+              {/* Resolution details if already resolved */}
+              {issue?.status === "resolved" && (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs space-y-1">
+                  <div className="flex items-center justify-between font-bold text-emerald-900">
+                    <span className="flex items-center gap-1.5">
+                      <Check className="h-4 w-4 text-emerald-600" />
+                      Resolution Verified
+                    </span>
+                    <span className="text-[10px] font-normal text-emerald-700">
+                      {issue.resolvedAt} &bull; {issue.resolvedBy}
+                    </span>
+                  </div>
+                  <p className="text-emerald-800 text-[11px]">{issue.resolutionNote}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Manager Resolution & Action Suite */}
+            <div className="rounded-2xl border border-sand-200/90 bg-white p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-sand-200/80 pb-3">
+                <div>
+                  <h4 className="font-serif text-base font-semibold text-sand-950">
+                    Manager Resolution Controls
+                  </h4>
+                  <p className="text-xs text-sand-500">
+                    Resolve this issue, expedite staff, or send updates to Room {activeThread?.room}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {issue?.status !== "escalated" && issue?.status !== "resolved" && (
+                    <button
+                      onClick={handleEscalateProblem}
+                      className="flex items-center gap-1 rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 transition"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Escalate
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 1. Mark as Resolved box */}
+              {issue?.status !== "resolved" ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                  <p className="font-semibold text-xs text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    Verify and Mark Problem Resolved
+                  </p>
+                  <input
+                    type="text"
+                    value={resolutionNoteInput}
+                    onChange={(e) => setResolutionNoteInput(e.target.value)}
+                    placeholder="Enter resolution notes (e.g. Technician inspected AC, reset compressor, room cooled to 21°C)..."
+                    className="w-full rounded-xl border border-emerald-300/80 bg-white px-3.5 py-2 text-xs text-sand-950 placeholder:text-sand-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <button
+                    onClick={handleResolveProblem}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white shadow-soft hover:bg-emerald-800 transition w-full sm:w-auto"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>Confirm & Mark Issue Resolved</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-3 text-xs text-emerald-900 border border-emerald-200">
+                  <span className="font-semibold">This guest room problem has been marked resolved.</span>
+                  <button
+                    onClick={() => {
+                      if (!activeThread) return;
+                      escalateRoomIssue(activeThread.room, "Re-opened by manager for additional follow-up.");
+                      showToast({ title: "Issue Re-opened", description: "Status changed to pending attention.", type: "warning" });
+                    }}
+                    className="text-xs font-medium text-emerald-800 underline hover:text-emerald-950"
+                  >
+                    Re-open Issue
+                  </button>
+                </div>
+              )}
+
+              {/* 2. Expedite / Reassign Department Staff */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold text-sand-800 block">
+                  Expedite Staff Dispatch for Room {activeThread?.room}
+                </span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {[
+                    "Duty Engineering (Senior Technician)",
+                    "Housekeeping Supervisor",
+                    "F&B Duty Captain",
+                    "Front Desk Manager",
+                  ].map((team) => (
+                    <button
+                      key={team}
+                      onClick={() => handleExpediteTeam(team)}
+                      className="rounded-lg border border-sand-200 bg-sand-50/80 px-2.5 py-1.5 text-sand-700 hover:border-gold-300 hover:bg-gold-50/60 transition text-xs font-medium"
+                    >
+                      &rarr; Dispatch {team}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Send Direct Resolution Message to Guest Room */}
+              <div className="space-y-2 border-t border-sand-200/80 pt-4">
+                <span className="text-xs font-semibold text-sand-800 block flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5 text-gold-700" />
+                  Send Official Update to Guest in Room {activeThread?.room}
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={messageToRoomInput}
+                    onChange={(e) => setMessageToRoomInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSendMessageToRoom();
+                    }}
+                    placeholder={`e.g., Dear guest, our senior technician is at your door to inspect the AC. We apologize for the delay.`}
+                    className="flex-1 rounded-xl border border-sand-300 bg-sand-50/50 px-3.5 py-2 text-xs text-sand-950 placeholder:text-sand-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-gold-500/20"
+                  />
+                  <button
+                    onClick={handleSendMessageToRoom}
+                    disabled={!messageToRoomInput.trim()}
+                    className="flex shrink-0 items-center gap-1.5 rounded-xl bg-sage-800 px-4 py-2 text-xs font-semibold text-white shadow-soft hover:bg-sage-900 transition disabled:opacity-40"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>Send to Room</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. One-Click Hospitality Service Recovery */}
+              <div className="space-y-2 border-t border-sand-200/80 pt-4">
+                <span className="text-xs font-semibold text-sand-800 block flex items-center gap-1.5">
+                  <Gift className="h-3.5 w-3.5 text-gold-700" />
+                  Service Recovery Offerings for Room {activeThread?.room}
+                </span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {[
+                    "Complimentary 2:00 PM Late Checkout",
+                    "Chef's Artisanal Fruit & Pastry Platter",
+                    "₹1,000 F&B Dining Credit at The Verandah",
+                    "Complimentary Signature Foot Reflexology at Vesper Spa",
+                  ].map((offer) => (
+                    <button
+                      key={offer}
+                      onClick={() => handleOfferRecovery(offer)}
+                      className="rounded-full border border-gold-200 bg-gold-50/70 px-3 py-1 text-gold-900 hover:bg-gold-100 transition text-[11px] font-medium"
+                    >
+                      + Grant {offer}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        {/* Right: In-House Guest File & Stay Intelligence */}
         <div className="space-y-4">
-          {/* Tab Navigation */}
+          {/* Tab Selector */}
           <div className="flex rounded-xl border border-sand-200 bg-sand-100/60 p-1">
             <button
-              onClick={() => setRightTab("ai-intel")}
+              onClick={() => setRightTab("guest-profile")}
               className={cn(
                 "flex-1 rounded-lg py-1.5 text-xs font-medium transition",
-                rightTab === "ai-intel"
+                rightTab === "guest-profile"
                   ? "bg-white text-sand-950 shadow-xs"
                   : "text-sand-600 hover:text-sand-900"
               )}
             >
-              AI Agent Intel
+              Guest Stay File
             </button>
             <button
-              onClick={() => setRightTab("guest-file")}
+              onClick={() => setRightTab("history")}
               className={cn(
                 "flex-1 rounded-lg py-1.5 text-xs font-medium transition",
-                rightTab === "guest-file"
+                rightTab === "history"
                   ? "bg-white text-sand-950 shadow-xs"
                   : "text-sand-600 hover:text-sand-900"
               )}
             >
-              Guest File (Room 608)
+              Stay Activity
             </button>
           </div>
 
-          {rightTab === "ai-intel" ? (
+          {rightTab === "guest-profile" ? (
             <>
-              {/* AI Agent Status Card */}
-              <Panel>
-                <PanelBody className="space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-sand-200/80 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-100 text-gold-700">
-                        <Cpu className="h-4.5 w-4.5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-sand-950">Groq Llama 3.3 70B</p>
-                        <p className="text-xs text-sand-500">RAG Engine · Retrieval Augmented</p>
-                      </div>
-                    </div>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                      Live
-                    </span>
-                  </div>
-
-                  <dl className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded-lg bg-sand-50/80 p-2 border border-sand-200/60">
-                      <dt className="text-sand-400 text-[10px]">Latency</dt>
-                      <dd className="font-semibold text-sand-900 mt-0.5">420 ms</dd>
-                    </div>
-                    <div className="rounded-lg bg-sand-50/80 p-2 border border-sand-200/60">
-                      <dt className="text-sand-400 text-[10px]">Indexed</dt>
-                      <dd className="font-semibold text-sand-900 mt-0.5">142 docs</dd>
-                    </div>
-                    <div className="rounded-lg bg-sand-50/80 p-2 border border-sand-200/60">
-                      <dt className="text-sand-400 text-[10px]">Method</dt>
-                      <dd className="font-semibold text-sand-900 mt-0.5">BM25 + RAG</dd>
-                    </div>
-                  </dl>
-                </PanelBody>
-              </Panel>
-
-              {/* Connected Knowledge Bases */}
-              <Panel>
-                <PanelHeader
-                  title="Connected Knowledge Bases"
-                  action={
-                    <button
-                      onClick={() =>
-                        showToast({
-                          title: "Knowledge Bases Verified",
-                          description: "All 5 property knowledge bases are synchronized.",
-                          type: "success",
-                        })
-                      }
-                      className="pt-1 text-xs font-medium text-gold-700 hover:text-gold-900"
-                    >
-                      Sync All
-                    </button>
-                  }
-                />
-                <PanelBody className="pt-3">
-                  <ul className="space-y-2">
-                    {[
-                      {
-                        name: "Live Inventory & Rate Policies",
-                        source: "PMS / Channel Manager",
-                        status: "Synced",
-                      },
-                      {
-                        name: "Front Desk & Late Checkout SOP",
-                        source: "Operations Guide",
-                        status: "Synced",
-                      },
-                      {
-                        name: "The Verandah & Jain Dining Menus",
-                        source: "F&B POS",
-                        status: "Synced",
-                      },
-                      {
-                        name: "Vesper Wellness Spa & Gym Directory",
-                        source: "Spa Services",
-                        status: "Synced",
-                      },
-                      {
-                        name: "IT Infrastructure & Guest Wi-Fi",
-                        source: "IT Network",
-                        status: "Synced",
-                      },
-                    ].map((kb) => (
-                      <li
-                        key={kb.name}
-                        className="flex items-center justify-between rounded-lg border border-sand-200/70 bg-sand-50/50 p-2.5 text-xs"
-                      >
-                        <div className="min-w-0 pr-2">
-                          <p className="font-medium text-sand-900 truncate">{kb.name}</p>
-                          <p className="text-[11px] text-sand-400">{kb.source}</p>
-                        </div>
-                        <span className="shrink-0 rounded-full bg-emerald-100/80 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
-                          {kb.status}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </PanelBody>
-              </Panel>
-
-              {/* Quick AI Actions */}
-              <Panel>
-                <PanelHeader title="Operational Shortcuts" />
-                <PanelBody className="grid grid-cols-2 gap-2 pt-3">
-                  {[
-                    {
-                      label: "Check Upgrades",
-                      prompt: "What room upgrades are available tonight and at what rates?",
-                      icon: Sparkles,
-                    },
-                    {
-                      label: "Late Checkout",
-                      prompt: "Review late checkout requests and policies for today",
-                      icon: Clock,
-                    },
-                    {
-                      label: "Jain Dinners",
-                      prompt: "What Jain meal options are available for in-room dining?",
-                      icon: UtensilsCrossed,
-                    },
-                    {
-                      label: "Spa Schedule",
-                      prompt: "What are the spa treatment hours and available therapists?",
-                      icon: ConciergeBell,
-                    },
-                  ].map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.label}
-                        onClick={() => handleSend(action.prompt)}
-                        className="flex flex-col items-center gap-1.5 rounded-xl border border-sand-200 p-3 text-center text-xs font-medium text-sand-700 transition hover:border-gold-300 hover:bg-gold-50/40"
-                      >
-                        <Icon className="h-4 w-4 text-gold-600" />
-                        <span>{action.label}</span>
-                      </button>
-                    );
-                  })}
-                </PanelBody>
-              </Panel>
-            </>
-          ) : (
-            <>
-              {/* In-House Guest File (Clarifying Ananya Kapoor is an In-House Guest) */}
+              {/* In-House Guest Profile */}
               <Panel>
                 <PanelBody className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sand-200 text-sm font-semibold text-sand-800">
-                      AK
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sage-800 text-gold-300 font-sans font-bold text-sm shadow-xs">
+                      {guestDetails.room}
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-serif text-lg font-semibold leading-tight text-sand-950">
-                          Ananya Kapoor
+                        <p className="font-serif text-base font-semibold leading-tight text-sand-950">
+                          {guestDetails.name}
                         </p>
-                        <span className="rounded-full border border-gold-200 bg-gold-50 px-2 py-0.5 text-xs font-medium text-gold-800">
-                          Gold Elite
+                        <span className="rounded-full border border-gold-200 bg-gold-50 px-2 py-0.2 text-[10px] font-semibold text-gold-800">
+                          {guestDetails.vip}
                         </span>
                       </div>
-                      <p className="text-xs font-medium text-sage-700">In-House Guest</p>
-                      <p className="text-xs text-sand-500">Mumbai, India · +91 98765 43210</p>
-                      <p className="truncate text-xs text-sand-500">ananya.kapoor@gmail.com</p>
+                      <p className="text-xs text-sand-500 mt-0.5">{guestDetails.roomType}</p>
+                      <p className="text-xs text-sand-500">{guestDetails.phone}</p>
                     </div>
                   </div>
 
-                  <dl className="grid grid-cols-3 gap-3 border-t border-sand-200/80 pt-4 text-sm">
-                    {[
-                      { label: "Room", value: "608", sub: "Executive Sea View" },
-                      { label: "Check-in", value: "18 Nov", sub: "2026" },
-                      { label: "Check-out", value: "21 Nov", sub: "2026" },
-                      { label: "Nights", value: "3", sub: null },
-                      { label: "Total Spend", value: "₹62,700", sub: null },
-                    ].map((item) => (
-                      <div key={item.label}>
-                        <dt className="text-xs text-sand-500">{item.label}</dt>
-                        <dd className="font-medium text-sand-950">{item.value}</dd>
-                        {item.sub && <dd className="text-xs text-sand-500">{item.sub}</dd>}
-                      </div>
-                    ))}
+                  <dl className="grid grid-cols-2 gap-2.5 border-t border-sand-200/80 pt-3 text-xs">
+                    <div>
+                      <dt className="text-sand-400">Check-in</dt>
+                      <dd className="font-medium text-sand-900">{guestDetails.checkIn}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sand-400">Check-out</dt>
+                      <dd className="font-medium text-sand-900">{guestDetails.checkOut}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sand-400">Total Spend</dt>
+                      <dd className="font-medium text-sand-900">{guestDetails.spend}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sand-400">Room Status</dt>
+                      <dd className="font-medium text-emerald-700">Occupied (Clean)</dd>
+                    </div>
                   </dl>
                 </PanelBody>
               </Panel>
 
               {/* Guest Preferences */}
               <Panel>
-                <PanelHeader
-                  title="Guest Stay Preferences"
-                  action={
-                    <button className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900">
-                      Edit
-                    </button>
-                  }
-                />
-                <PanelBody className="pt-4">
-                  <ul className="flex flex-wrap gap-2">
-                    {GUEST_PREFERENCES.map((pref) => (
+                <PanelHeader title="Guest Stay Preferences" />
+                <PanelBody className="pt-3">
+                  <ul className="flex flex-wrap gap-1.5">
+                    {guestDetails.preferences.map((pref) => (
                       <li
                         key={pref}
-                        className="rounded-full border border-sand-200 bg-sand-50/70 px-3 py-1.5 text-xs text-sand-800"
+                        className="rounded-full border border-sand-200 bg-sand-50/70 px-2.5 py-1 text-xs text-sand-800"
                       >
                         {pref}
                       </li>
@@ -736,63 +874,29 @@ export default function GuestChatPage() {
                   </ul>
                 </PanelBody>
               </Panel>
-
+            </>
+          ) : (
+            <>
               {/* Recent Activity */}
               <Panel>
-                <PanelHeader
-                  title="Recent Guest Activity"
-                  action={
-                    <button className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900">
-                      View all
-                    </button>
-                  }
-                />
-                <PanelBody className="pt-4">
-                  <ul className="space-y-2.5">
-                    {GUEST_ACTIVITY.map((item) => (
-                      <li key={item.label} className="flex items-center gap-2.5 text-sm">
+                <PanelHeader title="Recent Activity" />
+                <PanelBody className="pt-3">
+                  <ul className="space-y-2">
+                    {guestDetails.recentActivity.map((act) => (
+                      <li key={act.label} className="flex items-center gap-2 text-xs">
                         <span
                           className={cn(
                             "h-2 w-2 shrink-0 rounded-full",
-                            item.live ? "bg-sage-600" : "bg-sand-300"
+                            act.live ? "bg-amber-500 animate-pulse" : "bg-sand-300"
                           )}
                         />
-                        <span className="min-w-0 flex-1 truncate text-sand-800">{item.label}</span>
-                        <span className="shrink-0 text-xs text-sand-400">{item.time}</span>
+                        <span className="min-w-0 flex-1 truncate text-sand-800">
+                          {act.label}
+                        </span>
+                        <span className="shrink-0 text-sand-400">{act.time}</span>
                       </li>
                     ))}
                   </ul>
-                </PanelBody>
-              </Panel>
-
-              {/* Actions for this guest */}
-              <Panel>
-                <PanelHeader title="Guest Actions" />
-                <PanelBody className="grid grid-cols-2 gap-2 pt-4 sm:grid-cols-4 xl:grid-cols-2">
-                  {[
-                    { label: "Add Note", icon: NotebookPen },
-                    { label: "Create Task", icon: SquareCheck },
-                    { label: "Send Offer", icon: Gift },
-                    { label: "View Profile", icon: UserRound },
-                  ].map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.label}
-                        onClick={() =>
-                          showToast({
-                            title: action.label,
-                            description: `${action.label} for Ananya Kapoor.`,
-                            type: "default",
-                          })
-                        }
-                        className="flex flex-col items-center gap-2 rounded-xl border border-sand-200 px-3 py-4 text-xs font-medium text-sand-700 transition-colors hover:bg-sand-50"
-                      >
-                        <Icon className="h-4 w-4 text-sand-500" />
-                        {action.label}
-                      </button>
-                    );
-                  })}
                 </PanelBody>
               </Panel>
             </>
