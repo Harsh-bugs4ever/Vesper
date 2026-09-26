@@ -1,74 +1,76 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  BookOpen,
+  AlertCircle,
+  AlertTriangle,
   Bot,
-  Clock,
-  ConciergeBell,
-  CornerDownLeft,
-  FileText,
-  MessageSquare,
-  Send,
-  Sparkles,
-  UtensilsCrossed,
-  Waves,
-  Wifi,
-  Wind,
-  X,
   CheckCircle2,
   ChevronRight,
-  ShoppingBag,
+  Clock,
+  FileText,
+  HelpCircle,
+  Loader2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  UserCheck,
+  UtensilsCrossed,
+  Waves,
+  Wind,
+  X,
+  ShieldAlert,
 } from "lucide-react";
 
 import { VesperMark } from "@/components/layout/vesper-mark";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { addGuestRequest } from "@/lib/demo/requests";
 import {
-  getStoredChatThreads,
-  addMessageToRoomThread,
-  subscribeChatThreads,
-  TODAY_MENU_ITEMS,
-  type ChatMessage,
-  type ChatMenuItem,
-  type RoomIssue,
-} from "@/lib/demo/guest-chats";
+  concierge,
+  guestRequests,
+  guestTokens,
+  type ConciergeMessage,
+  type ConciergeSource,
+  type RequestDetail,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
   {
     icon: UtensilsCrossed,
-    label: "What's in the menu?",
-    prompt: "What's in the menu for today?",
+    label: "In-Room Dining",
+    prompt: "What dining and in-room menu options are available today?",
   },
   {
     icon: Waves,
-    label: "Request extra towels",
-    prompt: "Can I get extra bath towels delivered to Room 412?",
+    label: "Extra Towels",
+    prompt: "Can I get extra bath towels delivered to my room?",
   },
   {
     icon: Wind,
-    label: "AC cooling issue",
-    prompt: "My air conditioner isn't cooling properly.",
+    label: "AC / Climate",
+    prompt: "How do I adjust the air conditioning in my room?",
   },
   {
     icon: Clock,
-    label: "Late checkout policy",
-    prompt: "What is the late checkout policy for my room?",
+    label: "Late Checkout",
+    prompt: "What is the checkout time and late checkout policy?",
   },
   {
-    icon: Wifi,
-    label: "Wi-Fi setup",
-    prompt: "What is the guest Wi-Fi network and password?",
-  },
-  {
-    icon: ConciergeBell,
-    label: "Spa & gym hours",
-    prompt: "What are the spa and pool hours today?",
+    icon: Sparkles,
+    label: "Spa & Amenities",
+    prompt: "What are the spa and pool operating hours?",
   },
 ];
+
+const DEPARTMENT_OPTIONS = [
+  { key: "front_office", kind: "other", label: "Front Desk & Concierge", description: "Inquiries, luggage, billing & general requests" },
+  { key: "housekeeping", kind: "housekeeping", label: "Housekeeping", description: "Room cleaning, linens & turn-down service" },
+  { key: "amenities", kind: "amenities", label: "Amenities & Towels", description: "Bath towels, toiletries & dental/shaving kits" },
+  { key: "maintenance", kind: "maintenance", label: "Engineering & Maintenance", description: "AC, lighting, plumbing or appliance issues" },
+  { key: "fnb", kind: "room_service", label: "In-Room Dining Kitchen", description: "Food orders, beverages & tray clearance" },
+] as const;
 
 interface GuestAiConciergeDrawerProps {
   open: boolean;
@@ -80,274 +82,173 @@ interface GuestAiConciergeDrawerProps {
 export function GuestAiConciergeDrawer({
   open,
   onOpenChange,
-  roomNumber = "412",
+  roomNumber,
   onOpenRoomService,
 }: GuestAiConciergeDrawerProps) {
   const { showToast } = useToast();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ConciergeMessage[]>([]);
   const [input, setInput] = useState("");
-  const [thinking, setThinking] = useState(false);
+  const [failedInput, setFailedInput] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Human Assistance Modal / Sheet state
+  const [isAssistanceOpen, setIsAssistanceOpen] = useState(false);
+  const [assistanceKind, setAssistanceKind] = useState<string>("other");
+  const [assistanceNote, setAssistanceNote] = useState("");
+  const [isSubmittingAssistance, setIsSubmittingAssistance] = useState(false);
+  const [assistanceError, setAssistanceError] = useState<string | null>(null);
+
+  // Persisted active requests for progress tracking
+  const [activeRequests, setActiveRequests] = useState<RequestDetail[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync messages from stored thread for this room
-  useEffect(() => {
-    const sync = () => {
-      const threads = getStoredChatThreads();
-      const thread = threads.find((t) => t.room === roomNumber);
-      if (thread && thread.messages) {
-        setMessages(thread.messages);
-      }
-    };
-    sync();
-    const unsub = subscribeChatThreads(sync);
-    return unsub;
-  }, [roomNumber]);
+  const hasGuestToken = Boolean(guestTokens.access());
 
-  // Auto-scroll to bottom of chat
+  // Load conversation history from backend
+  const loadHistory = useCallback(async () => {
+    if (!guestTokens.access()) return;
+    setIsLoadingHistory(true);
+    setErrorMessage(null);
+    try {
+      const history = await concierge.history();
+      setMessages(history);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load conversation history.";
+      setErrorMessage(msg);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  // Load active guest requests from backend
+  const loadActiveRequests = useCallback(async () => {
+    if (!guestTokens.access()) return;
+    setIsLoadingRequests(true);
+    try {
+      const reqs = await guestRequests.list();
+      setActiveRequests(reqs);
+    } catch {
+      // Non-blocking for concierge chat
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && hasGuestToken) {
+      void loadHistory();
+      void loadActiveRequests();
+    }
+  }, [open, hasGuestToken, loadHistory, loadActiveRequests]);
+
+  // Auto-scroll when messages update or in-flight state changes
   useEffect(() => {
     if (open) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         scrollRef.current?.scrollTo({
           top: scrollRef.current.scrollHeight,
           behavior: "smooth",
         });
         inputRef.current?.focus();
-      }, 100);
+      }, 80);
+      return () => clearTimeout(timer);
     }
-  }, [open, messages, thinking]);
+  }, [open, messages, isAsking]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  // Send message to AI Concierge API
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend ?? input).trim();
-    if (!text || thinking) return;
+    if (!text || isAsking) return;
 
-    const timeStr = new Date().toLocaleTimeString("en-IN", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    if (!hasGuestToken) {
+      showToast({
+        title: "Guest Session Required",
+        description: "Please scan your room QR code to activate concierge assistance.",
+        type: "default",
+      });
+      return;
+    }
 
-    const guestMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      from: "guest",
-      senderName: `Guest (Room ${roomNumber})`,
-      text,
-      time: timeStr,
-      type: "text",
-    };
+    setErrorMessage(null);
+    setFailedInput(null);
+    if (!textToSend) {
+      setInput("");
+    }
+    setIsAsking(true);
 
-    // Save and render guest message
-    addMessageToRoomThread(roomNumber, guestMessage, "active");
-    if (!textToSend) setInput("");
-    setThinking(true);
-
-    // AI Concierge reasoning & response logic
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      let aiText = "";
-      let sources: string[] = ["Hotel Knowledge Base"];
-      let type: "text" | "menu" | "request_dispatched" = "text";
-      let menuItems: ChatMenuItem[] | undefined = undefined;
-      let dispatchedRequestId: string | undefined = undefined;
-      let dispatchedType: string | undefined = undefined;
-      let updatedIssue: Partial<RoomIssue> | undefined = undefined;
-
-      // 1. Food & Menu queries
-      if (
-        lower.includes("menu") ||
-        lower.includes("food") ||
-        lower.includes("eat") ||
-        lower.includes("dining") ||
-        lower.includes("dinner") ||
-        lower.includes("lunch") ||
-        lower.includes("breakfast") ||
-        lower.includes("dish") ||
-        lower.includes("order")
-      ) {
-        aiText =
-          "Here is our Chef's In-Room Dining Menu for today at Vesper Beach Resort. Everything is prepared fresh in our kitchen:";
-        sources = ["In-Room Dining Menu", "F&B Operations", "The Verandah Kitchen"];
-        type = "menu";
-        menuItems = TODAY_MENU_ITEMS;
-        updatedIssue = {
-          title: "In-room dining menu for the day inquired",
-          description: "Guest requested and viewed today's in-room dining menu via AI Concierge.",
-          category: "F&B",
-          severity: "standard",
-          status: "in_progress",
-          reportedAt: timeStr,
-          slaMinutes: 15,
-          aiActionTaken: "AI Concierge presented today's featured dining menu.",
-          assignedTeam: "In-Room Dining Kitchen",
-        };
+    try {
+      const response = await concierge.ask(text);
+      setMessages((prev) => [...prev, response]);
+      // If escalated, automatically reload requests to reflect any linked actions
+      if (response.escalated) {
+        void loadActiveRequests();
       }
-      // 2. Towels & Housekeeping requests
-      else if (
-        lower.includes("towel") ||
-        lower.includes("linen") ||
-        lower.includes("pillow") ||
-        lower.includes("bedsheet") ||
-        lower.includes("cleaning") ||
-        lower.includes("housekeeping")
-      ) {
-        const req = addGuestRequest({
-          room: roomNumber,
-          guest: "In-Room Guest",
-          channel: "Housekeeping",
-          summary: lower.includes("pillow")
-            ? "Extra Pillows via AI Concierge"
-            : "Fresh Bath Towels via AI Concierge",
-          detail: `Automated request placed via Guest AI Concierge from Room ${roomNumber}. Prompt: "${text}"`,
-          sla: 15,
-          state: "new",
-        });
-
-        dispatchedRequestId = req.id;
-        dispatchedType = "Housekeeping";
-        type = "request_dispatched";
-        aiText = `I have dispatched a request for fresh towels to our Floor Attendant (Ticket #${req.id}). Delivery to Room ${roomNumber} will arrive within 15 minutes.`;
-        sources = ["Housekeeping Dispatch", "SLA Guidelines"];
-        updatedIssue = {
-          title: lower.includes("pillow")
-            ? "Extra Pillows requested via AI Concierge"
-            : "Fresh Bath Towels requested via AI Concierge",
-          description: `Guest requested amenities: "${text}".`,
-          category: "Housekeeping",
-          severity: "standard",
-          status: "open",
-          ticketId: req.id,
-          reportedAt: timeStr,
-          slaMinutes: 15,
-          aiActionTaken: `AI Concierge dispatched Floor Attendant (Ticket #${req.id}).`,
-          assignedTeam: "Housekeeping (Floor Attendant)",
-        };
-
-        showToast({
-          title: "Housekeeping Dispatched",
-          description: `Ticket #${req.id} created for Room ${roomNumber}.`,
-          type: "success",
-        });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not reach the AI Concierge service.";
+      setErrorMessage(msg);
+      // Preserve unsent text for retry
+      setFailedInput(text);
+      if (!textToSend) {
+        setInput(text);
       }
-      // 3. Maintenance / Problems (AC, water, TV, etc.)
-      else if (
-        lower.includes("ac") ||
-        lower.includes("air condition") ||
-        lower.includes("cooling") ||
-        lower.includes("hot") ||
-        lower.includes("leak") ||
-        lower.includes("water") ||
-        lower.includes("tv") ||
-        lower.includes("broken") ||
-        lower.includes("fix") ||
-        lower.includes("not working") ||
-        lower.includes("problem") ||
-        lower.includes("issue")
-      ) {
-        const req = addGuestRequest({
-          room: roomNumber,
-          guest: "In-Room Guest",
-          channel: "Maintenance",
-          summary: lower.includes("ac") || lower.includes("cooling")
-            ? "AC Cooling Issue (AI Concierge)"
-            : "Room Maintenance Alert (AI Concierge)",
-          detail: `Guest reported: "${text}". Immediate engineering attention required.`,
-          sla: 20,
-          state: "new",
-        });
+    } finally {
+      setIsAsking(false);
+    }
+  };
 
-        dispatchedRequestId = req.id;
-        dispatchedType = "Engineering";
-        type = "request_dispatched";
-        aiText = `I am very sorry for the inconvenience! I have alerted our Duty Engineering Team right away (Ticket #${req.id}). A technician is on their way to inspect Room ${roomNumber} within 20 minutes.`;
-        sources = ["Maintenance Operations", "Duty Manager Alert"];
-        updatedIssue = {
-          title: "Air conditioner isn't cooling properly",
-          description: `Guest reported: "${text}". Immediate engineering attention required.`,
-          category: "Maintenance",
-          severity: "urgent",
-          status: "open",
-          ticketId: req.id,
-          reportedAt: timeStr,
-          slaMinutes: 20,
-          aiActionTaken: `AI Concierge logged Ticket #${req.id} and dispatched Duty Engineering.`,
-          assignedTeam: "Duty Engineering Technician (Ramesh Patil)",
-        };
+  // Submit Request for Human Assistance to persisted /guest/requests
+  const handleRequestHumanAssistance = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!hasGuestToken) {
+      setAssistanceError("Guest session required. Please scan your room QR code.");
+      return;
+    }
 
-        showToast({
-          title: "Engineering Dispatched",
-          description: `Ticket #${req.id} prioritized for Room ${roomNumber}.`,
-          type: "warning",
-        });
-      }
-      // 4. Late checkout
-      else if (
-        lower.includes("checkout") ||
-        lower.includes("check-out") ||
-        lower.includes("check out") ||
-        lower.includes("extend") ||
-        lower.includes("late")
-      ) {
-        aiText =
-          "Standard checkout is at 11:00 AM. For our guests in Room 412, complimentary late checkout is extended until 2:00 PM today! If you need keycard extension, I have already notified the Front Desk team.";
-        sources = ["Late Checkout Policy", "Front Desk SOP"];
-      }
-      // 5. Wi-Fi
-      else if (
-        lower.includes("wifi") ||
-        lower.includes("wi-fi") ||
-        lower.includes("internet") ||
-        lower.includes("password")
-      ) {
-        aiText =
-          "Property-wide high-speed Wi-Fi is complimentary. Connect to network: 'Vesper_Guest', enter Room Number '412', and use last name 'Guest'. Speed is unthrottled up to 200 Mbps.";
-        sources = ["IT Infrastructure", "Guest Guide"];
-      }
-      // 6. Spa & Pool
-      else if (
-        lower.includes("spa") ||
-        lower.includes("massage") ||
-        lower.includes("gym") ||
-        lower.includes("pool") ||
-        lower.includes("wellness")
-      ) {
-        aiText =
-          "Vesper Wellness Spa & Gym is located on Level 3. The infinity pool and fitness studio are open 6:00 AM – 10:00 PM. Ayurvedic massages and signature spa therapies are available 8:00 AM – 9:00 PM.";
-        sources = ["Spa Directory", "Wellness Services"];
-      }
-      // 7. General fallback
-      else {
-        aiText = `Thank you for reaching out! I've noted: "${text}". Our Front Desk and Concierge team are always available to make your stay effortless. Would you like me to request anything specific for Room ${roomNumber}?`;
-        sources = ["Front Desk", "Hotel Knowledge Base"];
-      }
+    setIsSubmittingAssistance(true);
+    setAssistanceError(null);
 
-      const aiMessage: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        from: "ai",
-        senderName: "Vesper AI Concierge",
-        text: aiText,
-        time: new Date().toLocaleTimeString("en-IN", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-        sources,
-        type,
-        menuItems,
-        dispatchedRequestId,
-        dispatchedType,
-      };
+    try {
+      const created = await guestRequests.create({
+        kind: assistanceKind,
+        note: assistanceNote.trim() || undefined,
+      });
 
-      addMessageToRoomThread(roomNumber, aiMessage, "active", updatedIssue);
-      setThinking(false);
-    }, 850);
+      showToast({
+        title: "Assistance Requested",
+        description: `Request #${created.id.slice(0, 8)} dispatched. Expected SLA: ${created.sla_minutes} min.`,
+        type: "success",
+      });
+
+      setIsAssistanceOpen(false);
+      setAssistanceNote("");
+      void loadActiveRequests();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to dispatch request to department.";
+      setAssistanceError(msg);
+    } finally {
+      setIsSubmittingAssistance(false);
+    }
+  };
+
+  const openAssistanceWithContext = (prefill?: string, defaultKind?: string) => {
+    if (prefill) setAssistanceNote(prefill);
+    if (defaultKind) setAssistanceKind(defaultKind);
+    setIsAssistanceOpen(true);
   };
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-sand-950/40 backdrop-blur-xs transition-opacity animate-in fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-300 data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
         <Dialog.Content
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-sand-200 bg-sand-50 shadow-2xl transition-all animate-in slide-in-from-right duration-300",
-            "sm:max-w-lg"
+            "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-full flex-col bg-sand-50/95 shadow-2xl backdrop-blur-md transition duration-300 ease-out sm:max-w-lg",
+            "border-l border-sand-200/80 data-[state=closed]:translate-x-full data-[state=open]:translate-x-0"
           )}
         >
           {/* Header */}
@@ -365,28 +266,102 @@ export function GuestAiConciergeDrawer({
                   <Dialog.Title className="font-serif text-lg font-semibold leading-tight text-sand-950">
                     Vesper AI Concierge
                   </Dialog.Title>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                    Room {roomNumber}
-                  </span>
+                  {roomNumber && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                      Room {roomNumber}
+                    </span>
+                  )}
                 </div>
                 <Dialog.Description className="text-xs text-sand-500">
-                  Instant service, dining menu & room assistance
+                  Direct answers from verified hotel knowledge
                 </Dialog.Description>
               </div>
             </div>
 
-            <Dialog.Close
-              className="rounded-lg p-1.5 text-sand-400 transition-colors hover:bg-sand-100 hover:text-sand-800"
-              aria-label="Close Concierge"
-            >
-              <X className="h-5 w-5" />
-            </Dialog.Close>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openAssistanceWithContext()}
+                className="h-8 gap-1.5 border-sand-300 px-2.5 text-xs text-sand-800 hover:bg-sand-100"
+                title="Request human staff assistance"
+              >
+                <UserCheck className="h-3.5 w-3.5 text-gold-600" />
+                <span className="hidden sm:inline">Human Help</span>
+              </Button>
+              <Dialog.Close
+                className="rounded-lg p-1.5 text-sand-400 transition-colors hover:bg-sand-100 hover:text-sand-800"
+                aria-label="Close Concierge"
+              >
+                <X className="h-5 w-5" />
+              </Dialog.Close>
+            </div>
           </div>
 
+          {/* Guest Session Guard */}
+          {!hasGuestToken && (
+            <div className="border-b border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-semibold">Guest Stay Session Required</p>
+                  <p className="mt-0.5 text-amber-800">
+                    Please scan the QR code located on your nightstand to unlock live AI Concierge answers and human assistance dispatch.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active Requests Progress Tracker (if any exist) */}
+          {activeRequests.length > 0 && (
+            <div className="border-b border-sand-200/60 bg-sand-100/60 px-4 py-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-sand-700">
+                <span>Active Service Requests ({activeRequests.length})</span>
+                <button
+                  type="button"
+                  onClick={() => void loadActiveRequests()}
+                  className="flex items-center gap-1 text-[10px] text-sand-500 hover:text-sand-800"
+                >
+                  <RefreshCw className={cn("h-3 w-3", isLoadingRequests && "animate-spin")} />
+                  Refresh
+                </button>
+              </div>
+              <div className="mt-1.5 space-y-1.5">
+                {activeRequests.slice(0, 2).map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between rounded-lg border border-sand-200 bg-white px-2.5 py-1.5 text-xs shadow-3xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium capitalize text-sand-900">
+                        {req.kind.replaceAll("_", " ")}
+                      </p>
+                      {req.note && <p className="truncate text-[10px] text-sand-500">{req.note}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+                          req.status === "delivered" && "bg-emerald-50 text-emerald-800 border border-emerald-200",
+                          req.status === "in_progress" && "bg-blue-50 text-blue-800 border border-blue-200",
+                          req.status === "accepted" && "bg-gold-50 text-gold-800 border border-gold-200",
+                          req.status === "raised" && "bg-sand-100 text-sand-700 border border-sand-200"
+                        )}
+                      >
+                        {req.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Quick Prompts Bar */}
-          <div className="border-b border-sand-200/60 bg-white/70 px-4 py-2.5">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sand-400">
-              Quick Inquiries & Requests
+          <div className="border-b border-sand-200/60 bg-white/70 px-4 py-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sand-400">
+              Verified Knowledge Prompts
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               {QUICK_PROMPTS.map((item) => {
@@ -395,7 +370,8 @@ export function GuestAiConciergeDrawer({
                   <button
                     key={item.label}
                     onClick={() => handleSendMessage(item.prompt)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-sand-200 bg-white px-3 py-1 text-xs font-medium text-sand-700 transition hover:border-gold-400 hover:bg-gold-50/60 hover:text-sand-950 shadow-3xs"
+                    disabled={isAsking || !hasGuestToken}
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-sand-200 bg-white px-3 py-1 text-xs font-medium text-sand-700 transition hover:border-gold-400 hover:bg-gold-50/60 hover:text-sand-950 disabled:opacity-50 shadow-3xs"
                   >
                     <Icon className="h-3 w-3 text-gold-600" />
                     <span>{item.label}</span>
@@ -406,194 +382,197 @@ export function GuestAiConciergeDrawer({
           </div>
 
           {/* Chat Messages */}
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs"
-          >
-            {messages.map((message) => {
-              const isGuest = message.from === "guest";
-              const isStaff = message.from === "staff";
+          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
+            {isLoadingHistory && (
+              <div className="flex items-center justify-center py-8 text-sand-500 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-gold-600" />
+                <span>Loading stay conversation history…</span>
+              </div>
+            )}
 
-              if (isGuest) {
-                return (
-                  <div key={message.id} className="flex justify-end">
+            {!isLoadingHistory && messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-sand-300 bg-white/50 p-8 text-center text-sand-500">
+                <Bot className="h-8 w-8 text-gold-600 opacity-60 mb-2" />
+                <p className="font-medium text-sand-800">Welcome to your AI Concierge</p>
+                <p className="mt-1 text-xs max-w-xs text-sand-500">
+                  Ask any question about hotel amenities, dining, checkout policies or request staff assistance.
+                </p>
+              </div>
+            )}
+
+            {messages.map((message) => {
+              const formattedTime = new Date(message.created_at).toLocaleTimeString("en-IN", {
+                hour: "numeric",
+                minute: "2-digit",
+              });
+
+              return (
+                <div key={message.id} className="space-y-3">
+                  {/* Guest Question */}
+                  <div className="flex justify-end">
                     <div className="max-w-[85%] space-y-1">
                       <div className="rounded-2xl rounded-tr-xs bg-sage-800 px-4 py-3 text-white shadow-xs">
-                        <p className="text-sm leading-relaxed">{message.text}</p>
+                        <p className="text-sm leading-relaxed">{message.question}</p>
                       </div>
-                      <p className="text-right text-[10px] text-sand-400">
-                        {message.time}
-                      </p>
+                      <p className="text-right text-[10px] text-sand-400">{formattedTime}</p>
                     </div>
                   </div>
-                );
-              }
 
-              if (isStaff) {
-                return (
-                  <div key={message.id} className="flex items-start gap-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sand-200 text-xs font-semibold text-sand-800">
-                      GM
+                  {/* AI Response */}
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-300 bg-gold-100/70 text-gold-700 shadow-2xs">
+                      <VesperMark className="h-4 w-4" />
                     </span>
-                    <div className="max-w-[88%] space-y-1.5">
-                      <div className="rounded-2xl rounded-tl-xs border border-gold-200/80 bg-gold-50/80 px-4 py-3 text-sand-950 shadow-xs">
-                        <div className="mb-1 flex items-center gap-1.5">
-                          <span className="font-semibold text-xs text-gold-900">
-                            {message.senderName || "Arjun Mehta"}
-                          </span>
-                          <span className="rounded bg-gold-200/70 px-1.5 py-0.2 text-[9px] font-semibold text-gold-800 uppercase">
-                            {message.senderRole || "General Manager"}
-                          </span>
-                        </div>
-                        <p className="text-sm leading-relaxed">{message.text}</p>
-                      </div>
-                      <p className="text-[10px] text-sand-400">{message.time}</p>
-                    </div>
-                  </div>
-                );
-              }
-
-              // AI Message
-              return (
-                <div key={message.id} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-300 bg-gold-100/70 text-gold-700 shadow-2xs">
-                    <VesperMark className="h-4 w-4" />
-                  </span>
-                  <div className="max-w-[88%] space-y-2">
-                    <div className="rounded-2xl rounded-tl-xs border border-sand-200 bg-white p-4 shadow-xs">
-                      <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-sand-100 pb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-serif font-semibold text-sand-950">
-                            Vesper AI Concierge
-                          </span>
-                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 uppercase border border-emerald-200">
-                            Autonomous
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-sand-400">
-                          {message.time}
-                        </span>
-                      </div>
-
-                      <p className="text-sm leading-relaxed text-sand-900">
-                        {message.text}
-                      </p>
-
-                      {/* When message contains the today's menu */}
-                      {message.type === "menu" && message.menuItems && (
-                        <div className="mt-3.5 space-y-2.5 border-t border-sand-200/70 pt-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-gold-800">
-                              Today&apos;s Featured Menu
+                    <div className="max-w-[88%] space-y-2">
+                      <div className="rounded-2xl rounded-tl-xs border border-sand-200 bg-white p-4 shadow-xs">
+                        <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-sand-100 pb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-serif font-semibold text-sand-950">
+                              Vesper AI Concierge
                             </span>
-                            <span className="text-[11px] font-medium text-sand-500">
-                              In-Room Dining
-                            </span>
-                          </div>
-
-                          <div className="space-y-2">
-                            {message.menuItems.map((item) => (
-                              <div
-                                key={item.id}
-                                className="group relative rounded-xl border border-sand-200/90 bg-sand-50/60 p-2.5 transition hover:border-gold-300 hover:bg-white hover:shadow-xs"
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <p className="font-medium text-xs text-sand-950">
-                                        {item.name}
-                                      </p>
-                                      {item.tag && (
-                                        <span
-                                          className={cn(
-                                            "rounded px-1.5 py-0.2 text-[9px] font-semibold",
-                                            item.veg
-                                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                              : "bg-amber-50 text-amber-800 border border-amber-200"
-                                          )}
-                                        >
-                                          {item.tag}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="mt-0.5 line-clamp-2 text-[11px] text-sand-500">
-                                      {item.desc}
-                                    </p>
-                                  </div>
-                                  <span className="shrink-0 font-sans font-semibold text-xs text-sand-900 tabular-nums">
-                                    ₹{item.price}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {onOpenRoomService && (
-                            <button
-                              onClick={() => {
-                                onOpenChange(false);
-                                onOpenRoomService();
-                              }}
-                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-sage-800 py-2.5 text-xs font-semibold text-white shadow-soft transition hover:bg-sage-900"
+                            {message.model && (
+                              <span className="rounded bg-sand-100 px-1.5 py-0.5 text-[9px] font-mono text-sand-600">
+                                {message.model}
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase border",
+                                message.outcome === "answered"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-amber-50 text-amber-800 border-amber-200"
+                              )}
                             >
-                              <ShoppingBag className="h-4 w-4 text-gold-300" />
-                              <span>Order from In-Room Dining</span>
-                              <ChevronRight className="h-3.5 w-3.5 opacity-80" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Dispatched request banner */}
-                      {message.type === "request_dispatched" && (
-                        <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-xs">
-                          <div className="flex items-center gap-2 text-emerald-900 font-medium">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                            <span>
-                              {message.dispatchedType || "Service"} Ticket Dispatched
+                              {message.outcome}
                             </span>
                           </div>
-                          <span className="font-mono text-[10px] font-bold text-emerald-800">
-                            {message.dispatchedRequestId}
-                          </span>
+                          <span className="text-[10px] text-sand-400">{formattedTime}</span>
+                        </div>
+
+                        {/* Real Backend Answer */}
+                        <p className="text-sm leading-relaxed text-sand-900 whitespace-pre-wrap">
+                          {message.answer}
+                        </p>
+
+                        {/* Escalation or Human Dispatch Recommendation */}
+                        {message.escalated && (
+                          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
+                            <div className="flex items-start gap-2">
+                              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                              <div className="flex-1">
+                                <p className="font-semibold text-amber-950">
+                                  Escalated to Staff Support
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-amber-800">
+                                  {message.escalation_reason === "no_matching_knowledge"
+                                    ? "Information not in resort knowledge base. Ready to forward to department staff."
+                                    : message.escalation_reason === "model_unavailable"
+                                    ? "AI service is currently offline. A human attendant is ready to assist."
+                                    : message.escalation_reason === "rate_limited"
+                                    ? "Request threshold reached. Please connect with the front desk."
+                                    : "This inquiry requires human attention."}
+                                </p>
+                                {message.handled_at ? (
+                                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-emerald-800">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                    <span>
+                                      Handled by Front Desk at{" "}
+                                      {new Date(message.handled_at).toLocaleTimeString("en-IN", {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openAssistanceWithContext(
+                                        `Follow-up regarding inquiry: "${message.question}"`
+                                      )
+                                    }
+                                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-amber-900"
+                                  >
+                                    <UserCheck className="h-3.5 w-3.5" />
+                                    <span>Request Human Assistance Now</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Real Sources Citation */}
+                      {message.sources && message.sources.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-sand-400">Verified Sources:</span>
+                          {message.sources.map((src, i) => {
+                            const title =
+                              typeof src === "string"
+                                ? src
+                                : (src as ConciergeSource).title || (src as ConciergeSource).category || `Passage #${(src as ConciergeSource).id?.slice(0, 6)}`;
+                            return (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 rounded border border-sand-200 bg-sand-100/70 px-1.5 py-0.5 text-[10px] text-sand-600"
+                              >
+                                <FileText className="h-2.5 w-2.5 text-sand-400" />
+                                {title}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-
-                    {message.sources && message.sources.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] text-sand-400">Sources:</span>
-                        {message.sources.map((src) => (
-                          <span
-                            key={src}
-                            className="inline-flex items-center gap-1 rounded border border-sand-200 bg-sand-100/70 px-1.5 py-0.5 text-[10px] text-sand-600"
-                          >
-                            <FileText className="h-2.5 w-2.5 text-sand-400" />
-                            {src}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })}
 
-            {thinking && (
+            {/* In-Flight Pending State (Actual API Call Pending) */}
+            {isAsking && (
               <div className="flex items-start gap-2.5">
                 <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-300 bg-gold-100/70 text-gold-700">
                   <VesperMark className="h-4 w-4" />
                 </span>
                 <div className="flex items-center gap-2 rounded-2xl rounded-tl-xs border border-sand-200 bg-white px-4 py-3 shadow-xs">
-                  <span className="text-xs text-sand-500">Checking hotel menu & services</span>
-                  <div className="flex items-center gap-1">
-                    {[0, 1, 2].map((dot) => (
-                      <span
-                        key={dot}
-                        className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-600"
-                        style={{ animationDelay: `${dot * 180}ms` }}
-                      />
-                    ))}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-gold-600" />
+                  <span className="text-xs text-sand-600">Retrieving resort knowledge base…</span>
+                </div>
+              </div>
+            )}
+
+            {/* Error & Retry Banner */}
+            {errorMessage && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-rose-950">Inquiry Could Not Be Processed</p>
+                    <p className="mt-0.5 text-rose-800">{errorMessage}</p>
+                    {failedInput && (
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendMessage(failedInput)}
+                          className="h-7 border-rose-300 bg-white px-2.5 text-xs text-rose-900 hover:bg-rose-100"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Retry Inquiry
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAssistanceWithContext(failedInput)}
+                          className="h-7 border-rose-300 bg-white px-2.5 text-xs text-rose-900 hover:bg-rose-100"
+                        >
+                          <UserCheck className="h-3 w-3 mr-1" />
+                          Send to Human Staff
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -605,7 +584,7 @@ export function GuestAiConciergeDrawer({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleSendMessage();
+                void handleSendMessage();
               }}
               className="flex items-center gap-2"
             >
@@ -615,24 +594,155 @@ export function GuestAiConciergeDrawer({
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask a question or request (e.g. What's in the menu?)..."
-                  className="w-full rounded-xl border border-sand-300/80 bg-sand-50/70 px-4 py-2.5 text-xs text-sand-950 placeholder:text-sand-400 focus:border-gold-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-gold-500/20 sm:text-sm"
+                  disabled={isAsking || !hasGuestToken}
+                  placeholder={
+                    hasGuestToken
+                      ? "Ask a question (e.g. late checkout policy, spa hours)…"
+                      : "Scan room QR code to activate concierge…"
+                  }
+                  className="w-full rounded-xl border border-sand-300/80 bg-sand-50/70 px-4 py-2.5 text-xs text-sand-950 placeholder:text-sand-400 focus:border-gold-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-gold-500/20 disabled:opacity-50 sm:text-sm"
                 />
               </div>
               <button
                 type="submit"
-                disabled={!input.trim() || thinking}
+                disabled={!input.trim() || isAsking || !hasGuestToken}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sage-800 text-white shadow-soft transition hover:bg-sage-900 disabled:opacity-40 disabled:hover:bg-sage-800"
                 aria-label="Send Message"
               >
-                <Send className="h-4 w-4" />
+                {isAsking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </form>
+
             <div className="mt-2 flex items-center justify-between text-[11px] text-sand-400">
-              <span>Powered by Vesper Autonomous Hospitality Engine</span>
-              <span>Available 24/7</span>
+              <span className="flex items-center gap-1">
+                <Bot className="h-3 w-3 text-gold-600" />
+                Live Retrieval Concierge
+              </span>
+              <button
+                type="button"
+                onClick={() => openAssistanceWithContext()}
+                className="text-sage-700 hover:text-sage-950 hover:underline font-medium"
+              >
+                Request Human Assistance
+              </button>
             </div>
           </div>
+
+          {/* Human Assistance Dialog */}
+          {isAssistanceOpen && (
+            <div className="absolute inset-0 z-60 flex flex-col bg-white">
+              <div className="flex items-center justify-between border-b border-sand-200 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-gold-600" />
+                  <div>
+                    <h3 className="font-serif text-lg font-semibold text-sand-950">
+                      Request Human Assistance
+                    </h3>
+                    <p className="text-xs text-sand-500">
+                      Dispatches a persisted service request to department attendants
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAssistanceOpen(false)}
+                  className="rounded-lg p-1.5 text-sand-400 hover:bg-sand-100 hover:text-sand-800"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleRequestHumanAssistance} className="flex-1 overflow-y-auto p-5 space-y-4">
+                {assistanceError && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                    {assistanceError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-sand-700 uppercase tracking-wider mb-2">
+                    Department Service
+                  </label>
+                  <div className="space-y-2">
+                    {DEPARTMENT_OPTIONS.map((dept) => (
+                      <label
+                        key={dept.key}
+                        className={cn(
+                          "flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition",
+                          assistanceKind === dept.kind
+                            ? "border-gold-500 bg-gold-50/50 shadow-xs"
+                            : "border-sand-200 hover:border-sand-300 bg-white"
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="assistanceKind"
+                          value={dept.kind}
+                          checked={assistanceKind === dept.kind}
+                          onChange={(e) => setAssistanceKind(e.target.value)}
+                          className="mt-0.5 text-gold-600 focus:ring-gold-500"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-xs text-sand-950">{dept.label}</p>
+                          <p className="text-[11px] text-sand-500">{dept.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="assistance-notes" className="block text-xs font-semibold text-sand-700 uppercase tracking-wider mb-1.5">
+                    Request Notes / Specific Requirements
+                  </label>
+                  <textarea
+                    id="assistance-notes"
+                    value={assistanceNote}
+                    onChange={(e) => setAssistanceNote(e.target.value)}
+                    rows={4}
+                    maxLength={500}
+                    placeholder="Describe what you need assistance with..."
+                    className="w-full rounded-xl border border-sand-300 p-3 text-xs text-sand-950 placeholder:text-sand-400 focus:border-gold-500 focus:outline-hidden focus:ring-2 focus:ring-gold-500/20"
+                  />
+                  <p className="mt-1 text-right text-[10px] text-sand-400">
+                    {assistanceNote.length}/500
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-sand-200 bg-sand-50/80 p-3 text-xs text-sand-600">
+                  <p className="font-medium text-sand-800">Persisted Ticket Tracking</p>
+                  <p className="mt-0.5 text-[11px]">
+                    Submitting this form immediately routes a ticket into the department manager and floor staff queue with live SLA monitoring.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsAssistanceOpen(false)}
+                    disabled={isSubmittingAssistance}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSubmittingAssistance}
+                    className="bg-sage-800 text-white hover:bg-sage-900"
+                  >
+                    {isSubmittingAssistance ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                        Dispatching…
+                      </>
+                    ) : (
+                      "Dispatch Request"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
