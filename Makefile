@@ -8,7 +8,8 @@ PY := python
 # Opening a new terminal window. Both halves are started this way by `make dev`.
 # Paths inside are relative on purpose: Start-Process gives the new window the
 # working directory it was launched from, which is this directory.
-NEW_WINDOW = powershell -NoProfile -Command "Start-Process powershell -ArgumentList '-NoExit','-NoProfile','-Command',
+POWERSHELL ?= $(shell which powershell.exe 2>/dev/null || which /c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe 2>/dev/null || echo powershell.exe)
+NEW_WINDOW = $(POWERSHELL) -NoProfile -Command "Start-Process powershell.exe -ArgumentList '-NoExit','-NoProfile','-Command',
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \

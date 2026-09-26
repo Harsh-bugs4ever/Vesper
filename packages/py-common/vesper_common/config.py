@@ -54,7 +54,9 @@ class Settings(BaseSettings):
     # Shadow mode lets every executor preview without touching the world.
     shadow_mode_default: bool = False
 
-    cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://localhost:3002"
+    )
 
     # Where each context is reachable. Inside the application these are not used at
     # all: app/transport.py points every ServiceClient in-process, so an internal call
