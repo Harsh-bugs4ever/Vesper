@@ -26,6 +26,7 @@ import {
   Network,
   PackageCheck,
   QrCode,
+  Shield,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -33,10 +34,13 @@ import {
   Undo2,
   Users,
   Utensils,
+  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { landingImages } from "@/lib/landing-images";
+import { RoomCategoryGallery } from "@/components/property/room-category-gallery";
+import { GuestAmenitiesSection } from "@/components/guest/guest-amenities-section";
 
 const focus =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-4 focus-visible:ring-offset-sage-950";
@@ -44,6 +48,9 @@ const button = `inline-flex min-h-12 items-center justify-center gap-3 rounded-f
 const links = [
   { id: "tour", label: "Tour" },
   { id: "how-it-works", label: "How it works" },
+  { id: "rooms", label: "Rooms" },
+  { id: "amenities", label: "Amenities" },
+  { id: "about", label: "About" },
 ];
 
 type Scene = {
@@ -103,14 +110,15 @@ const scenes: Scene[] = [
   },
   {
     title: "Behind every plate, a little foresight.",
-    module: "Inventory",
+    module: "Inventory & Purchasing",
     description:
       "Stock adjusts as orders are served, keeping the kitchen one step ahead.",
-    detail: "When supplies run low, a purchase suggestion is ready for review.",
+    detail:
+      "When supplies run low, automated reorder suggestions route directly to the responsible department manager for routine approval, while general managers retain executive spending oversight.",
     points: [
       { icon: PackageCheck, text: "Automatic stock deductions" },
-      { icon: BellRing, text: "Low-stock signals" },
-      { icon: ShieldCheck, text: "Purchasing stays in your hands" },
+      { icon: BellRing, text: "Low-stock reorder triggers" },
+      { icon: ShieldCheck, text: "Dept manager approves routine purchasing" },
     ],
   },
   {
@@ -143,7 +151,7 @@ const flow = [
   { icon: Smartphone, label: "Staff delivers" },
   { icon: PackageCheck, label: "Inventory deducts" },
   { icon: Sparkles, label: "AI action card" },
-  { icon: ShieldCheck, label: "GM approves" },
+  { icon: ShieldCheck, label: "Dept manager approves" },
 ];
 function SceneImage({ index }: { index: number }) {
   const [failed, setFailed] = useState(false);
@@ -486,7 +494,7 @@ export default function LandingPage() {
                         <p className="mt-6 text-[11px] leading-relaxed tracking-wide text-white/90">
                           JW Marriott Mumbai, Juhu{" "}
                           <span className="mx-2 text-gold-300">/</span> Academic
-                          project · Simulated data
+                          prototype · Smart Resort 360
                         </p>
                       </>
                     ) : (
@@ -581,6 +589,126 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* Rooms and Suites Showcase */}
+          <RoomCategoryGallery />
+
+          {/* Guest Amenities Section */}
+          <GuestAmenitiesSection />
+
+          {/* Working About Section with Verified Department-Based Workflow Facts */}
+          <section
+            id="about"
+            tabIndex={-1}
+            aria-labelledby="about-heading"
+            className="scroll-mt-20 border-t border-sand-200 bg-white px-6 py-20 outline-none sm:px-10 lg:px-16"
+          >
+            <div className="mx-auto max-w-7xl">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-gold-800">
+                  Resort Architecture &amp; Operations
+                </p>
+                <h2 id="about-heading" className="mt-3 font-serif text-3xl sm:text-4xl lg:text-5xl text-sage-950">
+                  About Vesper.
+                </h2>
+                <p className="mt-4 max-w-3xl text-base leading-relaxed text-sage-700">
+                  Vesper is an academic <em>Smart Resort 360</em> operational prototype engineered to unify hotel departments, staff devices, and in-room guest services into a single event-driven architecture.
+                </p>
+              </div>
+
+              {/* Department-Based Workflows */}
+              <div className="mt-14">
+                <h3 className="font-serif text-2xl text-sage-950">
+                  Department-Based Operational Architecture
+                </h3>
+                <p className="mt-2 text-sm text-sage-700 max-w-2xl">
+                  Each resort division operates through tailored role-scoped interfaces coordinated by a centralized operational bus:
+                </p>
+
+                <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Guest Services
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">Front Desk &amp; Arrival</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Coordinates guest arrivals, room allocation, keycard provisioning, and arrival context across shifts.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Operations
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">Housekeeping Board</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Maintains floor-by-floor boards with distinct occupancy (Occupied vs Vacant) and serviceability (Clean, Dirty, Cleaning, Inspection, Out of Order) tracking.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Dining &amp; Kitchen
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">Food &amp; Beverage</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Ingests nightstand QR dining orders directly into kitchen preparation queues with automatic stock deduction.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Supply Chain
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">Department Purchasing</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Routine purchase orders are handled directly by the responsible department manager within allocated budgets, with GM oversight on capital thresholds.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Facilities
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">Engineering &amp; Assets</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Monitors equipment telemetry, schedules preventative servicing, and tracks guest defect tickets to resolution.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-6">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-gold-800">
+                      Governance
+                    </p>
+                    <h4 className="mt-2 font-serif text-xl text-sage-950">General Management</h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700">
+                      Maintains comprehensive property oversight, reviews cross-department SLA performance, and manages strategic resort policies.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verified Project Disclosures */}
+              <div className="mt-14 rounded-2xl border border-sand-200 bg-sand-100/40 p-6 sm:p-8">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between">
+                  <div>
+                    <h4 className="font-serif text-xl text-sage-950">
+                      Project Disclosure &amp; Non-Affiliation
+                    </h4>
+                    <p className="mt-2 text-xs leading-relaxed text-sage-700 max-w-2xl">
+                      Vesper is an independent academic project and technical demonstration. It is not affiliated with, endorsed by, or associated with Marriott International, JW Marriott Mumbai, Juhu, or any commercial hotel enterprise. All active operational modules run strictly against the project's typed backend API contracts without simulated business metrics or mock fallbacks.
+                    </p>
+                  </div>
+                  <Link
+                    href="/login"
+                    className="shrink-0 rounded-full bg-sage-700 px-6 py-3 text-xs font-medium text-white hover:bg-sage-800 transition-colors"
+                  >
+                    Enter Live Staff System
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <footer className="border-t border-sand-200 px-6 py-10 sm:px-10 lg:px-16">
             <div className="mx-auto flex max-w-7xl flex-col justify-between gap-6 md:flex-row md:items-center">
               <div>
@@ -593,8 +721,7 @@ export default function LandingPage() {
               </div>
               <div className="max-w-md text-xs leading-6 text-sage-700">
                 <p>
-                  Academic project. Not affiliated with Marriott International.
-                  All data is simulated.
+                  Academic project · Smart Resort 360 prototype. Not affiliated with Marriott International.
                 </p>
                 <a
                   href="/landing/credits.txt"

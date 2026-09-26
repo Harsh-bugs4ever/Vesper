@@ -20,7 +20,14 @@ const REFRESH_KEY = "vesper_refresh_token";
 const GUEST_KEY = "vesper_guest_token";
 
 /** Endpoints reachable without a token; a 401 on these must not trigger a refresh. */
-const PUBLIC_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/guest/session"];
+const PUBLIC_PATHS = [
+  "/auth/login",
+  "/auth/refresh",
+  "/auth/logout",
+  "/guest/session",
+  "/property/public",
+  "/guest/amenities",
+];
 
 export interface ApiErrorBody {
   code: string;
@@ -260,11 +267,103 @@ export interface BackendPropertySummary {
   city: string;
 }
 
+export interface BackendRoomCategoryImage {
+  url: string;
+  order: number;
+  alt_text: string;
+}
+
+export interface BackendRoomCategory {
+  id: string;
+  key: string;
+  name: string;
+  base_rate: string;
+  max_occupancy: number;
+  amenities: string[];
+  images?: BackendRoomCategoryImage[];
+}
+
+export interface BackendRoom {
+  id: string;
+  number: string;
+  floor: number;
+  status: "ready" | "occupied" | "dirty" | "cleaning" | "inspection" | "out_of_order";
+  category_id: string;
+  category_key: string;
+  category_name: string;
+  status_changed_at: string | null;
+  notes: string | null;
+  is_occupied?: boolean;
+}
+
+export interface BackendRoomBoardFloor {
+  floor: number;
+  rooms: BackendRoom[];
+}
+
+export interface BackendRoomBoard {
+  counts: Record<string, number>;
+  floors: BackendRoomBoardFloor[];
+}
+
+export interface GuestAmenity {
+  id: string;
+  name: string;
+  category: "wellness" | "dining" | "recreation" | "services";
+  location: string;
+  operating_hours: string;
+  is_available: boolean;
+  closure_notes?: string | null;
+  image_url?: string | null;
+}
+
 export const property = {
   /** The signed-in user's own property. */
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
+  /** Public property summary, safe for landing/orientation without staff credentials. */
+  public: (propertyId?: string) =>
+    api.get<BackendPropertySummary>(
+      "/property/public",
+      propertyId ? { property_id: propertyId } : undefined
+    ),
+  /** Room categories belonging to this property (calls public endpoint first, falls back to authenticated). */
+  roomCategories: async (propertyId?: string): Promise<BackendRoomCategory[]> => {
+    try {
+      return await api.get<BackendRoomCategory[]>(
+        "/property/public/room-categories",
+        propertyId ? { property_id: propertyId } : undefined
+      );
+    } catch {
+      return await api.get<BackendRoomCategory[]>("/property/room-categories");
+    }
+  },
+  /** Occupancy count and percentage from backend. */
+  occupancy: () =>
+    api.get<{
+      total_rooms: number;
+      occupied_rooms: number;
+      occupancy_rate: number;
+      as_of: string;
+    }>("/property/occupancy"),
+};
+
+export const rooms = {
+  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
+    api.get<BackendRoom[]>("/rooms", params),
+  board: () => api.get<BackendRoomBoard>("/rooms/board"),
+  get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
+  setStatus: (id: string, status: string, note?: string) =>
+    api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
+};
+
+export const amenities = {
+  /**
+   * Persisted guest amenity catalogue.
+   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
+   */
+  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
 export interface GuestSession {
