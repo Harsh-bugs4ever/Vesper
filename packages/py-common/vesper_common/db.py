@@ -56,6 +56,7 @@ def get_engine():
                 "pool_size": 20,
                 "max_overflow": 30,
                 "pool_timeout": 10,
+                "connect_args": {"connect_timeout": 5},
             })
         _engine = create_engine(settings.database_url, **engine_kwargs)
         SessionLocal.configure(bind=_engine)

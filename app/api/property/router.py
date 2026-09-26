@@ -62,8 +62,8 @@ UPLOAD_DIR = Path("/data/uploads")
 def _room_detail(room) -> RoomDetail:
     return RoomDetail(
         **RoomOut.model_validate(room).model_dump(),
-        category_key=room.category.key,
-        category_name=room.category.name,
+        category_key=room.category.key if room.category else "",
+        category_name=room.category.name if room.category else "Standard Room",
     )
 
 
@@ -233,7 +233,8 @@ def spatial_view(branch_id: UUID | None = None,
         Stay.property_id == branch, Stay.status == StayStatus.IN_HOUSE)))
     return SpatialViewOut(branch_id=branch, generated_at=utcnow(),
         rooms=[SpatialRoomOut(id=room.id, number=room.number, floor=room.floor,
-            category=room.category.name, housekeeping_status=room.status,
+            category=room.category.name if room.category else "Standard Room",
+            housekeeping_status=room.status,
             occupied=room.id in occupied) for room in rooms])
 
 

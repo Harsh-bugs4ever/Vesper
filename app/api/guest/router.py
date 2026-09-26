@@ -82,9 +82,33 @@ def active_rooms(db: Session = Depends(get_session)) -> list[dict]:
 
 @guest_router.get("/menu", response_model=MenuOut)
 def guest_menu(
-    principal: Principal = Depends(active_guest), db: Session = Depends(get_session)
+    request: Request, db: Session = Depends(get_session)
 ) -> MenuOut:
-    data = service.menu(db, UUID(principal.property_id))
+    """In-room dining menu with live prices and recipe availability."""
+    prop_id: UUID | None = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        if token:
+            try:
+                from vesper_common.security import decode_guest_token
+                principal = decode_guest_token(token)
+                if principal and principal.property_id:
+                    prop_id = UUID(principal.property_id)
+            except Exception:
+                pass
+
+    if prop_id is None:
+        from app.api.property.models import Property
+        from sqlalchemy import select
+        prop = db.scalars(select(Property).order_by(Property.created_at)).first()
+        if prop:
+            prop_id = prop.id
+
+    if prop_id is None:
+        return MenuOut(currency="INR", categories={})
+
+    data = service.menu(db, prop_id)
     return MenuOut(
         currency=data["currency"],
         categories={
@@ -132,10 +156,14 @@ def guest_amenities(
 def guest_room(principal: Principal = Depends(active_guest),
                db: Session = Depends(get_session)) -> GuestRoomOut:
     room = property_service.get_room(db, UUID(principal.property_id), UUID(principal.room_id))
-    return GuestRoomOut(id=room.id, number=room.number, floor=room.floor,
-                        category_name=room.category.name,
-                        category_amenities=room.category.amenities,
-                        images=[RoomImageOut.model_validate(i) for i in room.images])
+    return GuestRoomOut(
+        id=room.id,
+        number=room.number,
+        floor=room.floor,
+        category_name=room.category.name if room.category else "Standard Room",
+        category_amenities=room.category.amenities if room.category else [],
+        images=[RoomImageOut.model_validate(i) for i in room.images],
+    )
 
 
 @guest_router.post("/requests", response_model=RequestDetail, status_code=status.HTTP_201_CREATED)
