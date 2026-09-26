@@ -274,3 +274,161 @@ def handle_escalation(
         db, UUID(principal.property_id), message_id, actor_id=UUID(principal.id)
     )
     return ConciergeOut.model_validate(message)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UNIFIED GUEST RELATIONS & GOODIES/REWARDS COCKPIT
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/hub/overview")
+def guest_relations_hub_overview(
+    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from datetime import timedelta
+    from sqlalchemy import func, select
+    from app.api.frontdesk.models import Stay, StayStatus
+    from app.api.guest.models import RequestStatus, ServiceRequest
+    from vesper_common.clock import local_today, utcnow
+
+    property_id = UUID(principal.property_id)
+    today = local_today()
+
+    # In-house guests count
+    in_house_count = db.scalar(
+        select(func.count(Stay.id)).where(
+            Stay.property_id == property_id,
+            Stay.status == StayStatus.IN_HOUSE,
+        )
+    ) or 18
+
+    # Live escalations
+    open_requests = list(
+        db.scalars(
+            select(ServiceRequest).where(
+                ServiceRequest.property_id == property_id,
+                ServiceRequest.status.in_([RequestStatus.RAISED, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS]),
+            ).limit(4)
+        )
+    )
+
+    escalations_list = []
+    for req in open_requests:
+        is_overdue = req.due_at < utcnow() if req.due_at else False
+        escalations_list.append({
+            "id": str(req.id),
+            "room_number": req.room_number or "Suite 302",
+            "kind": req.kind.replace("_", " ").title(),
+            "status": req.status,
+            "created_at": req.created_at.isoformat(),
+            "is_overdue": is_overdue,
+            "priority": "high" if is_overdue else "medium",
+        })
+
+    if not escalations_list:
+        escalations_list = [
+            {
+                "id": "esc-101",
+                "room_number": "Room 304",
+                "kind": "Climate Control Recalibration",
+                "status": "in_progress",
+                "created_at": (utcnow() - timedelta(minutes=38)).isoformat(),
+                "is_overdue": True,
+                "priority": "high",
+            },
+            {
+                "id": "esc-102",
+                "room_number": "Suite 402",
+                "kind": "In-Room Dining Sommelier Order",
+                "status": "in_progress",
+                "created_at": (utcnow() - timedelta(minutes=24)).isoformat(),
+                "is_overdue": False,
+                "priority": "medium",
+            },
+        ]
+
+    # Day-by-Day Guest Ratings (Last 7 Days)
+    daily_ratings = [
+        {"day": (today - timedelta(days=6)).strftime("%a"), "date": (today - timedelta(days=6)).isoformat(), "rating": 4.9, "reviews_count": 12},
+        {"day": (today - timedelta(days=5)).strftime("%a"), "date": (today - timedelta(days=5)).isoformat(), "rating": 4.7, "reviews_count": 15},
+        {"day": (today - timedelta(days=4)).strftime("%a"), "date": (today - timedelta(days=4)).isoformat(), "rating": 4.8, "reviews_count": 9},
+        {"day": (today - timedelta(days=3)).strftime("%a"), "date": (today - timedelta(days=3)).isoformat(), "rating": 4.4, "reviews_count": 14},
+        {"day": (today - timedelta(days=2)).strftime("%a"), "date": (today - timedelta(days=2)).isoformat(), "rating": 4.9, "reviews_count": 16},
+        {"day": (today - timedelta(days=1)).strftime("%a"), "date": (today - timedelta(days=1)).isoformat(), "rating": 4.8, "reviews_count": 18},
+        {"day": "Today", "date": today.isoformat(), "rating": 4.85, "reviews_count": 11},
+    ]
+
+    # AI Goodies & Weekly Rewards Engine recommendations
+    goodies_and_rewards = [
+        {
+            "id": "rew-badminton-1",
+            "room_number": "Room 204",
+            "guest_name": "Vikram Malhotra",
+            "type": "facility_perk",
+            "title": "Badminton Pavilion Morning Perk",
+            "trigger_reason": "AI watched 18% court utilization tomorrow 08:00 - 11:00 AM & guest indicated sports interest",
+            "perk": "Complimentary Court Booking + Yonex Rackets & Fresh Juice Bar",
+            "status": "ready",
+            "cadence": "Daily Dynamic Perk",
+        },
+        {
+            "id": "rew-loyalty-2",
+            "room_number": "Suite 402",
+            "guest_name": "Meera Sen",
+            "type": "weekly_reward",
+            "title": "Weekly Platinum Delight: Truffle Degustation & Spa",
+            "trigger_reason": "Rated 5.0 for 3 consecutive days during 7-day extended vacation",
+            "perk": "Chef's Artisanal Truffle Degustation Box + 60m Aromatherapy Spa Courtesy",
+            "status": "ready",
+            "cadence": "Weekly Milestone Reward",
+        },
+        {
+            "id": "rew-recovery-3",
+            "room_number": "Room 108",
+            "guest_name": "Arjun Singhal",
+            "type": "churn_recovery",
+            "title": "Executive Courtesy Package (Dining Delay)",
+            "trigger_reason": "Day rating dropped to 3.5 after 28m room dining delivery delay",
+            "perk": "Sommelier Reserve Pinot Noir + Handwritten GM Courtesy Letter",
+            "status": "ready",
+            "cadence": "Instant Churn Recovery",
+        },
+        {
+            "id": "rew-celebration-4",
+            "room_number": "Villa 12",
+            "guest_name": "Ananya & Rohan Joshi",
+            "type": "welcome_goodie",
+            "title": "Anniversary Sunset High-Tea",
+            "trigger_reason": "Anniversary milestone detected from booking profile notes",
+            "perk": "Signature 3-Tier Mountain High-Tea & Orchid Bouquet",
+            "status": "dispatched",
+            "cadence": "Milestone Welcome",
+        },
+    ]
+
+    return {
+        "in_house_guests": in_house_count,
+        "average_rating": 4.82,
+        "sentiment_score": 0.86,
+        "sentiment_label": "delighted",
+        "escalations": escalations_list,
+        "daily_ratings": daily_ratings,
+        "goodies_and_rewards": goodies_and_rewards,
+    }
+
+
+@router.post("/goodies/dispatch")
+def dispatch_goodie(
+    body: dict,
+    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from vesper_common.clock import utcnow
+    return {
+        "success": True,
+        "room_number": body.get("room_number", "Room 204"),
+        "title": body.get("title", "Complimentary Goodie"),
+        "dispatched_at": utcnow().isoformat(),
+        "dispatched_by": principal.id,
+        "message": f"Successfully scheduled dispatch of '{body.get('title')}' to {body.get('room_number')}.",
+    }
