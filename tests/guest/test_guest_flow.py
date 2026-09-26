@@ -289,3 +289,39 @@ def test_successful_request_lifecycle(monkeypatch):
     )
     assert rated.rating == 5
     assert rated.rating_comment == "Wonderful service!"
+
+
+def test_guest_amenities_public_and_authenticated(monkeypatch):
+    from app.api.guest import router as guest_router
+    from app.api.property.models import ResortAmenity
+
+    property_id = uuid4()
+    amenity = ResortAmenity(
+        id=uuid4(),
+        property_id=property_id,
+        key="infinity_pool",
+        name="Infinity Pool",
+        category="wellness",
+        location="Oceanfront Deck",
+        operating_hours="06:00 - 22:00",
+        is_available=True,
+    )
+
+    db = MagicMock()
+    # Mock property lookup for public request
+    prop = SimpleNamespace(id=property_id)
+    db.scalars.return_value.first.return_value = prop
+
+    monkeypatch.setattr(
+        guest_router.property_service,
+        "list_amenities",
+        lambda db, pid: [amenity],
+    )
+
+    # Public request with no Authorization header
+    mock_request_public = MagicMock()
+    mock_request_public.headers = {}
+    public_result = guest_router.guest_amenities(mock_request_public, db)
+    assert len(public_result) == 1
+    assert public_result[0].name == "Infinity Pool"
+

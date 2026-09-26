@@ -157,8 +157,11 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     guest ||
     (path.startsWith("/guest/") &&
       path !== "/guest/session" &&
-      path !== "/guest/active-rooms");
-  const token = guestRequest ? guestTokens.access() : tokens.access();
+      path !== "/guest/active-rooms" &&
+      path !== "/guest/amenities");
+  const token = guestRequest
+    ? guestTokens.access()
+    : guestTokens.access() || tokens.access();
   if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
