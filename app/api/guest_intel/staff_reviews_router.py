@@ -21,7 +21,7 @@ from vesper_common.db import get_session
 from vesper_common.permissions import Perm
 from app.api.identity.models import User
 from vesper_common.errors import NotFound
-from vesper_common.security import Principal, current_guest, current_user, requires
+from vesper_common.security import Principal, current_guest, current_user, requires, requires_gm
 
 from . import staff_reviews
 from .models import GuestStaffReview, StaffPerformanceSummary
@@ -178,7 +178,7 @@ def board(
     return StaffPerformanceBoard(
         ranked=[StaffPerformanceOut.model_validate(row) for row in ranked],
         unranked=[StaffPerformanceOut.model_validate(row) for row in unranked],
-        house_average=staff_reviews._house_average(db, property_id, scope),
+        house_average=staff_reviews.observed_house_average(db, property_id, scope),
         minimum_reviews_for_score=staff_rating.MIN_REVIEWS_FOR_SCORE,
     )
 
@@ -211,7 +211,7 @@ def staff_detail(
 @router.post("/staff/{staff_id}/recompute", response_model=StaffPerformanceOut)
 def recompute(
     staff_id: UUID,
-    principal: Principal = Depends(requires(Perm.STAFF_REVIEW_READ)),
+    principal: Principal = Depends(requires_gm(Perm.STAFF_REVIEW_READ)),
     db: Session = Depends(get_session),
 ) -> StaffPerformanceOut:
     """Rebuild one person's summary from their ratings."""

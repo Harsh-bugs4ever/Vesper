@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
-from vesper_common.security import Principal, current_user, requires
+from vesper_common.security import Principal, current_user, requires, requires_gm
 
 from . import service
 from .schemas import (
@@ -80,7 +80,7 @@ def today(
 @bookings_router.get("/occupancy-history", response_model=list[dict])
 def occupancy_history(
     days: int = Query(default=180, ge=7, le=730),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[dict]:
     """The nightly series revenue-service trains its demand model on."""

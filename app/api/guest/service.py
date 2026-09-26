@@ -9,6 +9,7 @@ from difflib import SequenceMatcher
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from vesper_common.clients import frontdesk, property_client
@@ -150,10 +151,20 @@ def create_request(
     guest_id: UUID | None,
     data,
     actor_id: str | None = None,
+    source_message_id: UUID | None = None,
+    department_id_override: UUID | None = None,
+    sla_minutes_override: int | None = None,
 ) -> ServiceRequest:
+    if source_message_id is not None:
+        existing = db.scalars(select(ServiceRequest).where(
+            ServiceRequest.property_id == property_id,
+            ServiceRequest.source_message_id == source_message_id,
+        )).first()
+        if existing is not None:
+            return existing
     department_key = KIND_TO_DEPARTMENT[data.kind]
-    department = _department(property_id, department_key)
-    sla = (department or {}).get("default_sla_minutes") or DEFAULT_SLA_MINUTES[data.kind]
+    department = None if department_id_override else _department(property_id, department_key)
+    sla = sla_minutes_override or (department or {}).get("default_sla_minutes") or DEFAULT_SLA_MINUTES[data.kind]
 
     lines, total = _price_order(db, property_id, data)
     request = ServiceRequest(
@@ -162,7 +173,8 @@ def create_request(
         room_id=room_id,
         room_number=room_number,
         guest_id=guest_id,
-        department_id=UUID(department["id"]) if department else None,
+        department_id=department_id_override or (UUID(department["id"]) if department else None),
+        source_message_id=source_message_id,
         kind=data.kind.value,
         note=data.note,
         items=lines,
@@ -171,7 +183,18 @@ def create_request(
         due_at=utcnow() + timedelta(minutes=sla),
     )
     db.add(request)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if source_message_id is not None:
+            existing = db.scalars(select(ServiceRequest).where(
+                ServiceRequest.property_id == property_id,
+                ServiceRequest.source_message_id == source_message_id,
+            )).first()
+            if existing is not None:
+                return existing
+        raise
     db.refresh(request)
 
     # staff-service turns this into a task; notification-service pushes it to phones.

@@ -44,7 +44,7 @@ import {
   concierge,
   notifications,
   staffRequests,
-  property as propertyApi,
+  departments as departmentApi,
   type ConciergeMessage,
   type DepartmentOut,
   type OutboxOut,
@@ -133,7 +133,7 @@ export default function CommunicationsPage() {
     try {
       const [reqData, deptData, escData] = await Promise.all([
         staffRequests.list().catch(() => []),
-        propertyApi.departments().catch(() => []),
+        departmentApi.list().catch(() => []),
         isGeneralManager || user?.departmentKey === "front_office"
           ? concierge.escalations(false).catch(() => [])
           : Promise.resolve([]),

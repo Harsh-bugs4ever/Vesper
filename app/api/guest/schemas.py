@@ -140,3 +140,58 @@ class GuestCreate(BaseModel):
 
 class PhotoUploadOut(BaseModel):
     url: str
+
+
+class SupportAsk(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    client_message_id: UUID | None = None
+
+
+class SupportMessageWrite(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    visibility: str = Field(default="guest", pattern="^(guest|internal)$")
+    client_message_id: UUID | None = None
+
+
+class SupportPostOut(ORMModel):
+    id: UUID
+    author_kind: str
+    visibility: str
+    body: str
+    created_at: datetime
+
+
+class SupportConversationOut(BaseModel):
+    id: UUID
+    kind: str
+    topic: str
+    urgency: str
+    status: str
+    department_id: UUID | None = None
+    escalation_reason: str | None = None
+    assigned_owner_id: UUID | None = None
+    request_id: UUID | None = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+    created_at: datetime
+    posts: list[SupportPostOut]
+    unread_count: int = 0
+
+
+class DepartmentThreadCreate(BaseModel):
+    department_id: UUID
+    topic: str = Field(min_length=1, max_length=48)
+    participant_ids: list[UUID] = Field(default_factory=list)
+
+
+class DelegateRequest(BaseModel):
+    assignee_id: UUID
+
+
+class TopicSummaryOut(BaseModel):
+    department_id: UUID | None
+    topic: str
+    urgency: str
+    total: int
+    unresolved: int
+    oldest_unresolved_hours: int | None

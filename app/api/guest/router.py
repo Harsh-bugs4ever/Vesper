@@ -247,9 +247,11 @@ def report_issue(
 @issues_router.get("", response_model=list[IssueOut])
 def list_issues(
     status_filter: str | None = Query(default=None, alias="status"),
-    principal: Principal = Depends(requires(Perm.ISSUES_WRITE)),
+    principal: Principal = Depends(current_user),
     db: Session = Depends(get_session),
 ) -> list[IssueOut]:
+    if not (principal.can(Perm.ISSUES_WRITE) or principal.can(Perm.REPORTS_READ)):
+        principal.require(Perm.REPORTS_READ)
     rows = [row for row in service.list_issues(db, UUID(principal.property_id), status=status_filter) if principal.can_see_department(row.department_id) or str(row.reported_by) == principal.id]
     return [IssueOut.model_validate(r) for r in rows]
 

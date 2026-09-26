@@ -2,12 +2,15 @@
 
 Account IDs and audit rows are deliberately untouched. Existing department membership is
 backfilled as a grant; accounts without a department receive no implicit access.
+
+Revision ID: 0005_auth
+Revises: 0005
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0005_auth"
-down_revision = "0004"
+down_revision = "0005"
 branch_labels = None
 depends_on = None
 

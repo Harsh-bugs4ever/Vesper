@@ -45,7 +45,7 @@ import {
   concierge,
   staffRequests,
   sentiment,
-  property as propertyApi,
+  departments as departmentApi,
   type ConciergeMessage,
   type RequestDetail,
   type SentimentSummary,
@@ -114,7 +114,7 @@ export default function GuestChatEscalationsPage() {
         // 2. Department requests
         staffRequests.list().catch(() => []),
         // 3. Departments
-        propertyApi.departments().catch(() => []),
+        departmentApi.list().catch(() => []),
         // 4. Sentiment & Query Topics (if permitted or GM)
         hasPermission("learning:read") || isGeneralManager
           ? sentiment.summary(30).catch(() => null)

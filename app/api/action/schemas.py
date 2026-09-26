@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -149,3 +149,50 @@ class ActionStats(BaseModel):
     executed_cards: int
     realised_impact: float
     shadow_mode: bool
+
+
+class DepartmentSnapshot(BaseModel):
+    department_id: UUID
+    department_name: str
+    open_requests: int
+    overdue_requests: int
+    open_tasks: int
+    overdue_tasks: int
+    completed_tasks_in_period: int
+    attendance_today: int
+
+
+class OverviewException(BaseModel):
+    kind: str
+    count: int
+    path: str
+
+
+class FactualInsights(BaseModel):
+    source: str
+    state: str
+    generated_at: datetime
+    items: list[str]
+
+
+class GMOverviewOut(BaseModel):
+    branch_id: UUID
+    period_start: date
+    period_end: date
+    generated_at: datetime
+    freshness: str
+    guests: dict[str, int]
+    occupancy: dict[str, int | float | None]
+    arrivals_today: int
+    departures_today: int
+    departments: list[DepartmentSnapshot]
+    exceptions: list[OverviewException]
+    insights: FactualInsights
+
+
+class ManagerOverviewOut(BaseModel):
+    branch_id: UUID
+    period_start: date
+    period_end: date
+    generated_at: datetime
+    department: DepartmentSnapshot

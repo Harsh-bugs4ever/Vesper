@@ -7,6 +7,8 @@ import logging
 from types import SimpleNamespace
 from uuid import UUID
 
+from sqlalchemy import and_, select
+
 from vesper_common.app_factory import on_events
 from vesper_common.db import session_scope
 from vesper_common.errors import VesperError
@@ -163,3 +165,30 @@ def _task_from_card(db, envelope: Envelope) -> None:
 
 
 start_subscriptions = handle
+
+
+def reconcile_guest_requests(db, property_id: UUID, *, limit: int = 100) -> int:
+    """Recover persisted requests whose event was dropped or interrupted."""
+    from app.api.guest.models import RequestStatus, ServiceRequest
+    from .models import Task
+
+    rows = db.scalars(select(ServiceRequest).outerjoin(Task, and_(
+        Task.property_id == ServiceRequest.property_id,
+        Task.source == TaskSource.GUEST_REQUEST,
+        Task.source_ref == ServiceRequest.id,
+    )).where(
+        ServiceRequest.property_id == property_id,
+        ServiceRequest.department_id.is_not(None),
+        ServiceRequest.status.notin_([RequestStatus.DELIVERED, RequestStatus.CANCELLED]),
+        Task.id.is_(None),
+    ).order_by(ServiceRequest.created_at).limit(limit)).all()
+    for request in rows:
+        _task_from_request(db, Envelope(name=Event.REQUEST_RAISED.value,
+            property_id=str(property_id), payload={
+                "request_id": str(request.id), "kind": request.kind,
+                "room_id": str(request.room_id), "room_number": request.room_number,
+                "department_id": str(request.department_id), "note": request.note,
+                "items": request.items, "sla_minutes": request.sla_minutes,
+                "priority": "high" if request.kind == "room_service" else "normal",
+            }))
+    return len(rows)

@@ -95,8 +95,7 @@ def answer(
         # starts inventing spa timings.
         return ConciergeAnswer(
             text=(
-                "I don't have that detail to hand. Let me pass this to the front desk — "
-                "they'll come back to you shortly."
+                "I don't have that detail to hand. I can ask the front desk for help."
             ),
             escalate=True,
             escalation_reason="no_matching_knowledge",

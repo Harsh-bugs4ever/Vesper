@@ -11,7 +11,7 @@ from app.api.identity.models import User
 from app.api.property.models import Room
 from vesper_common.errors import Forbidden
 
-from . import service, reporting
+from . import service, reporting, metrics
 from .schemas import (
     AttendanceOut,
     AttendanceSummary,
@@ -27,11 +27,86 @@ from .schemas import (
     TeamProgress,
     ReportCreate,
     ReportOut,
+    EmployeeOption,
+    PerformanceMetric,
 )
 
 attendance_router = APIRouter(prefix="/attendance", tags=["attendance"])
 tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 reports_router = APIRouter(prefix="/reports", tags=["staff-reports"])
+performance_router = APIRouter(prefix="/performance", tags=["performance"])
+
+
+@performance_router.get("/employees", response_model=list[EmployeeOption])
+def performance_employees(branch_id: UUID | None = None, department_id: UUID | None = None,
+                          principal: Principal = Depends(current_user),
+                          db: Session = Depends(get_session)) -> list[EmployeeOption]:
+    principal.require(Perm.STAFF_REVIEW_READ_OWN if principal.role == Role.STAFF
+                      else Perm.STAFF_REVIEW_READ)
+    branch, department = metrics.scope(db, principal, branch_id=branch_id,
+                                       department_id=department_id)
+    return [EmployeeOption(**item) for item in metrics.employees(
+        db, branch, department, principal=principal)]
+
+
+@performance_router.get("/me", response_model=PerformanceMetric)
+def my_performance_metrics(start: date | None = None, end: date | None = None,
+                           principal: Principal = Depends(current_user),
+                           db: Session = Depends(get_session)) -> PerformanceMetric:
+    principal.require(Perm.STAFF_REVIEW_READ_OWN if principal.role == Role.STAFF
+                      else Perm.STAFF_REVIEW_READ)
+    begin, finish = metrics.period(start, end)
+    branch, _ = metrics.scope(db, principal, branch_id=None, department_id=None,
+                              employee_id=UUID(principal.id), self_only=True)
+    return PerformanceMetric(**metrics.employee_metrics(db, branch, UUID(principal.id),
+                                                         None, begin, finish))
+
+
+@performance_router.get("/summary", response_model=list[PerformanceMetric])
+def performance_summary(branch_id: UUID | None = None, department_id: UUID | None = None,
+                        start: date | None = None, end: date | None = None,
+                        principal: Principal = Depends(current_user),
+                        db: Session = Depends(get_session)) -> list[PerformanceMetric]:
+    if principal.role not in {Role.GM, Role.MANAGER}:
+        raise Forbidden("Manager access required")
+    principal.require(Perm.STAFF_REVIEW_READ)
+    branch, department = metrics.scope(db, principal, branch_id=branch_id,
+                                       department_id=department_id)
+    begin, finish = metrics.period(start, end)
+    return [PerformanceMetric(**metrics.employee_metrics(db, branch, item["id"],
+                                                   department, begin, finish))
+            for item in metrics.employees(db, branch, department, principal=principal)]
+
+
+@performance_router.get("/employees/{employee_id}", response_model=PerformanceMetric)
+def employee_performance(employee_id: UUID, branch_id: UUID | None = None,
+                         department_id: UUID | None = None,
+                         start: date | None = None, end: date | None = None,
+                         principal: Principal = Depends(current_user),
+                         db: Session = Depends(get_session)) -> PerformanceMetric:
+    principal.require(Perm.STAFF_REVIEW_READ_OWN if str(employee_id) == principal.id
+                      else Perm.STAFF_REVIEW_READ)
+    branch, department = metrics.scope(db, principal, branch_id=branch_id,
+        department_id=department_id, employee_id=employee_id)
+    begin, finish = metrics.period(start, end)
+    return PerformanceMetric(**metrics.employee_metrics(db, branch, employee_id,
+                                                         department, begin, finish))
+
+
+@attendance_router.get("/records", response_model=list[AttendanceOut])
+def attendance_records(branch_id: UUID | None = None, department_id: UUID | None = None,
+                       employee_id: UUID | None = None, start: date | None = None,
+                       end: date | None = None,
+                       principal: Principal = Depends(current_user),
+                       db: Session = Depends(get_session)) -> list[AttendanceOut]:
+    if principal.role != Role.STAFF:
+        principal.require(Perm.ATTENDANCE_READ_TEAM)
+    branch, department = metrics.scope(db, principal, branch_id=branch_id,
+        department_id=department_id, employee_id=employee_id)
+    begin, finish = metrics.period(start, end)
+    selected = UUID(principal.id) if principal.role == Role.STAFF else employee_id
+    return [AttendanceOut.model_validate(row) for row in metrics.attendance_records(
+        db, branch, department, selected, begin, finish)]
 
 
 def _detail(task) -> TaskDetail:

@@ -18,6 +18,8 @@ log = logging.getLogger(__name__)
 
 # Everything worth showing live on a dashboard or a phone.
 LIVE_EVENTS = {
+    Event.SUPPORT_ESCALATED.value,
+    Event.COMMUNICATION_MESSAGE.value,
     Event.REQUEST_RAISED.value,
     Event.REQUEST_ACCEPTED.value,
     Event.REQUEST_DELIVERED.value,

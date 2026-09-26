@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import as_utc, local_day_bounds, local_today, property_tz, utcnow
@@ -241,6 +242,12 @@ def create_task(
     actor_id: str | None = None,
     sla_minutes: int | None = None,
 ) -> Task:
+    source = data.source.value if hasattr(data.source, "value") else data.source
+    if data.source_ref is not None:
+        existing = db.scalars(select(Task).where(Task.property_id == property_id,
+            Task.source == source, Task.source_ref == data.source_ref)).first()
+        if existing is not None:
+            return existing
     minutes = data.due_in_minutes or sla_minutes or DEFAULT_DUE_MINUTES.get(data.source, 120)
     task = Task(
         property_id=property_id,
@@ -250,14 +257,23 @@ def create_task(
         title=data.title,
         description=data.description,
         priority=data.priority.value if hasattr(data.priority, "value") else data.priority,
-        source=data.source.value if hasattr(data.source, "value") else data.source,
+        source=source,
         source_ref=data.source_ref,
         status=TaskStatus.ASSIGNED if data.assignee_id else TaskStatus.OPEN,
         due_at=utcnow() + timedelta(minutes=minutes),
         meta=data.meta,
     )
     db.add(task)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if data.source_ref is not None:
+            existing = db.scalars(select(Task).where(Task.property_id == property_id,
+                Task.source == source, Task.source_ref == data.source_ref)).first()
+            if existing is not None:
+                return existing
+        raise
     db.refresh(task)
 
     bus.publish(

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
-from vesper_common.security import Principal, current_user, requires
+from vesper_common.security import Principal, current_user, requires, requires_gm
 
 from . import service
 from .models import RateSource
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/revenue", tags=["revenue"])
 @router.get("/forecast", response_model=list[ForecastOut])
 def forecast(
     days: int = Query(default=30, ge=1, le=90),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[ForecastOut]:
     """The 30-day demand curve with its confidence band."""
@@ -38,7 +38,7 @@ def forecast(
 @router.post("/forecast/refresh", response_model=list[ForecastOut])
 def refresh_forecast(
     days: int = Query(default=30, ge=1, le=90),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[ForecastOut]:
     """Refit against the latest booking history. Nightly job; also a button."""
@@ -49,7 +49,7 @@ def refresh_forecast(
 @router.get("/rate-card", response_model=list[RateCardRow])
 def rate_card(
     days: int = Query(default=30, ge=1, le=90),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[RateCardRow]:
     """Every category, every night, with the forecast beside the price."""
@@ -97,7 +97,7 @@ def restore_rates(
 def rate_history(
     category_id: UUID | None = None,
     limit: int = Query(default=200, ge=1, le=1000),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[RateHistoryOut]:
     rows = service.rate_history(db, UUID(principal.property_id), category_id=category_id, limit=limit)
@@ -107,7 +107,7 @@ def rate_history(
 @router.get("/competitors", response_model=list[CompetitorRow])
 def competitors(
     days: int = Query(default=14, ge=1, le=60),
-    principal: Principal = Depends(requires(Perm.FORECAST_READ)),
+    principal: Principal = Depends(requires_gm(Perm.FORECAST_READ)),
     db: Session = Depends(get_session),
 ) -> list[CompetitorRow]:
     rows = service.competitor_table(db, UUID(principal.property_id), days=days)
@@ -134,7 +134,7 @@ def propose_cards(
 @router.post("/simulate", response_model=SimulateResult)
 def simulate(
     body: SimulateRequest,
-    principal: Principal = Depends(requires(Perm.SIMULATOR_RUN)),
+    principal: Principal = Depends(requires_gm(Perm.SIMULATOR_RUN)),
     db: Session = Depends(get_session),
 ) -> SimulateResult:
     """What-if on live data. The response carries its own assumptions."""

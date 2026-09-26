@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
-from vesper_common.security import Principal, current_guest, current_user, requires
+from vesper_common.security import Principal, current_guest, current_user, requires, requires_gm
 from vesper_common.permissions import Role
 
 from . import service
@@ -34,11 +34,11 @@ def _bearer(request: Request) -> str | None:
 @router.post("/sentiment", response_model=SentimentOut, status_code=status.HTTP_201_CREATED)
 def score_sentiment(
     body: SentimentIn,
-    principal: Principal = Depends(current_user),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> SentimentOut:
     """Score a comment. Normally driven by the rating event, exposed for backfills."""
-    if principal.role not in {Role.GM, "service"} or body.department_id is not None:
+    if body.department_id is not None:
         principal.require_department_record(db, body.department_id)
     record = service.record_sentiment(
         db,
@@ -55,7 +55,7 @@ def score_sentiment(
 @router.get("/sentiment/summary", response_model=SentimentSummary)
 def sentiment_summary(
     days: int = Query(default=30, ge=1, le=365),
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
     db: Session = Depends(get_session),
 ) -> SentimentSummary:
     return SentimentSummary(
@@ -66,7 +66,7 @@ def sentiment_summary(
 @router.get("/sentiment/trend", response_model=list[dict])
 def sentiment_trend(
     days: int = Query(default=30, ge=1, le=365),
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
     db: Session = Depends(get_session),
 ) -> list[dict]:
     """Department sentiment over time — the trend chart."""
@@ -76,7 +76,7 @@ def sentiment_trend(
 @router.get("/dna/{guest_id}", response_model=GuestDnaOut)
 def get_dna(
     guest_id: UUID,
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> GuestDnaOut:
     """The Guest DNA card: preference chips, sentiment and churn risk."""
@@ -89,7 +89,7 @@ def get_dna(
 def rebuild_dna(
     guest_id: UUID,
     request: Request,
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> GuestDnaOut:
     row = service.build_dna(
@@ -100,7 +100,7 @@ def rebuild_dna(
 
 @router.get("/at-risk", response_model=list[GuestDnaOut])
 def at_risk(
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[GuestDnaOut]:
     """Guests drifting away, most at risk first."""
@@ -111,7 +111,7 @@ def at_risk(
 @router.get("/offers", response_model=list[OfferOut])
 def list_offers(
     status_filter: str | None = Query(default=None, alias="status"),
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[OfferOut]:
     rows = service.list_offers(db, UUID(principal.property_id), status=status_filter)
@@ -191,7 +191,7 @@ def reindex(
 
 
 @router.get("/concierge/models", response_model=list[str])
-def concierge_models(_: Principal = Depends(requires(Perm.SETTINGS_WRITE))) -> list[str]:
+def concierge_models(_: Principal = Depends(requires_gm(Perm.SETTINGS_WRITE))) -> list[str]:
     """What the configured Groq key can actually serve, for the settings page."""
     return concierge.available_models()
 
@@ -202,16 +202,17 @@ def guest_ask(
     principal: Principal = Depends(current_guest),
     db: Session = Depends(get_session),
 ) -> ConciergeOut:
-    """The guest chat. Rate limited per stay; answers only from the knowledge base."""
-    message = service.ask(
-        db,
-        UUID(principal.property_id),
-        body.question,
-        stay_id=UUID(principal.stay_id) if principal.stay_id else None,
+    """Persist the guest turn and route work before reporting a handoff."""
+    from app.api.guest import service as guest_service
+    from app.api.guest import support
+
+    stay = guest_service.assert_stay_open(principal.stay_id, principal.property_id,
+        room_id=principal.room_id, guest_id=principal.guest_id)
+    message = support.ask_guest(db, property_id=UUID(principal.property_id),
+        stay_id=UUID(principal.stay_id),
         guest_id=UUID(principal.guest_id) if principal.guest_id else None,
-        user_id=None,
-        asked_by_staff=False,
-    )
+        room_id=UUID(principal.room_id), room_number=stay["room_number"],
+        question=body.question, client_message_id=body.client_message_id)
     return ConciergeOut.model_validate(message)
 
 
@@ -219,6 +220,9 @@ def guest_ask(
 def guest_history(
     principal: Principal = Depends(current_guest), db: Session = Depends(get_session)
 ) -> list[ConciergeOut]:
+    from app.api.guest import service as guest_service
+    guest_service.assert_stay_open(principal.stay_id, principal.property_id,
+        room_id=principal.room_id, guest_id=principal.guest_id)
     rows = service.conversation(
         db, UUID(principal.property_id), UUID(principal.stay_id)
     )

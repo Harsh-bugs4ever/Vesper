@@ -215,6 +215,16 @@ def _house_average(db: Session, property_id: UUID, department_id: UUID | None = 
     return float(value) if value is not None else staff_rating.HOUSE_AVERAGE
 
 
+def observed_house_average(db: Session, property_id: UUID,
+                           department_id: UUID | None = None) -> float | None:
+    query = select(func.avg(GuestStaffReview.rating)).where(
+        GuestStaffReview.property_id == property_id)
+    if department_id is not None:
+        query = query.where(GuestStaffReview.department_id == department_id)
+    value = db.scalar(query)
+    return float(value) if value is not None else None
+
+
 def _summary_row(db: Session, property_id: UUID, staff_id: UUID) -> StaffPerformanceSummary:
     row = db.scalars(
         select(StaffPerformanceSummary).where(

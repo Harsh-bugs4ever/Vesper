@@ -60,6 +60,31 @@ class AttendanceSummary(BaseModel):
     records: list[AttendanceOut]
 
 
+class EmployeeOption(BaseModel):
+    id: UUID
+    full_name: str
+    employee_code: str | None = None
+
+
+class PerformanceMetric(BaseModel):
+    employee_id: UUID
+    branch_id: UUID
+    department_id: UUID | None
+    period_start: date
+    period_end: date
+    attendance_days: int
+    late_shifts: int
+    worked_minutes: int
+    assigned_tasks: int
+    completed_tasks: int
+    guest_reviews: int
+    distinct_guest_reviews: int
+    rating_mean: float | None
+    minimum_guest_reviews_for_rating: int
+    data_state: str
+    generated_at: datetime
+
+
 class TaskOut(ORMModel):
     id: UUID
     title: str

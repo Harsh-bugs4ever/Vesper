@@ -133,7 +133,6 @@ MANAGER_PERMS: set[str] = {
     Perm.BUDGET_READ,
     Perm.FORECAST_READ,
     Perm.CONCIERGE_USE,
-    Perm.DASHBOARD_READ,
 }
 
 GM_PERMS: set[str] = {

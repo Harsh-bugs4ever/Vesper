@@ -1,4 +1,8 @@
-"""Operational report ownership and room-linked corrective work orders."""
+"""Operational report ownership and room-linked corrective work orders.
+
+Revision ID: 0006
+Revises: 0005_auth
+"""
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB

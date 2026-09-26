@@ -9,9 +9,11 @@ from vesper_common.db import get_session
 from vesper_common.permissions import Perm, Role
 from vesper_common.errors import Forbidden, NotFound
 from app.api.identity.models import User
+from app.api.staff import metrics as staff_metrics
+from app.api.staff.schemas import EmployeeOption
 from app.api.action.models import ActionCard
 from .models import LeaveRequest
-from vesper_common.security import Principal, current_user, requires
+from vesper_common.security import Principal, current_user, requires, requires_gm
 
 from . import service
 from .schemas import (
@@ -27,6 +29,19 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/workforce", tags=["workforce"])
+
+
+@router.get("/employees", response_model=list[EmployeeOption])
+def roster_employees(branch_id: UUID | None = None,
+                     department_id: UUID | None = None,
+                     principal: Principal = Depends(requires(Perm.ROSTER_APPROVE)),
+                     db: Session = Depends(get_session)) -> list[EmployeeOption]:
+    if principal.role not in {Role.GM, Role.MANAGER}:
+        raise Forbidden("Manager access required")
+    branch, department = staff_metrics.scope(db, principal, branch_id=branch_id,
+                                             department_id=department_id)
+    return [EmployeeOption(**item) for item in staff_metrics.employees(
+        db, branch, department, principal=principal)]
 
 
 def _detail(roster) -> RosterDetail:
@@ -62,7 +77,7 @@ def list_rosters(
 def generate_roster(
     body: GenerateRosterRequest,
     request: Request,
-    principal: Principal = Depends(requires(Perm.ROSTER_APPROVE)),
+    principal: Principal = Depends(requires_gm(Perm.ROSTER_APPROVE)),
     db: Session = Depends(get_session),
 ) -> RosterDetail:
     if body.department_id is not None:

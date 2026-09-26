@@ -11,6 +11,21 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SpatialRoomOut(BaseModel):
+    id: UUID
+    number: str
+    floor: int
+    category: str
+    housekeeping_status: str
+    occupied: bool
+
+
+class SpatialViewOut(BaseModel):
+    branch_id: UUID
+    generated_at: datetime
+    rooms: list[SpatialRoomOut]
+
+
 class PropertyOut(ORMModel):
     id: UUID
     name: str

@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -6,10 +7,11 @@ from sqlalchemy.orm import Session
 from vesper_common.clock import utcnow
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm, Role
-from vesper_common.errors import Forbidden
-from vesper_common.security import Principal, current_user, requires
+from vesper_common.errors import Forbidden, NotFound
+from vesper_common.security import Principal, current_user, requires, requires_gm
 
 from . import dashboard as dashboard_builder
+from . import overview
 from . import service
 from .models import ActionCard
 from .schemas import (
@@ -25,12 +27,52 @@ from .schemas import (
     OutcomeOut,
     ReadinessOut,
     SnoozeRequest,
+    GMOverviewOut,
+    ManagerOverviewOut,
 )
 
 router = APIRouter(prefix="/cards", tags=["action-cards"])
 dashboard_router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 learning_router = APIRouter(prefix="/learning", tags=["learning"])
 audit_router = APIRouter(prefix="/audit", tags=["audit"])
+
+
+@dashboard_router.get("/overview", response_model=GMOverviewOut)
+def gm_overview(branch_id: UUID | None = None, start: date | None = None,
+                end: date | None = None,
+                principal: Principal = Depends(requires_gm(Perm.DASHBOARD_READ)),
+                db: Session = Depends(get_session)) -> dict:
+    from app.api.property.models import Property
+    from app.api.staff.metrics import period
+
+    branch = branch_id or UUID(principal.property_id)
+    principal.require_property(branch)
+    if db.get(Property, branch) is None:
+        raise NotFound("Branch not found")
+    begin, finish = period(start, end)
+    return overview.gm_overview(db, branch, begin, finish)
+
+
+@dashboard_router.get("/department", response_model=ManagerOverviewOut)
+def manager_overview(department_id: UUID | None = None,
+                     branch_id: UUID | None = None,
+                     start: date | None = None, end: date | None = None,
+                     principal: Principal = Depends(current_user),
+                     db: Session = Depends(get_session)) -> dict:
+    from app.api.property.models import Department
+    from app.api.staff.metrics import period, scope
+
+    if principal.role not in {Role.MANAGER, Role.GM}:
+        raise Forbidden("Manager access required")
+    branch, department = scope(db, principal, branch_id=branch_id,
+                               department_id=department_id)
+    if department is None:
+        raise Forbidden("Select a department")
+    row = db.get(Department, department)
+    if row is None or row.property_id != branch:
+        raise NotFound("Department not found")
+    begin, finish = period(start, end)
+    return overview.department_overview(db, branch, row, begin, finish)
 
 
 def _detail(card: ActionCard) -> CardDetail:
@@ -164,7 +206,7 @@ def dismiss(
 def score_outcome(
     card_id: UUID,
     body: OutcomeCreate,
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> OutcomeOut:
     """Close the loop: what actually happened, against what was predicted."""
@@ -176,7 +218,7 @@ def score_outcome(
 
 @learning_router.get("", response_model=list[dict])
 def learning(
-    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[dict]:
     """Per-engine accuracy, approval rate and earned confidence."""
@@ -185,7 +227,7 @@ def learning(
 
 @learning_router.get("/readiness", response_model=ReadinessOut)
 def readiness(
-    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    principal: Principal = Depends(requires_gm(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> ReadinessOut:
     """Cold-start banner data: which engines have enough history to be believed."""
@@ -234,7 +276,7 @@ def record_audit(
 def dashboard(
     request: Request,
     live_feed: int = Query(default=15, ge=0, le=50),
-    principal: Principal = Depends(requires(Perm.DASHBOARD_READ)),
+    principal: Principal = Depends(requires_gm(Perm.DASHBOARD_READ)),
     db: Session = Depends(get_session),
 ) -> dict:
     """Every tile on the General Manager dashboard in one call.

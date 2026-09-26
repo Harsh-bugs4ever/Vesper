@@ -37,6 +37,8 @@ from .schemas import (
     SensorReadingIn,
     SensorReadingOut,
     ShadowModeUpdate,
+    SpatialViewOut,
+    SpatialRoomOut,
 )
 
 router = APIRouter(prefix="/property", tags=["property"])
@@ -137,7 +139,7 @@ def get_public_property(
     if not p_id:
         ids = service.list_property_ids(db)
         if ids:
-            p_id = UUID(ids[0])
+            p_id = UUID(str(ids[0]))
     if not p_id:
         from vesper_common.errors import NotFound
         raise NotFound("Property not found")
@@ -155,7 +157,7 @@ def list_public_categories(
     if not p_id:
         ids = service.list_property_ids(db)
         if ids:
-            p_id = UUID(ids[0])
+            p_id = UUID(str(ids[0]))
     if not p_id:
         return []
     rows = service.list_categories(db, p_id)
@@ -204,6 +206,35 @@ def occupancy(
 ) -> dict:
     principal.require_department_key(db, "front_office")
     return service.occupancy_snapshot(db, UUID(principal.property_id))
+
+
+@router.get("/spatial", response_model=SpatialViewOut)
+def spatial_view(branch_id: UUID | None = None,
+                 principal: Principal = Depends(current_user),
+                 db: Session = Depends(get_session)) -> SpatialViewOut:
+    """Floor and room serviceability without names, notes or stay identifiers."""
+    from sqlalchemy import select
+    from vesper_common.clock import utcnow
+    from vesper_common.errors import Forbidden
+    from app.api.frontdesk.models import Stay, StayStatus
+    from .models import Property, Room
+
+    if principal.role not in {Role.GM, Role.MANAGER}:
+        raise Forbidden("Manager access required")
+    branch = branch_id or UUID(principal.property_id)
+    principal.require_property(branch)
+    if principal.role == Role.MANAGER and str(branch) != principal.property_id:
+        raise Forbidden("Select your current branch")
+    if db.get(Property, branch) is None:
+        raise Forbidden("Branch is unavailable")
+    rooms = list(db.scalars(select(Room).where(Room.property_id == branch)
+                            .order_by(Room.floor, Room.number)))
+    occupied = set(db.scalars(select(Stay.room_id).where(
+        Stay.property_id == branch, Stay.status == StayStatus.IN_HOUSE)))
+    return SpatialViewOut(branch_id=branch, generated_at=utcnow(),
+        rooms=[SpatialRoomOut(id=room.id, number=room.number, floor=room.floor,
+            category=room.category.name, housekeeping_status=room.status,
+            occupied=room.id in occupied) for room in rooms])
 
 
 @router.post("/import", response_model=ImportResult)

@@ -13,6 +13,7 @@ export type UserRole =
   | "general_manager"
   | "dept_manager_fb"
   | "dept_manager_hk"
+  | "dept_manager_frontdesk"
   | "employee"
   | "guest";
 
@@ -159,6 +160,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "attendance:view_dept",
     "equipment:report_issue",
     "audit:view",
+  ],
+  dept_manager_frontdesk: [
+    "bookings:read",
+    "bookings:write",
+    "attendance:view_dept",
+    "tasks:manage",
   ],
   employee: [
     "attendance:mark",

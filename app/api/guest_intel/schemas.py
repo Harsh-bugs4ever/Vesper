@@ -31,7 +31,7 @@ class SentimentOut(ORMModel):
 
 class SentimentSummary(BaseModel):
     samples: int
-    average_sentiment: float
+    average_sentiment: float | None
     label: str
     negative_share: float = 0.0
     top_themes: list[dict] = Field(default_factory=list)
@@ -92,10 +92,12 @@ class PassageCreate(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=500)
+    client_message_id: UUID | None = None
 
 
 class ConciergeOut(ORMModel):
     id: UUID
+    conversation_id: UUID | None = None
     question: str
     answer: str
     # Which passages the answer came from, so staff can check it.
@@ -233,7 +235,7 @@ class StaffPerformanceBoard(BaseModel):
 
     ranked: list[StaffPerformanceOut]
     unranked: list[StaffPerformanceOut]
-    house_average: float
+    house_average: float | None
     minimum_reviews_for_score: int
 
 

@@ -221,7 +221,7 @@ class Hub:
                 continue
             finally:
                 db.close()
-            if not principal.can_see_event(department_id):
+            if not can_receive(principal, event.get("payload", {})):
                 continue
             try:
                 await connection["socket"].send_text(payload)
@@ -240,3 +240,13 @@ class Hub:
 
 
 hub = Hub()
+
+
+def can_receive(principal: Principal, payload: dict) -> bool:
+    participants = payload.get("participant_ids")
+    if participants is not None:
+        return principal.id in participants and principal.can_see_event(payload.get("department_id"))
+    recipients = payload.get("recipient_ids")
+    if recipients is not None and principal.id not in recipients:
+        return False
+    return principal.can_see_event(payload.get("department_id"))

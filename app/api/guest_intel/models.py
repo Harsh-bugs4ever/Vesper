@@ -212,6 +212,7 @@ class ConciergeMessage(Base, TimestampMixin):
     stay_id: Mapped[UUID | None] = uuid_ref()
     guest_id: Mapped[UUID | None] = uuid_ref()
     asked_by_user_id: Mapped[UUID | None] = uuid_ref()
+    conversation_id: Mapped[UUID | None] = uuid_ref()
 
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)

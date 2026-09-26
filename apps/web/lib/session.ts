@@ -15,6 +15,7 @@ import { type User, type UserRole } from "./auth";
 /** Department keys the backend seeds, used to pick a UI role for a manager. */
 const HOUSEKEEPING = "housekeeping";
 const FNB = "fnb";
+const FRONT_OFFICE = "front_office";
 
 export interface Department {
   id: string;
@@ -28,7 +29,7 @@ export interface Department {
  * Presentational only — it decides which navigation and dashboard to show. Anything
  * that controls whether an action is *allowed* reads `permissions` instead.
  *
- * Non-HK / non-FB managers are mapped to `employee` rather than silently presenting
+ * Managers outside the three operational areas are mapped to `employee` rather than silently presenting
  * them as F&B managers. Their actual permissions from the backend govern what they
  * can do; the navigation shown is the staff view, which is the lowest-privilege
  * baseline any logged-in user can reach.
@@ -42,7 +43,8 @@ export function toUiRole(user: BackendUser, departmentKey?: string): UserRole {
     case "supervisor":
       if (departmentKey === HOUSEKEEPING) return "dept_manager_hk";
       if (departmentKey === FNB) return "dept_manager_fb";
-      // A manager in any other department (Front Office, Engineering, Security, …)
+      if (departmentKey === FRONT_OFFICE) return "dept_manager_frontdesk";
+      // A manager in any other department (Engineering, Security, …)
       // uses the staff view. Their effective permissions come from the backend response,
       // not this role label — so they can reach exactly what they are allowed to.
       return "employee";
@@ -199,6 +201,7 @@ export function isAdminUser(user: User): boolean {
     holdsPermission(user.permissions, "tasks:manage") ||
     user.role === "general_manager" ||
     user.role === "dept_manager_fb" ||
-    user.role === "dept_manager_hk"
+    user.role === "dept_manager_hk" ||
+    user.role === "dept_manager_frontdesk"
   );
 }

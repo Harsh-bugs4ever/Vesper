@@ -59,6 +59,8 @@ class Event(StrEnum):
     REQUEST_DELIVERED = "request.delivered"
     REQUEST_OVERDUE = "request.overdue"
     REQUEST_RATED = "request.rated"
+    SUPPORT_ESCALATED = "support.escalated"
+    COMMUNICATION_MESSAGE = "communication.message"
     ISSUE_REPORTED = "issue.reported"
 
     # Inventory

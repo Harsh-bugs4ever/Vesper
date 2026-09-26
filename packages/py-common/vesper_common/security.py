@@ -258,6 +258,18 @@ def requires(*permissions: str):
     return dependency
 
 
+def requires_gm(*permissions: str):
+    """Specialist analytics require a live GM role, not an old permission grant."""
+    def dependency(principal: Principal = Depends(current_user)) -> Principal:
+        if principal.role not in {Role.GM, "service"}:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "General Manager access required")
+        for permission in permissions:
+            principal.require(str(permission))
+        return principal
+
+    return dependency
+
+
 def token_from_query(token: str) -> Principal:
     """WebSocket auth — browsers cannot set headers on a WebSocket handshake."""
     return principal_from_payload(decode_token(token))

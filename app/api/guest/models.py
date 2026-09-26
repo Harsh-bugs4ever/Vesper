@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -94,6 +94,7 @@ class ServiceRequest(Base, TimestampMixin):
         ForeignKey(f"{SCHEMA}.guests.id"), nullable=True, index=True
     )
     department_id: Mapped[UUID | None] = uuid_ref()
+    source_message_id: Mapped[UUID | None] = uuid_ref()
 
     kind: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), default=RequestStatus.RAISED, nullable=False, index=True)
@@ -174,3 +175,49 @@ class QrScan(Base):
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     user_agent: Mapped[str | None] = mapped_column(String(200))
     accepted: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class SupportConversation(Base, TimestampMixin):
+    __tablename__ = "support_conversations"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    stay_id: Mapped[UUID | None] = uuid_ref()
+    guest_id: Mapped[UUID | None] = uuid_ref()
+    room_id: Mapped[UUID | None] = uuid_ref()
+    room_number: Mapped[str | None] = mapped_column(String(12))
+    department_id: Mapped[UUID | None] = uuid_ref()
+    topic: Mapped[str] = mapped_column(String(48), nullable=False)
+    urgency: Mapped[str] = mapped_column(String(12), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    escalation_reason: Mapped[str | None] = mapped_column(String(64))
+    assigned_owner_id: Mapped[UUID | None] = uuid_ref()
+    request_id: Mapped[UUID | None] = uuid_ref()
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SupportPost(Base, TimestampMixin):
+    __tablename__ = "support_posts"
+    __table_args__ = (UniqueConstraint("property_id", "client_message_id", name="uq_support_post_client_message"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.support_conversations.id"), nullable=False)
+    client_message_id: Mapped[UUID | None] = uuid_ref()
+    author_kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    author_user_id: Mapped[UUID | None] = uuid_ref()
+    visibility: Mapped[str] = mapped_column(String(12), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class SupportParticipant(Base, TimestampMixin):
+    __tablename__ = "support_participants"
+    __table_args__ = (UniqueConstraint("conversation_id", "user_id"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.support_conversations.id"), nullable=False)
+    user_id: Mapped[UUID] = uuid_ref(nullable=False)
+    last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

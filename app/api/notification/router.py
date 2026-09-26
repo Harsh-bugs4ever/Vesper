@@ -55,7 +55,7 @@ async def live(websocket: WebSocket, token: str = Query(...)) -> None:
         recent = [
             {"type": e.name, "payload": e.payload, "occurred_at": e.occurred_at, "id": e.id}
             for e in bus.recent(25)
-            if e.property_id == principal.property_id and principal.can_see_event(e.payload.get("department_id"))
+            if e.property_id == principal.property_id and service.can_receive(principal, e.payload)
         ]
         await websocket.send_json({"type": "backlog", "events": list(reversed(recent))})
 

@@ -134,7 +134,7 @@ def sentiment_summary(db: Session, property_id: UUID, *, days: int = 30, departm
     if department_ids is not None:
         records = [record for record in records if str(record.department_id) in department_ids]
     if not records:
-        return {"samples": 0, "average_sentiment": 0.0, "label": "neutral", "top_themes": []}
+        return {"samples": 0, "average_sentiment": None, "label": "insufficient_data", "top_themes": []}
 
     average = sum(r.score for r in records) / len(records)
     theme_counts: dict[str, int] = defaultdict(int)
@@ -465,6 +465,7 @@ def ask(
     guest_id: UUID | None,
     user_id: UUID | None,
     asked_by_staff: bool,
+    conversation_id: UUID | None = None,
 ) -> ConciergeMessage:
     """Answer a question and keep the transcript."""
     _enforce_rate_limit(db, property_id, stay_id=stay_id, user_id=user_id)
@@ -478,7 +479,7 @@ def ask(
     result = concierge.answer(
         question,
         hits,
-        property_name=property_row.get("name", "the resort"),
+        property_name=property_row.get("name") or "this property",
         asked_by_staff=asked_by_staff,
     )
 
@@ -487,6 +488,7 @@ def ask(
         stay_id=stay_id,
         guest_id=guest_id,
         asked_by_user_id=user_id,
+        conversation_id=conversation_id,
         question=question,
         answer=result.text,
         sources=result.sources,
@@ -528,7 +530,8 @@ def _enforce_rate_limit(db: Session, property_id: UUID, *, stay_id: UUID | None,
 def escalations(db: Session, property_id: UUID, *, unhandled_only: bool = True) -> list[ConciergeMessage]:
     """What the concierge could not answer — a staff queue and a content backlog."""
     query = select(ConciergeMessage).where(
-        ConciergeMessage.property_id == property_id, ConciergeMessage.escalated.is_(True)
+        ConciergeMessage.property_id == property_id, ConciergeMessage.escalated.is_(True),
+        ConciergeMessage.conversation_id.is_(None),
     )
     if unhandled_only:
         query = query.where(ConciergeMessage.handled_at.is_(None))
@@ -538,7 +541,9 @@ def escalations(db: Session, property_id: UUID, *, unhandled_only: bool = True) 
 def handle_escalation(db: Session, property_id: UUID, message_id: UUID, *, actor_id: UUID) -> ConciergeMessage:
     message = db.scalars(
         select(ConciergeMessage).where(
-            ConciergeMessage.id == message_id, ConciergeMessage.property_id == property_id
+            ConciergeMessage.id == message_id,
+            ConciergeMessage.property_id == property_id,
+            ConciergeMessage.conversation_id.is_(None),
         )
     ).first()
     if message is None:
