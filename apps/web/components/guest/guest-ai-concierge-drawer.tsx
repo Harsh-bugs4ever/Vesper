@@ -73,8 +73,8 @@ const DEPARTMENT_OPTIONS = [
 ] as const;
 
 interface GuestAiConciergeDrawerProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   roomNumber?: string;
   onOpenRoomService?: () => void;
 }
@@ -84,8 +84,16 @@ export function GuestAiConciergeDrawer({
   onOpenChange,
   roomNumber,
   onOpenRoomService,
-}: GuestAiConciergeDrawerProps) {
+}: GuestAiConciergeDrawerProps = {}) {
   const { showToast } = useToast();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const effectiveOpen = isControlled ? open : internalOpen;
+  const setEffectiveOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
+
   const [messages, setMessages] = useState<ConciergeMessage[]>([]);
   const [input, setInput] = useState("");
   const [failedInput, setFailedInput] = useState<string | null>(null);
@@ -140,15 +148,15 @@ export function GuestAiConciergeDrawer({
   }, []);
 
   useEffect(() => {
-    if (open && hasGuestToken) {
+    if (effectiveOpen && hasGuestToken) {
       void loadHistory();
       void loadActiveRequests();
     }
-  }, [open, hasGuestToken, loadHistory, loadActiveRequests]);
+  }, [effectiveOpen, hasGuestToken, loadHistory, loadActiveRequests]);
 
   // Auto-scroll when messages update or in-flight state changes
   useEffect(() => {
-    if (open) {
+    if (effectiveOpen) {
       const timer = setTimeout(() => {
         scrollRef.current?.scrollTo({
           top: scrollRef.current.scrollHeight,
@@ -158,7 +166,7 @@ export function GuestAiConciergeDrawer({
       }, 80);
       return () => clearTimeout(timer);
     }
-  }, [open, messages, isAsking]);
+  }, [effectiveOpen, messages, isAsking]);
 
   // Send message to AI Concierge API
   const handleSendMessage = async (textToSend?: string) => {
@@ -242,7 +250,18 @@ export function GuestAiConciergeDrawer({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <>
+      {!isControlled && !effectiveOpen && (
+        <button
+          type="button"
+          onClick={() => setEffectiveOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-sage-800 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-sage-950/20 transition-all hover:bg-sage-900 active:scale-95"
+        >
+          <Bot className="h-5 w-5 text-amber-300" />
+          <span>AI Concierge</span>
+        </button>
+      )}
+      <Dialog.Root open={effectiveOpen} onOpenChange={setEffectiveOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-300 data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
         <Dialog.Content
@@ -746,5 +765,6 @@ export function GuestAiConciergeDrawer({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+    </>
   );
 }
