@@ -17,7 +17,6 @@ export type StatTone =
   | "blue"
   | "purple";
 
-
 const tones: Record<StatTone, { chip: string; line: string }> = {
   sage: { chip: "bg-sage-50 text-sage-700", line: chartColors.forest },
   sand: { chip: "bg-sand-100 text-sand-700", line: chartColors.sand },

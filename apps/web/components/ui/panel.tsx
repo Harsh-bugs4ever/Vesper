@@ -29,13 +29,18 @@ function PanelHeader({
   title,
   description,
   action,
+  children,
   className,
 }: {
-  title: React.ReactNode;
+  title?: React.ReactNode;
   description?: React.ReactNode;
   action?: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }) {
+  if (children) {
+    return <div className={cn("px-5 pt-5", className)}>{children}</div>;
+  }
   return (
     <div className={cn("flex items-start justify-between gap-4 px-5 pt-5", className)}>
       <div className="min-w-0">

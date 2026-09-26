@@ -36,13 +36,23 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useToast } from "@/components/ui/toast";
 import { reviewErrorMessage, useRateStaff, useRateableStaff } from "@/lib/hooks/use-reviews";
 import { GuestAiConciergeDrawer } from "@/components/guest/guest-ai-concierge-drawer";
-import {
-  addGuestRequest,
-  subscribeRequests,
-  getStoredRequests,
-  type GuestRequest,
-} from "@/lib/demo/requests";
+import { guestRequests, guestTokens } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+export interface GuestUiRequest {
+  id: string;
+  room: string;
+  guest: string;
+  channel: string;
+  summary: string;
+  detail: string;
+  raisedAt: string;
+  openFor: number;
+  sla: number;
+  state: "new" | "accepted" | "done";
+  assignee?: string;
+  value?: number;
+}
 
 interface MenuItem {
   id: string;
@@ -206,8 +216,8 @@ export default function GuestPage() {
   const [issueDescription, setIssueDescription] = useState("");
   const [hasIssuePhoto, setHasIssuePhoto] = useState(false);
 
-  // Active request state (for Room 412)
-  const [activeRequest, setActiveRequest] = useState<GuestRequest | null>(null);
+  // Active request state
+  const [activeRequest, setActiveRequest] = useState<GuestUiRequest | null>(null);
   const [serviceRating, setServiceRating] = useState<number>(0);
 
   // Staff rating state (existing)
@@ -218,41 +228,58 @@ export default function GuestPage() {
   const { staff: servedBy, isLoading: staffLoading } = useRateableStaff();
   const rateStaff = useRateStaff();
 
-  // Load and listen to requests for Room 412
+  // Load and listen to requests from backend
   useEffect(() => {
-    const updateFromStore = (all: GuestRequest[]) => {
-      // Find the most relevant request for Room 412
-      const roomReqs = all.filter((r) => r.room === "412");
-      if (roomReqs.length > 0) {
-        // Prioritize in-progress or new, else latest done
-        const active =
-          roomReqs.find((r) => r.state === "accepted") ||
-          roomReqs.find((r) => r.state === "new") ||
-          roomReqs[0];
-        setActiveRequest(active);
-      } else {
-        // Default seed request
-        const initialReq: GuestRequest = {
-          id: "REQ-4182",
-          room: "412",
+    if (!guestTokens.access()) {
+      setActiveRequest(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchRequests = async () => {
+      try {
+        const list = await guestRequests.list();
+        if (cancelled || list.length === 0) return;
+        const first = list[0];
+        setActiveRequest({
+          id: first.id,
+          room: first.room_number,
           guest: "In-Room Guest",
-          channel: "Room Service",
-          summary: "Mumbai Club Sandwich ×2",
-          detail: "Deliver to balcony table. Extra napkins requested.",
-          raisedAt: "10:24 AM",
-          openFor: 6,
-          sla: 30,
-          state: "accepted",
-          assignee: "Ramesh Patil",
-          value: 1300,
-        };
-        setActiveRequest(initialReq);
+          channel:
+            first.kind === "room_service"
+              ? "Room Service"
+              : first.kind === "housekeeping"
+              ? "Housekeeping"
+              : first.kind === "maintenance"
+              ? "Maintenance"
+              : "Guest Service",
+          summary: first.note || `Request #${first.id.slice(0, 6)}`,
+          detail: `Target SLA: ${first.sla_minutes} min`,
+          raisedAt: new Date(first.created_at).toLocaleTimeString("en-IN", {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+          openFor: 0,
+          sla: first.sla_minutes,
+          state:
+            first.status === "delivered"
+              ? "done"
+              : first.status === "accepted" || first.status === "in_progress"
+              ? "accepted"
+              : "new",
+          value: Number(first.total_amount) || undefined,
+        });
+      } catch {
+        // Handled silently
       }
     };
 
-    updateFromStore(getStoredRequests());
-    const unsub = subscribeRequests(updateFromStore);
-    return unsub;
+    void fetchRequests();
+    const interval = setInterval(fetchRequests, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   // Cart helpers
@@ -289,35 +316,59 @@ export default function GuestPage() {
     const txnId = `UPI${Math.floor(100000000000 + Math.random() * 900000000000)}`;
     setPaymentTxnId(txnId);
 
-    setTimeout(() => {
-      const summaryItems = Object.entries(cart)
-        .map(([id, qty]) => {
-          const item = MENU_ITEMS.find((m) => m.id === id);
-          return `${item?.name} ×${qty}`;
+    const summaryItems = Object.entries(cart)
+      .map(([id, qty]) => {
+        const item = MENU_ITEMS.find((m) => m.id === id);
+        return `${item?.name} ×${qty}`;
+      })
+      .join(", ");
+
+    const note = `Paid via ${methodName} (Ref #${txnId}). ${cartInstructions ? `Notes: ${cartInstructions}` : "Standard preparation."} Items: ${summaryItems}`;
+
+    if (guestTokens.access()) {
+      guestRequests
+        .create({ kind: "room_service", note })
+        .then((created) => {
+          setActiveRequest({
+            id: created.id,
+            room: created.room_number,
+            guest: "In-Room Guest",
+            channel: "Room Service",
+            summary: summaryItems || "In-Room Dining",
+            detail: note,
+            value: cartTotal,
+            sla: created.sla_minutes,
+            raisedAt: new Date(created.created_at).toLocaleTimeString("en-IN", {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+            openFor: 0,
+            state: "new",
+          });
+          setOrderStage("success");
+          setServiceRating(0);
+          showToast({
+            title: "Order Placed & Dispatched",
+            description: `₹${cartTotal.toLocaleString()} order confirmed. Routed to kitchen.`,
+            type: "success",
+          });
         })
-        .join(", ");
-
-      const newReq = addGuestRequest({
-        room: "412",
-        guest: "In-Room Guest",
-        channel: "Room Service",
-        summary: summaryItems,
-        detail: `Paid via ${methodName} (Ref #${txnId}). ${cartInstructions ? `Notes: ${cartInstructions}` : "Standard preparation."}`,
-        value: cartTotal,
-        sla: 30,
-        state: "new",
-      });
-
-      setActiveRequest(newReq);
+        .catch((err) => {
+          setOrderStage("menu");
+          showToast({
+            title: "Order Dispatch Failed",
+            description: err instanceof Error ? err.message : "Could not place order.",
+            type: "error",
+          });
+        });
+    } else {
       setOrderStage("success");
-      setServiceRating(0);
-
       showToast({
-        title: "Payment Received & Order Placed",
-        description: `₹${cartTotal.toLocaleString()} paid via ${methodName}. Sent to kitchen.`,
-        type: "success",
+        title: "Guest Session Required",
+        description: "Please scan your nightstand QR code to transmit orders to the kitchen.",
+        type: "default",
       });
-    }, 1300);
+    }
   };
 
   const handleCloseRoomService = () => {
@@ -333,25 +384,52 @@ export default function GuestPage() {
 
   // Submit Housekeeping Request
   const handleRequestHousekeeping = () => {
-    const newReq = addGuestRequest({
-      room: "412",
-      guest: "In-Room Guest",
-      channel: "Housekeeping",
-      summary: housekeepingType,
-      detail: `Preferred time: ${housekeepingTime}.${housekeepingNotes ? ` Notes: ${housekeepingNotes}` : ""}`,
-      sla: 20,
-      state: "new",
-    });
-
-    setActiveRequest(newReq);
-    setActiveDrawer(null);
-    setServiceRating(0);
-
-    showToast({
-      title: "Housekeeping Requested",
-      description: `${housekeepingType} scheduled. Attendant assigned shortly.`,
-      type: "success",
-    });
+    const detail = `Preferred time: ${housekeepingTime}.${housekeepingNotes ? ` Notes: ${housekeepingNotes}` : ""}`;
+    if (guestTokens.access()) {
+      guestRequests
+        .create({
+          kind: "housekeeping",
+          note: `${housekeepingType}. ${detail}`,
+        })
+        .then((created) => {
+          setActiveRequest({
+            id: created.id,
+            room: created.room_number,
+            guest: "In-Room Guest",
+            channel: "Housekeeping",
+            summary: housekeepingType,
+            detail,
+            sla: created.sla_minutes,
+            raisedAt: new Date(created.created_at).toLocaleTimeString("en-IN", {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+            openFor: 0,
+            state: "new",
+          });
+          setActiveDrawer(null);
+          setServiceRating(0);
+          showToast({
+            title: "Housekeeping Dispatched",
+            description: `${housekeepingType} scheduled. Attendant assigned shortly.`,
+            type: "success",
+          });
+        })
+        .catch((err) => {
+          showToast({
+            title: "Request Failed",
+            description: err instanceof Error ? err.message : "Could not dispatch request.",
+            type: "error",
+          });
+        });
+    } else {
+      setActiveDrawer(null);
+      showToast({
+        title: "Guest Session Required",
+        description: "Please scan your nightstand QR code to request housekeeping.",
+        type: "default",
+      });
+    }
   };
 
   // Submit Towels Request
@@ -365,25 +443,51 @@ export default function GuestPage() {
       .filter(Boolean)
       .join(", ");
 
-    const newReq = addGuestRequest({
-      room: "412",
-      guest: "In-Room Guest",
-      channel: "Housekeeping",
-      summary: towelSummary || "Extra Towels",
-      detail: "Deliver to Room 412.",
-      sla: 15,
-      state: "new",
-    });
-
-    setActiveRequest(newReq);
-    setActiveDrawer(null);
-    setServiceRating(0);
-
-    showToast({
-      title: "Towels Requested",
-      description: `${towelSummary || "Towels"} dispatched to Room 412.`,
-      type: "success",
-    });
+    if (guestTokens.access()) {
+      guestRequests
+        .create({
+          kind: "amenities",
+          note: `Extra amenities requested: ${towelSummary || "Towels"}`,
+        })
+        .then((created) => {
+          setActiveRequest({
+            id: created.id,
+            room: created.room_number,
+            guest: "In-Room Guest",
+            channel: "Housekeeping",
+            summary: towelSummary || "Extra Towels",
+            detail: "Deliver to guest room.",
+            sla: created.sla_minutes,
+            raisedAt: new Date(created.created_at).toLocaleTimeString("en-IN", {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+            openFor: 0,
+            state: "new",
+          });
+          setActiveDrawer(null);
+          setServiceRating(0);
+          showToast({
+            title: "Towels Dispatched",
+            description: `${towelSummary || "Towels"} dispatched to your room.`,
+            type: "success",
+          });
+        })
+        .catch((err) => {
+          showToast({
+            title: "Request Failed",
+            description: err instanceof Error ? err.message : "Could not dispatch towels request.",
+            type: "error",
+          });
+        });
+    } else {
+      setActiveDrawer(null);
+      showToast({
+        title: "Guest Session Required",
+        description: "Please scan your nightstand QR code to request towels.",
+        type: "default",
+      });
+    }
   };
 
   // Submit Maintenance Issue
@@ -397,27 +501,55 @@ export default function GuestPage() {
       return;
     }
 
-    const newReq = addGuestRequest({
-      room: "412",
-      guest: "In-Room Guest",
-      channel: "Maintenance",
-      summary: issueCategory,
-      detail: `${issueDescription}${hasIssuePhoto ? " [Photo proof attached]" : ""}`,
-      sla: 30,
-      state: "new",
-    });
-
-    setActiveRequest(newReq);
-    setIssueDescription("");
-    setHasIssuePhoto(false);
-    setActiveDrawer(null);
-    setServiceRating(0);
-
-    showToast({
-      title: "Issue Dispatched to Engineering",
-      description: `${issueCategory} logged. Duty engineer notified.`,
-      type: "success",
-    });
+    if (guestTokens.access()) {
+      guestRequests
+        .reportIssue({
+          summary: issueCategory,
+          description: issueDescription,
+          category: issueCategory.toLowerCase(),
+          severity: "normal",
+        })
+        .then((created) => {
+          setActiveRequest({
+            id: created.id,
+            room: created.room_number || "Room",
+            guest: "In-Room Guest",
+            channel: "Maintenance",
+            summary: issueCategory,
+            detail: `${issueDescription}${hasIssuePhoto ? " [Photo proof attached]" : ""}`,
+            sla: 30,
+            raisedAt: new Date(created.created_at).toLocaleTimeString("en-IN", {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+            openFor: 0,
+            state: "new",
+          });
+          setIssueDescription("");
+          setHasIssuePhoto(false);
+          setActiveDrawer(null);
+          setServiceRating(0);
+          showToast({
+            title: "Issue Dispatched to Engineering",
+            description: `${issueCategory} logged. Duty engineer notified.`,
+            type: "success",
+          });
+        })
+        .catch((err) => {
+          showToast({
+            title: "Issue Report Failed",
+            description: err instanceof Error ? err.message : "Could not submit issue report.",
+            type: "error",
+          });
+        });
+    } else {
+      setActiveDrawer(null);
+      showToast({
+        title: "Guest Session Required",
+        description: "Please scan your nightstand QR code to report maintenance issues.",
+        type: "default",
+      });
+    }
   };
 
   // Staff rating submission

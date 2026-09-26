@@ -13,7 +13,7 @@
  */
 
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
 
 const ACCESS_KEY = "vesper_access_token";
 const REFRESH_KEY = "vesper_refresh_token";
@@ -159,18 +159,23 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
 
   let response: Response;
   try {
+    const effectiveSignal =
+      signal ||
+      (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+        ? AbortSignal.timeout(8000)
+        : undefined);
     response = await fetch(url.toString(), {
       method,
       headers,
-      body: body === undefined ? undefined : multipart ? body as FormData : JSON.stringify(body),
-      signal,
+      body: body === undefined ? undefined : multipart ? (body as FormData) : JSON.stringify(body),
+      signal: effectiveSignal,
     });
   } catch (cause) {
     // The gateway is down, or the browser is offline. Say which, rather than throwing
     // a bare TypeError from fetch.
     throw new ApiError(0, {
       code: "network_error",
-      message: "Could not reach the server. Check that the backend is running.",
+      message: `Could not reach backend at ${API_URL}. Please start the backend server (python -m uvicorn app.main:app --port 8000).`,
       details: { cause: String(cause) },
     });
   }
@@ -326,12 +331,11 @@ export const property = {
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
   /** Public property summary, safe for landing/orientation without staff credentials. */
-  public: (propertyId?: string) =>
+  publicSummary: (propertyId?: string) =>
     api.get<BackendPropertySummary>(
       "/property/public",
       propertyId ? { property_id: propertyId } : undefined
     ),
-  /** Room categories belonging to this property (calls public endpoint first, falls back to authenticated). */
   roomCategories: async (propertyId?: string): Promise<BackendRoomCategory[]> => {
     try {
       return await api.get<BackendRoomCategory[]>(
@@ -339,10 +343,9 @@ export const property = {
         propertyId ? { property_id: propertyId } : undefined
       );
     } catch {
-      return await api.get<BackendRoomCategory[]>("/property/room-categories");
+      return api.get<BackendRoomCategory[]>("/property/room-categories");
     }
   },
-  /** Occupancy count and percentage from backend. */
   occupancy: () =>
     api.get<{
       total_rooms: number;
@@ -350,30 +353,15 @@ export const property = {
       occupancy_rate: number;
       as_of: string;
     }>("/property/occupancy"),
+  departments: () => api.get<DepartmentOut[]>("/property/departments"),
   amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
+  public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
   publicDetail: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
   saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
   uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
   uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
   updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
     api.patch<RoomImage>(`/property/images/${imageId}`, data),
-};
-
-export const rooms = {
-  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
-    api.get<BackendRoom[]>("/rooms", params),
-  board: () => api.get<BackendRoomBoard>("/rooms/board"),
-  get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
-  setStatus: (id: string, status: string, note?: string) =>
-    api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
-};
-
-export const amenities = {
-  /**
-   * Persisted guest amenity catalogue.
-   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
-   */
-  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
 export interface RoomImage {
@@ -432,6 +420,23 @@ export const guestProperty = {
   amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
 };
 
+export const rooms = {
+  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
+    api.get<BackendRoom[]>("/rooms", params),
+  board: () => api.get<BackendRoomBoard>("/rooms/board"),
+  get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
+  setStatus: (id: string, status: string, note?: string) =>
+    api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
+};
+
+export const amenities = {
+  /**
+   * Persisted guest amenity catalogue.
+   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
+   */
+  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
+};
+
 export interface GuestSession {
   token: string;
   expires_in: number;
@@ -477,3 +482,217 @@ export const auth = {
 
   isSignedIn: () => tokens.access() !== null,
 };
+
+// --- Phase 4: Concierge, Escalation, Communications & Requests ---
+
+export interface ConciergeSource {
+  id: string;
+  title: string;
+  category: string;
+  score: number;
+}
+
+export interface ConciergeMessage {
+  id: string;
+  question: string;
+  answer: string;
+  sources: ConciergeSource[] | string[];
+  model: string | null;
+  outcome: "answered" | "no_context" | "rate_limited" | "unavailable" | "weak_context" | string;
+  escalated: boolean;
+  escalation_reason: string | null;
+  handled_at: string | null;
+  created_at: string;
+}
+
+export interface RequestDetail {
+  id: string;
+  kind: "room_service" | "housekeeping" | "amenities" | "maintenance" | "other" | string;
+  status: "raised" | "accepted" | "in_progress" | "delivered" | "cancelled" | string;
+  room_number: string;
+  note: string | null;
+  items: Array<{ menu_item_id: string; quantity: number }>;
+  total_amount: number | string;
+  sla_minutes: number;
+  due_at: string;
+  accepted_at: string | null;
+  delivered_at: string | null;
+  rating: number | null;
+  created_at: string;
+  is_overdue: boolean;
+  department_id: string | null;
+}
+
+export interface IssueOut {
+  id: string;
+  room_id: string | null;
+  room_number: string | null;
+  asset_id: string | null;
+  department_id: string | null;
+  reported_by: string | null;
+  reported_by_guest: boolean;
+  summary: string;
+  description: string | null;
+  category: string;
+  severity: string;
+  photo_url: string | null;
+  status: "reported" | "acknowledged" | "in_progress" | "resolved" | "dismissed" | string;
+  duplicate_count: number;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface SentimentSummary {
+  samples: number;
+  average_sentiment: number;
+  label: string;
+  negative_share: number;
+  top_themes: Array<{ theme?: string; count?: number; sentiment?: number; [key: string]: unknown }>;
+}
+
+export interface SentimentTrendItem {
+  department_id: string;
+  department_name?: string;
+  average_sentiment: number;
+  count: number;
+  [key: string]: unknown;
+}
+
+export interface OutboxOut {
+  id: string;
+  property_id: string;
+  channel: "sms" | "whatsapp" | "email" | "in_app" | string;
+  recipient: string;
+  subject: string | null;
+  body: string;
+  kind: string;
+  status: "queued" | "sending" | "sent" | "delivered" | "failed" | "dead" | string;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  next_attempt_at: string | null;
+  created_at: string;
+  delivered_at: string | null;
+}
+
+export interface OutboxSummary {
+  queued: number;
+  sent_today: number;
+  delivered_today: number;
+  failed_today: number;
+  dead: number;
+  channels: Record<string, number>;
+}
+
+export interface DepartmentOut {
+  id: string;
+  key: string;
+  name: string;
+  default_sla_minutes: number;
+  head_user_id: string | null;
+}
+
+export interface StaffTask {
+  id: string;
+  title: string;
+  description: string | null;
+  department_id: string;
+  assignee_id: string | null;
+  room_id: string | null;
+  priority: "low" | "normal" | "high" | "urgent" | string;
+  status: "open" | "assigned" | "in_progress" | "blocked" | "completed" | "cancelled" | string;
+  source: string;
+  due_at: string;
+  is_overdue: boolean;
+  created_at: string;
+}
+
+export const concierge = {
+  ask: (question: string) =>
+    api.guestPost<ConciergeMessage>("/guest-intel/concierge/ask", { question }),
+  history: () =>
+    api.guestGet<ConciergeMessage[]>("/guest-intel/concierge/history"),
+  escalations: (unhandledOnly: boolean = true) =>
+    api.get<ConciergeMessage[]>("/guest-intel/concierge/escalations", {
+      unhandled_only: unhandledOnly,
+    }),
+  handleEscalation: (id: string) =>
+    api.post<ConciergeMessage>(`/guest-intel/concierge/escalations/${id}/handle`),
+  staffAsk: (question: string) =>
+    api.post<ConciergeMessage>("/guest-intel/concierge/staff-ask", { question }),
+};
+
+export const guestRequests = {
+  list: () => api.guestGet<RequestDetail[]>("/guest/requests"),
+  create: (body: {
+    kind: string;
+    note?: string;
+    items?: Array<{ menu_item_id: string; quantity: number }>;
+  }) => api.guestPost<RequestDetail>("/guest/requests", body),
+  reportIssue: (body: {
+    summary: string;
+    description?: string;
+    category?: string;
+    severity?: string;
+  }) => api.guestPost<IssueOut>("/guest/issues", body),
+  rate: (requestId: string, rating: number, comment?: string) =>
+    api.guestPost<RequestDetail>(`/guest/requests/${requestId}/rating`, {
+      rating,
+      comment,
+    }),
+};
+
+export const staffRequests = {
+  list: (params?: { department_id?: string; status?: string }) =>
+    api.get<RequestDetail[]>("/requests", params),
+  accept: (id: string) => api.post<RequestDetail>(`/requests/${id}/accept`),
+  setStatus: (id: string, status: string) =>
+    api.put<RequestDetail>(`/requests/${id}/status`, { status }),
+};
+
+export const staffIssues = {
+  list: (params?: { status?: string }) =>
+    api.get<IssueOut[]>("/issues", params),
+  setStatus: (id: string, status: string) =>
+    api.put<IssueOut>(`/issues/${id}/status`, { status }),
+};
+
+export const sentiment = {
+  summary: (days: number = 30) =>
+    api.get<SentimentSummary>("/guest-intel/sentiment/summary", { days }),
+  trend: (days: number = 30) =>
+    api.get<SentimentTrendItem[]>("/guest-intel/sentiment/trend", { days }),
+};
+
+export const notifications = {
+  outbox: (params?: { status?: string; limit?: number }) =>
+    api.get<OutboxOut[]>("/notifications/outbox", params),
+  summary: () => api.get<OutboxSummary>("/notifications/outbox/summary"),
+  retry: (id: string) => api.post<OutboxOut>(`/notifications/outbox/${id}/retry`),
+};
+
+export const departments = {
+  list: () => api.get<DepartmentOut[]>("/property/departments"),
+};
+
+export const staffTasks = {
+  list: (params?: { department_id?: string; status?: string }) =>
+    api.get<{ counts: Record<string, number>; overdue: number; tasks: StaffTask[] }>(
+      "/tasks",
+      params
+    ),
+  create: (body: {
+    title: string;
+    description?: string;
+    department_id: string;
+    assignee_id?: string;
+    room_id?: string;
+    priority?: string;
+    due_at?: string;
+  }) => api.post<StaffTask>("/tasks", body),
+  claim: (id: string) => api.post<StaffTask>(`/tasks/${id}/claim`),
+  setStatus: (id: string, status: string) =>
+    api.put<StaffTask>(`/tasks/${id}/status`, { status }),
+};
+

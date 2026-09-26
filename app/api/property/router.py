@@ -2,18 +2,13 @@ from pathlib import Path
 from io import BytesIO
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from vesper_common.db import get_session
-<<<<<<< Updated upstream
-from vesper_common.permissions import Perm, Role
-from fastapi import HTTPException
-=======
 from vesper_common.errors import Invalid
-from vesper_common.permissions import Perm
->>>>>>> Stashed changes
+from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, current_user, requires
 
 from . import service
@@ -127,7 +122,8 @@ def list_departments(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> list[DepartmentOut]:
     rows = service.list_departments(db, UUID(principal.property_id))
-    return [DepartmentOut.model_validate(r) for r in rows if principal.role == Role.GM or str(r.id) in principal.department_ids]
+    return [DepartmentOut.model_validate(r) for r in rows
+            if principal.role in {Role.GM, "service"} or str(r.id) in principal.department_ids]
 
 
 @router.get("/public", response_model=PropertySummary)

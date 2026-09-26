@@ -77,7 +77,8 @@ export function toUiUser(
     // The backend's own word for the job, not the UI's approximation of it.
     roleTitle: ROLE_TITLES[user.role] ?? user.role,
     department: department?.name,
-    departmentId: user.department_id ?? undefined,
+    departmentId: user.department_id,
+    departmentKey: department?.key,
     propertyId: user.property_id,
     propertyName: options.propertyName ?? `Property ${user.property_id.slice(0, 8)}`,
     permissions: user.permissions,

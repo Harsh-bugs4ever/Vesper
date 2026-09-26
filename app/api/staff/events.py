@@ -105,8 +105,17 @@ def _task_from_issue(db, envelope: Envelope) -> None:
     payload = envelope.payload
     if not payload.get("department_id"):
         return
+    order = None
+    if payload.get("work_order_id"):
+        from app.api.maintenance.models import WorkOrder, WorkOrderStatus
+        order = db.get(WorkOrder, UUID(payload["work_order_id"]))
+        if (order is None or order.property_id != UUID(envelope.property_id)
+                or order.source_issue_id != UUID(payload["issue_id"])
+                or order.task_id is not None
+                or order.status in {WorkOrderStatus.COMPLETED, WorkOrderStatus.CANCELLED}):
+            return
     location = payload.get("room_number") or payload.get("location") or "property"
-    service.create_task(
+    task = service.create_task(
         db,
         UUID(envelope.property_id),
         _draft(
@@ -121,6 +130,9 @@ def _task_from_issue(db, envelope: Envelope) -> None:
         ),
         actor_id=envelope.actor_id,
     )
+    if order is not None:
+        order.task_id = task.id
+        db.commit()
 
 
 def _task_from_card(db, envelope: Envelope) -> None:

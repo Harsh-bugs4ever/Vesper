@@ -258,7 +258,7 @@ def list_issues(
 def set_issue_status(
     issue_id: UUID,
     body: IssueStatusUpdate,
-    principal: Principal = Depends(requires(Perm.ISSUES_WRITE)),
+    principal: Principal = Depends(requires(Perm.REPORTS_APPROVE)),
     db: Session = Depends(get_session),
 ) -> IssueOut:
     from .models import IssueReport
