@@ -65,7 +65,7 @@ dev: ## Run the backend and the web app, each in its own terminal
 	@echo "  backend   http://127.0.0.1:8000/docs"
 	@echo "  frontend  http://localhost:3000"
 	@echo ""
-	@echo "  sign in with owner@vesper.demo / vesper123"
+	@echo "  sign in with gm@vesper.demo / vesper123"
 	@echo "  close either window to stop that half"
 
 backend: ## Run only the backend in a new terminal window
