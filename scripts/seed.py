@@ -219,7 +219,7 @@ def main() -> int:
             ).limit(1))
         if existing_id is not None:
             from scripts.seed_existing import enrich_existing_demo
-            from scripts.seed_staff_tasks import seed_staff_tasks
+            from scripts.seed_staff_tasks import seed_claimable_work, seed_staff_tasks
             from scripts.seed_workflow import seed_workflow
             import vesper_models.guest as guest
             with session_scope() as db:
@@ -233,6 +233,7 @@ def main() -> int:
                     print(f"Recovered missing food-order seed: {food_counts['fnb_orders_total']} orders")
                 enrichment = enrich_existing_demo(db, existing_id)
                 assignments = seed_staff_tasks(db, existing_id)
+                claimable = seed_claimable_work(db, existing_id)
                 result = seed_workflow(db, existing_id, apply=True)
             print(f"Demo resort already exists. Added {result['created']} workflow rows; "
                   f"{result['already_present']} already present.")
@@ -240,6 +241,8 @@ def main() -> int:
                 print(f"  {label:<22} {count}")
             for label, count in assignments.items():
                 print(f"  {label:<22} {count}")
+            for label, count in claimable.items():
+                print(f"  pool_{label:<17} {count}")
             print("No base data was reset.")
             return 0
 
@@ -397,7 +400,7 @@ def _seed(db) -> dict[str, int]:
             staff_grants |= {"requests:read", "requests:accept"}
         if department == "front_office":
             staff_grants |= {"bookings:read", "bookings:write", "guests:read"}
-        if department in {"housekeeping", "maintenance", "fnb", "front_office"}:
+        if department in {"housekeeping", "maintenance", "fnb", "front_office", "store", "security"}:
             staff_grants.add("tasks:pool_read")
         if department == "store":
             staff_grants |= {"stock:read"}
@@ -841,9 +844,11 @@ def _seed(db) -> dict[str, int]:
     fnb_counts = seed_fnb_data(db, property_id=pid)
     counts.update(fnb_counts)
 
-    from scripts.seed_staff_tasks import seed_staff_tasks
+    from scripts.seed_staff_tasks import seed_claimable_work, seed_staff_tasks
     assignment_counts = seed_staff_tasks(db, pid)
     counts["assigned_staff_tasks"] = assignment_counts["tasks_added"]
+    pool_counts = seed_claimable_work(db, pid)
+    counts["claimable_staff_tasks"] = pool_counts["claimable_added"]
 
     # Finish the single-command demo with linked guest, staff and manager stories.
     # Their stable IDs make the ordinary rerun safe after an interrupted first run.

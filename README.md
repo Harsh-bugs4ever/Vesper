@@ -336,15 +336,17 @@ make seed                        # rooms, staff, bookings, orders and connected 
 
 `python scripts/seed.py` is the single command for the complete demo. It creates
 rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
-staff tasks, one assigned task for every demo staff account, requisitions, guest
-requests, issue reports and manager scenarios.
+staff tasks, one assigned task for every demo staff account, claimable department
+work, requisitions, guest requests, issue reports and manager scenarios.
 Running it again fills missing demo attendance, food-order task links, menu stock
 and workflow examples, and recovers the food-order seed if an earlier run stopped
 before creating any orders. It also repairs old placeholder room references when exactly
 one historical booking matches; ambiguous rows are reported and left as they are.
 It does not duplicate the base resort or delete data.
-To add only the missing assigned staff tasks to an existing demo, run
-`python scripts/seed_staff_tasks.py`. It writes and commits the tasks directly.
+To add only staff work to an existing demo, run `python scripts/seed_staff_tasks.py`.
+It writes and commits assigned tasks for every demo staff account plus six unassigned,
+claimable tasks each for housekeeping, F&B, front office, maintenance, store and
+security. Existing demo staff in those departments gain the pool-read permission.
 `--reset --confirm-reset` is destructive and only for a
 disposable database.
 
