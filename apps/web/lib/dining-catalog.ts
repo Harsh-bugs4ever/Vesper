@@ -241,14 +241,17 @@ export interface AiRecommendationResult {
  */
 export function getAiDiningRecommendations(
   orderHistory: OrderItemHistorySummary[],
-  cartItemIds: string[] = []
+  cartItemIds: string[] = [],
+  availableCatalog?: MenuItem[]
 ): AiRecommendationResult {
+  const catalog = availableCatalog && availableCatalog.length > 0 ? availableCatalog : FALLBACK_MENU_ITEMS;
+
   // Check if non-veg items exist in order history or current cart
   const orderedNonVegCount = orderHistory.filter((item) => !item.is_veg).reduce((sum, item) => sum + item.quantity, 0);
   const orderedVegCount = orderHistory.filter((item) => item.is_veg).reduce((sum, item) => sum + item.quantity, 0);
 
   // Check current cart
-  const cartItems = FALLBACK_MENU_ITEMS.filter((item) => cartItemIds.includes(item.id));
+  const cartItems = catalog.filter((item) => cartItemIds.includes(item.id));
   const cartNonVegCount = cartItems.filter((item) => !item.is_veg).length;
   const cartVegCount = cartItems.filter((item) => item.is_veg).length;
 
@@ -270,7 +273,10 @@ export function getAiDiningRecommendations(
   if (totalNonVeg > 0) {
     const primarySample = recentNonVegNames[0] || "non-vegetarian selection";
     // Filter STRICTLY to non-veg food items
-    const nonVegPool = FALLBACK_MENU_ITEMS.filter((item) => !item.is_veg);
+    let nonVegPool = catalog.filter((item) => !item.is_veg);
+    if (nonVegPool.length === 0) {
+      nonVegPool = FALLBACK_MENU_ITEMS.filter((item) => !item.is_veg);
+    }
     
     // Sort items: prioritize items not yet ordered/in cart, then popular ones
     const prioritizedNonVeg = [...nonVegPool].sort((a, b) => {
@@ -291,7 +297,10 @@ export function getAiDiningRecommendations(
   // If user has exclusively ordered vegetarian
   if (totalVeg > 0) {
     const primarySample = recentVegNames[0] || "vegetarian selection";
-    const vegPool = FALLBACK_MENU_ITEMS.filter((item) => item.is_veg && item.category !== "beverages");
+    let vegPool = catalog.filter((item) => item.is_veg && item.category !== "beverages");
+    if (vegPool.length === 0) {
+      vegPool = FALLBACK_MENU_ITEMS.filter((item) => item.is_veg && item.category !== "beverages");
+    }
 
     return {
       preference: "veg",
@@ -302,17 +311,20 @@ export function getAiDiningRecommendations(
     };
   }
 
-  // If no history yet, provide chef's balanced top recommendations
+  // If no history yet, provide chef's balanced top recommendations from catalog
+  const topSignatures = catalog.slice(0, 4);
+  const fallbackSignatures = [
+    FALLBACK_MENU_ITEMS.find((i) => i.id === "mumbai-chicken-club")!,
+    FALLBACK_MENU_ITEMS.find((i) => i.id === "murgh-malai-tikka")!,
+    FALLBACK_MENU_ITEMS.find((i) => i.id === "dal-vesper-naan")!,
+    FALLBACK_MENU_ITEMS.find((i) => i.id === "awadhi-dum-biryani")!,
+  ].filter(Boolean);
+
   return {
     preference: "neutral",
     preferenceLabel: "Chef Ranveer's Highlights",
     headline: "Executive Chef's Signature Recommendations",
     explanation: "Curated signature dishes from Vesper's kitchen. Place your first order to unlock deeply tailored AI palate recommendations!",
-    recommendations: [
-      FALLBACK_MENU_ITEMS.find((i) => i.id === "mumbai-chicken-club")!,
-      FALLBACK_MENU_ITEMS.find((i) => i.id === "murgh-malai-tikka")!,
-      FALLBACK_MENU_ITEMS.find((i) => i.id === "dal-vesper-naan")!,
-      FALLBACK_MENU_ITEMS.find((i) => i.id === "awadhi-dum-biryani")!,
-    ].filter(Boolean),
+    recommendations: topSignatures.length >= 2 ? topSignatures : fallbackSignatures,
   };
 }

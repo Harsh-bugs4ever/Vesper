@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 interface GuestAiDiningRecommendationsProps {
   orderHistory: OrderItemHistorySummary[];
   cart: Record<string, number>;
+  availableCatalog?: MenuItem[];
   onAddToCart: (item: MenuItem) => void;
   className?: string;
 }
@@ -28,14 +29,15 @@ interface GuestAiDiningRecommendationsProps {
 export function GuestAiDiningRecommendations({
   orderHistory,
   cart,
+  availableCatalog,
   onAddToCart,
   className,
 }: GuestAiDiningRecommendationsProps) {
   const activeCartIds = Object.keys(cart).filter((id) => (cart[id] ?? 0) > 0);
 
   const aiResult = useMemo(() => {
-    return getAiDiningRecommendations(orderHistory, activeCartIds);
-  }, [orderHistory, activeCartIds]);
+    return getAiDiningRecommendations(orderHistory, activeCartIds, availableCatalog);
+  }, [orderHistory, activeCartIds, availableCatalog]);
 
   const isNonVegPreference = aiResult.preference === "non-veg";
 

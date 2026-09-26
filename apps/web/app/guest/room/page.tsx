@@ -241,6 +241,78 @@ export default function GuestRoomPage() {
     return grouped;
   }, []);
 
+  // Master catalog of all menu items (backend live items + fallback resort catalog)
+  const masterCatalog = useMemo(() => {
+    const itemMap = new Map<string, MenuItem>();
+
+    // 1. First add fallback items
+    for (const item of FALLBACK_MENU_ITEMS) {
+      itemMap.set(String(item.id).toLowerCase(), {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        price: Number(item.price),
+        is_veg: item.is_veg,
+        is_available: item.is_available,
+      });
+    }
+
+    // 2. Add backend live items (overrides or supplements with live items)
+    if (menu.data?.categories) {
+      for (const items of Object.values(menu.data.categories)) {
+        for (const item of items) {
+          if (item && item.id) {
+            itemMap.set(String(item.id).toLowerCase(), {
+              id: String(item.id),
+              name: item.name,
+              description: item.description,
+              price: Number(item.price || 0),
+              is_veg: Boolean(item.is_veg),
+              is_available: Boolean(item.is_available),
+            });
+          }
+        }
+      }
+    }
+
+    return Array.from(itemMap.values());
+  }, [menu.data?.categories]);
+
+  // Robust menu item finder by ID, lowercase ID, or name
+  const getMenuItem = (id: string): MenuItem | undefined => {
+    if (!id) return undefined;
+    const cleanId = String(id).trim().toLowerCase();
+
+    // 1. Direct ID match in masterCatalog
+    let match = masterCatalog.find(
+      (m) => String(m.id).toLowerCase() === cleanId
+    );
+    if (match) return match;
+
+    // 2. Name match (case-insensitive)
+    match = masterCatalog.find(
+      (m) => m.name.toLowerCase().trim() === cleanId
+    );
+    if (match) return match;
+
+    // 3. Fallback search in FALLBACK_MENU_ITEMS
+    const fallbackMatch = FALLBACK_MENU_ITEMS.find(
+      (m) => String(m.id).toLowerCase() === cleanId || m.name.toLowerCase().trim() === cleanId
+    );
+    if (fallbackMatch) {
+      return {
+        id: fallbackMatch.id,
+        name: fallbackMatch.name,
+        description: fallbackMatch.description,
+        price: Number(fallbackMatch.price),
+        is_veg: fallbackMatch.is_veg,
+        is_available: fallbackMatch.is_available,
+      };
+    }
+
+    return undefined;
+  };
+
   const isBackendMenuLoaded = Boolean(
     menu.data?.categories && Object.keys(menu.data.categories).length > 0
   );
@@ -250,25 +322,24 @@ export default function GuestRoomPage() {
     ? (menu.data!.categories)
     : fallbackCategories;
 
-  const allMenuItems = useMemo(() => {
-    return Object.values(menuCategories).flat();
-  }, [menuCategories]);
+  const allMenuItems = masterCatalog;
 
   const cartItems = Object.entries(cart)
     .filter(([, quantity]) => quantity > 0)
     .map(([id, quantity]) => ({ menu_item_id: id, quantity }));
 
   const cartTotal = cartItems.reduce((sum, line) => {
-    const item = allMenuItems.find((i) => i.id === line.menu_item_id);
-    return sum + Number(item?.price ?? 0) * line.quantity;
+    const item = getMenuItem(line.menu_item_id);
+    const unitPrice = Number(item?.price ?? 0);
+    return sum + (isNaN(unitPrice) ? 0 : unitPrice) * line.quantity;
   }, 0);
 
   const totalCartItemCount = cartItems.reduce((sum, line) => sum + line.quantity, 0);
 
   const cartSummaryString = cartItems
     .map((line) => {
-      const item = allMenuItems.find((i) => i.id === line.menu_item_id);
-      return `${item?.name || "Item"} ×${line.quantity}`;
+      const item = getMenuItem(line.menu_item_id);
+      return `${item?.name || "Gourmet Dish"} ×${line.quantity}`;
     })
     .join(", ");
 
@@ -311,13 +382,14 @@ export default function GuestRoomPage() {
     });
 
     const orderedItemsWithDetails = cartItems.map((ci) => {
-      const catalogItem = allMenuItems.find((m) => m.id === ci.menu_item_id);
+      const catalogItem = getMenuItem(ci.menu_item_id);
+      const unitPrice = Number(catalogItem?.price ?? 0);
       return {
         menu_item_id: ci.menu_item_id,
         name: catalogItem?.name || "Gourmet Dish",
         quantity: ci.quantity,
-        unit_price: catalogItem?.price ?? 0,
-        price: (catalogItem?.price ?? 0) * ci.quantity,
+        unit_price: unitPrice,
+        price: unitPrice * ci.quantity,
         is_veg: catalogItem ? catalogItem.is_veg : true,
       };
     });
@@ -592,6 +664,7 @@ export default function GuestRoomPage() {
               <GuestAiDiningRecommendations
                 orderHistory={orderHistory}
                 cart={cart}
+                availableCatalog={masterCatalog}
                 onAddToCart={handleAddToCartFromAi}
               />
 
