@@ -142,6 +142,32 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
               <Lock className="h-4 w-4" aria-hidden="true" />
               {submitting ? "Authenticating with server…" : "Sign in to live operations"}
             </button>
+
+            <div className="pt-2">
+              <p className="text-[11px] font-medium text-sand-500 mb-1.5">Quick Demo Fill:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail("gm@vesper.demo");
+                    setPassword("vesper123");
+                  }}
+                  className="rounded-lg border border-sand-200 bg-sand-50 px-2.5 py-1 text-xs font-medium text-sand-700 hover:bg-sand-100 hover:text-sand-900 transition-colors"
+                >
+                  ⚡ GM (gm@vesper.demo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail("owner@vesper.demo");
+                    setPassword("vesper123");
+                  }}
+                  className="rounded-lg border border-sand-200 bg-sand-50 px-2.5 py-1 text-xs font-medium text-sand-700 hover:bg-sand-100 hover:text-sand-900 transition-colors"
+                >
+                  ⚡ Owner (owner@vesper.demo)
+                </button>
+              </div>
+            </div>
           </form>
 
           {/* Guest Access Alternative */}
