@@ -83,6 +83,10 @@ const KIND_LABEL: Record<string, string> = {
   work_order: "Engineering",
   retention_offer: "Guest Experience",
   staffing_gap: "Workforce",
+  facility_promo: "Facility & Perks",
+  guest_recovery: "Guest SLA Recovery",
+  vision_audit: "Vision-AI Turnover",
+  chef_special: "Kitchen Waste Rescue",
 };
 
 const KIND_CATEGORY: Record<string, string> = {
@@ -92,6 +96,10 @@ const KIND_CATEGORY: Record<string, string> = {
   work_order: "maintenance",
   retention_offer: "inventory",
   staffing_gap: "staffing",
+  facility_promo: "guest",
+  guest_recovery: "guest",
+  vision_audit: "maintenance",
+  chef_special: "inventory",
 };
 
 const URGENCY_META: Record<string, { label: string; chip: string; bar: string }> = {
@@ -191,6 +199,32 @@ function LiveActionQueue() {
 
   // Snooze dropdown
   const [activeSnoozeId, setActiveSnoozeId] = useState<string | null>(null);
+
+  // AI Autonomous automation scanner state
+  const [runningAiEngine, setRunningAiEngine] = useState<string | null>(null);
+
+  const triggerAi = async (endpoint: string, label: string) => {
+    try {
+      setRunningAiEngine(label);
+      await api.post(`/cards/ai-automation/${endpoint}`);
+      await client.invalidateQueries({ queryKey: key });
+      await client.invalidateQueries({ queryKey: statsKey });
+      showToast({
+        title: "AI Scan Completed",
+        description: `${label} analyzed real-time conditions and refreshed the action queue.`,
+        type: "default",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not complete engine scan.";
+      showToast({
+        title: "AI Engine Scan Failed",
+        description: msg,
+        type: "error",
+      });
+    } finally {
+      setRunningAiEngine(null);
+    }
+  };
 
   const key = ["cards", user?.propertyId ?? "", user?.id ?? ""];
   const statsKey = ["cards-stats", user?.propertyId ?? ""];
@@ -341,6 +375,16 @@ function LiveActionQueue() {
               </span>
             )}
             <Button
+              variant="default"
+              size="sm"
+              disabled={runningAiEngine !== null}
+              onClick={() => triggerAi("run-all", "All 4 AI Autonomous Engines")}
+              className="bg-sand-900 text-sand-50 hover:bg-sand-800 shadow-sm gap-1.5"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              {runningAiEngine === "All 4 AI Autonomous Engines" ? "Scanning Workflows…" : "Run AI Scan (All 4)"}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => {
@@ -399,15 +443,81 @@ function LiveActionQueue() {
         />
       </div>
 
+      {/* AI Autonomous Engines Simulation & Trigger Cockpit */}
+      <Panel className="border-sand-200/80 bg-gradient-to-r from-sand-50/80 via-white to-sand-50/60 shadow-sm">
+        <PanelBody className="py-3 px-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sand-900 text-amber-300">
+                <Bot className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-sand-900">
+                    AI Autonomous Workflows
+                  </h4>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    4 Engines Active
+                  </span>
+                </div>
+                <p className="text-xs text-sand-500">
+                  Trigger targeted heuristics to discover off-peak perks, prevent guest churn, audit turnovers & rescue food stock.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={runningAiEngine !== null}
+                onClick={() => triggerAi("facility-promo", "Facility Demand Engine")}
+                className="h-7 text-xs border-sand-200 hover:bg-sand-100"
+              >
+                🏸 Badminton & Perks
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={runningAiEngine !== null}
+                onClick={() => triggerAi("guest-recovery", "Predictive Churn Engine")}
+                className="h-7 text-xs border-sand-200 hover:bg-sand-100"
+              >
+                ❤️ SLA Recovery
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={runningAiEngine !== null}
+                onClick={() => triggerAi("vision-audit", "Vision-AI Turnover Engine")}
+                className="h-7 text-xs border-sand-200 hover:bg-sand-100"
+              >
+                📷 Vision Turnover
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={runningAiEngine !== null}
+                onClick={() => triggerAi("kitchen-waste", "Kitchen Waste Rescue")}
+                className="h-7 text-xs border-sand-200 hover:bg-sand-100"
+              >
+                🍲 Chef Special
+              </Button>
+            </div>
+          </div>
+        </PanelBody>
+      </Panel>
+
       {/* Filter Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <FilterChips
           options={[
             { value: "all" as const, label: "All Cards", count: cards.length },
             { value: "pricing" as const, label: "Revenue & Pricing", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "pricing").length },
-            { value: "maintenance" as const, label: "Engineering", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "maintenance").length },
+            { value: "maintenance" as const, label: "Engineering & Rooms", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "maintenance").length },
             { value: "staffing" as const, label: "Workforce", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "staffing").length },
-            { value: "inventory" as const, label: "Stock & F&B", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "inventory").length },
+            { value: "inventory" as const, label: "F&B & Stock", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "inventory").length },
+            { value: "guest" as const, label: "Guest SLA & Perks", count: cards.filter((c) => KIND_CATEGORY[c.kind] === "guest").length },
           ]}
           value={kindFilter}
           onChange={setKindFilter}
@@ -577,7 +687,7 @@ function LiveActionQueue() {
                       </div>
 
                       {card.payload && Object.keys(card.payload).length > 0 && (
-                        <div className="mt-3 border-t border-sand-200/80 pt-3 space-y-1">
+                        <div className="mt-3 border-t border-sand-200/80 pt-3 space-y-1.5">
                           {card.payload.quantity !== undefined && (
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-sand-500">Suggested quantity</span>
@@ -590,6 +700,60 @@ function LiveActionQueue() {
                               <span className="font-mono font-medium text-sand-700 text-[10px]">
                                 {String(card.payload.item_id).slice(0, 8)}…
                               </span>
+                            </div>
+                          )}
+                          {/* Facility Utilization details */}
+                          {card.kind === "facility_promo" && card.payload.facility !== undefined && (
+                            <div className="rounded-md border border-sand-200 bg-sand-100/70 p-2 text-xs space-y-1">
+                              <div className="flex justify-between font-semibold text-sand-900">
+                                <span>🏸 {String(card.payload.facility)}</span>
+                                <span className="text-emerald-700">+{String(card.payload.discount_percent)}% Resident Perk</span>
+                              </div>
+                              <p className="text-[11px] text-sand-600 font-mono">{String(card.payload.time_slot)}</p>
+                              <div className="text-[10px] text-sand-500 mt-1 italic border-t border-sand-200/60 pt-1">
+                                &ldquo;{String(card.payload.concierge_message ?? "")}&rdquo;
+                              </div>
+                            </div>
+                          )}
+                          {/* Guest SLA Recovery details */}
+                          {card.kind === "guest_recovery" && card.payload.room_number !== undefined && (
+                            <div className="rounded-md border border-rose-200 bg-rose-50/70 p-2 text-xs space-y-1">
+                              <div className="flex justify-between font-semibold text-rose-900">
+                                <span>❤️ Room: {String(card.payload.room_number)}</span>
+                                <span className="rounded bg-rose-100 px-1 py-0.5 text-[10px] text-rose-800 font-medium">VIP Rescue</span>
+                              </div>
+                              <p className="text-[11px] text-rose-800 font-medium">
+                                {String(card.payload.recommended_action ?? "Executive courtesy delivery")}
+                              </p>
+                            </div>
+                          )}
+                          {/* Vision AI Room Inspection details */}
+                          {card.kind === "vision_audit" && card.payload.audit_score !== undefined && (
+                            <div className="rounded-md border border-emerald-200 bg-emerald-50/70 p-2 text-xs space-y-1">
+                              <div className="flex justify-between font-semibold text-emerald-950">
+                                <span>📷 Room {String(card.payload.room_number ?? "304")}</span>
+                                <span className="rounded bg-emerald-100 px-1 py-0.5 text-[10px] text-emerald-800 font-bold">
+                                  {String(card.payload.audit_score)}% Passed
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-emerald-900">
+                                <span>✓ Crisp Linen</span>
+                                <span>✓ Sanitized Surfaces</span>
+                                <span>✓ Luxury Towels</span>
+                                <span>✓ Minibar Sealed</span>
+                              </div>
+                            </div>
+                          )}
+                          {/* Kitchen Waste Rescue details */}
+                          {card.kind === "chef_special" && card.payload.dish_name !== undefined && (
+                            <div className="rounded-md border border-amber-200 bg-amber-50/70 p-2 text-xs space-y-1">
+                              <div className="flex justify-between font-semibold text-amber-950">
+                                <span>🍲 {String(card.payload.ingredient_name ?? "Stock Rescue")}</span>
+                                <span className="text-emerald-700 font-bold">₹{String(card.payload.proposed_menu_price)}</span>
+                              </div>
+                              <p className="text-[11px] text-amber-900 font-medium">
+                                {String(card.payload.dish_name)}
+                              </p>
                             </div>
                           )}
                           {card.adjustments && Object.keys(card.adjustments).length > 0 && (
