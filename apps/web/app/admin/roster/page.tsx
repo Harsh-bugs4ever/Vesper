@@ -24,7 +24,7 @@ import { PeriodSelect } from "@/components/ui/period-select";
 import { useToast } from "@/components/ui/toast";
 import {
   workforceApi,
-  property,
+  departments as departmentApi,
   type RosterDetail,
   type RosterOut,
   type StaffingRow,
@@ -48,7 +48,7 @@ export default function RosterPage() {
   // 1. Fetch available departments
   const { data: departments = [] } = useQuery<DepartmentOut[]>({
     queryKey: ["departments"],
-    queryFn: () => property.departments(),
+    queryFn: () => departmentApi.list(),
     staleTime: 300_000,
   });
 

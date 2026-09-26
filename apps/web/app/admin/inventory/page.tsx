@@ -36,6 +36,9 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AdminDepartmentRequisitions } from "@/components/connected/admin-department-requisitions";
 import { AdminDepartmentBudgets } from "@/components/connected/admin-department-budgets";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { LivePurchaseOrders } from "@/components/connected/live-purchase-orders";
+import { loadSuppliers } from "@/lib/api/overviews";
 
 export interface BackendStockItem {
   id: string;
@@ -81,7 +84,7 @@ export default function InventoryPage() {
     direction: "in" | "out";
   } | null>(null);
   const [quantity, setQuantity] = useState("");
-  const [activeTab, setActiveTab] = useState<"stock" | "requisitions" | "budgets">("stock");
+  const [activeTab, setActiveTab] = useState<"stock" | "requisitions" | "purchase-orders" | "suppliers" | "budgets">("stock");
   const [movementNote, setMovementNote] = useState("");
 
   // 1. Fetch live inventory summary
@@ -250,6 +253,8 @@ export default function InventoryPage() {
         {[
           ["stock", "Stock Levels & Ledger"],
           ["requisitions", "Department Requisitions"],
+          ["purchase-orders", "Purchase Orders"],
+          ["suppliers", "Suppliers"],
           ["budgets", "Department Budgets & Caps"],
         ].map(([key, label]) => (
           <Button
@@ -257,7 +262,7 @@ export default function InventoryPage() {
             variant={activeTab === key ? "default" : "outline"}
             role="tab"
             aria-selected={activeTab === key}
-            onClick={() => setActiveTab(key as "stock" | "requisitions" | "budgets")}
+            onClick={() => setActiveTab(key as typeof activeTab)}
             className="text-xs"
           >
             {label}
@@ -525,7 +530,7 @@ export default function InventoryPage() {
       {/* Record Movement Drawer */}
       <Drawer
         open={Boolean(movement)}
-        onClose={() => setMovement(null)}
+        onOpenChange={(open) => { if (!open) setMovement(null); }}
         title={movement?.direction === "in" ? "Receive Stock" : "Issue Stock"}
         description={
           movement
@@ -583,6 +588,8 @@ export default function InventoryPage() {
       )}
 
       {activeTab === "requisitions" && <AdminDepartmentRequisitions />}
+      {activeTab === "purchase-orders" && <LivePurchaseOrders />}
+      {activeTab === "suppliers" && <ConnectedOverview title="Suppliers" description="Supplier coverage derived from live stock records." queryKey="inventory-suppliers" load={loadSuppliers} />}
       {activeTab === "budgets" && <AdminDepartmentBudgets />}
     </div>
   );

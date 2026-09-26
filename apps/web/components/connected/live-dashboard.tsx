@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -33,6 +33,7 @@ import {
   actionCardsApi,
   attendanceApi,
   reportsApi,
+  departments,
   api,
   type ActionCardDetail,
   type DashboardData,
@@ -60,6 +61,7 @@ function greetingFor(date: Date): string {
 
 export function GmDashboard() {
   const { user } = useAuth();
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const scope = [user?.propertyId ?? "default"];
@@ -67,6 +69,22 @@ export function GmDashboard() {
   const today = new Date();
   const firstName = user?.name ? user.name.split(" ")[0] : "General Manager";
   const propertyName = user?.propertyName ?? "the Resort";
+
+  const departmentList = useQuery({
+    queryKey: ["gm-departments", user?.propertyId],
+    queryFn: () => departments.list(),
+    enabled: Boolean(user?.propertyId),
+  });
+  const departmentOverview = useQuery({
+    queryKey: ["gm-department-overview", user?.propertyId, selectedDepartment],
+    queryFn: () => api.get<{ department: { department_name: string; open_requests: number; overdue_requests: number; open_tasks: number; overdue_tasks: number; attendance_today: number }; generated_at: string }>("/dashboard/department", { department_id: selectedDepartment }),
+    enabled: Boolean(user?.propertyId) && selectedDepartment !== "all",
+  });
+  const propertyOverview = useQuery({
+    queryKey: ["gm-property-overview", user?.propertyId],
+    queryFn: () => api.get<{ departments: { department_id: string; department_name: string; open_requests: number; open_tasks: number; attendance_today: number }[]; generated_at: string }>("/dashboard/overview"),
+    enabled: Boolean(user?.propertyId),
+  });
 
   // 1. Fetch live aggregated executive dashboard
   const {
@@ -99,7 +117,7 @@ export function GmDashboard() {
       queryClient.invalidateQueries({ queryKey: ["gm-dashboard"] });
       showToast({
         title: "Action Approved",
-        description: `Recommendation applied: ${card.title}. Undo window open for 60s.`,
+        description: `Recommendation applied: ${card.title}.${card.undo_seconds_left ? ` Undo available for ${card.undo_seconds_left}s.` : ""}`,
         type: "success",
       });
     },
@@ -157,15 +175,48 @@ export function GmDashboard() {
         actions={
           <div className="flex items-center gap-2">
             <Link
-              href="/admin/simulator"
+              href="/admin/rates"
               className="inline-flex items-center gap-1.5 rounded-xl border border-sand-200 bg-white px-3.5 py-2 text-xs font-semibold text-sand-800 shadow-xs transition-colors hover:bg-sand-50 hover:text-sand-950"
             >
               <SlidersHorizontal className="h-3.5 w-3.5 text-sage-600" />
-              Open Revenue Simulator →
+              Review Rates →
             </Link>
           </div>
         }
       />
+
+      <Panel>
+        <PanelHeader title="Department comparison" description="Current backend-scoped attendance and operational work." />
+        <PanelBody className="space-y-3">
+          <label className="block text-xs font-medium text-sand-700" htmlFor="gm-department-select">Department</label>
+          <select id="gm-department-select" value={selectedDepartment} onChange={(event) => setSelectedDepartment(event.target.value)}
+            className="rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm">
+            <option value="all">All departments</option>
+            {(departmentList.data ?? []).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+          </select>
+          {selectedDepartment === "all" ? (
+            propertyOverview.isLoading ? <p role="status">Loading department comparison…</p> :
+            propertyOverview.isError ? <p role="alert">Department comparison is unavailable.</p> :
+            <div className="space-y-2 text-sm">
+              {(propertyOverview.data?.departments ?? []).map((department) => (
+                <div key={department.department_id} className="flex flex-wrap justify-between gap-2 border-b border-sand-100 py-2">
+                  <span className="font-medium">{department.department_name}</span>
+                  <span>Present: {department.attendance_today} · Open tasks: {department.open_tasks} · Guest requests: {department.open_requests}</span>
+                </div>
+              ))}
+              {propertyOverview.data?.departments.length === 0 && <p>No department records are available.</p>}
+              {propertyOverview.data?.generated_at && <p className="text-xs text-sand-500">Updated {new Date(propertyOverview.data.generated_at).toLocaleString()}</p>}
+            </div>
+          ) : departmentOverview.isLoading ? <p role="status">Loading selected department…</p> :
+            departmentOverview.isError ? <p role="alert">Selected department is unavailable.</p> :
+            departmentOverview.data && <div className="text-sm text-sand-700">
+              <p className="font-medium text-sand-950">{departmentOverview.data.department.department_name}</p>
+              <p>Present: {departmentOverview.data.department.attendance_today} · Open tasks: {departmentOverview.data.department.open_tasks} · Overdue tasks: {departmentOverview.data.department.overdue_tasks}</p>
+              <p>Guest requests: {departmentOverview.data.department.open_requests} · Overdue requests: {departmentOverview.data.department.overdue_requests}</p>
+              <p className="mt-1 text-xs text-sand-500">Updated {new Date(departmentOverview.data.generated_at).toLocaleString()}</p>
+            </div>}
+        </PanelBody>
+      </Panel>
 
       {/* Degradation Warning Banner if any subsystems are offline */}
       {unavailable.length > 0 && (
@@ -254,10 +305,8 @@ export function GmDashboard() {
         <StatTile
           label="Guest Intel & Sentiment"
           value={
-            dashboard?.sentiment?.average_score
-              ? `${dashboard.sentiment.average_score.toFixed(1)} / 5`
-              : dashboard?.sentiment?.positive_pct
-              ? `${Math.round(dashboard.sentiment.positive_pct * 100)}% Pos`
+            dashboard?.sentiment?.samples && dashboard.sentiment.average_sentiment != null
+              ? `${dashboard.sentiment.average_sentiment.toFixed(2)} sentiment`
               : "—"
           }
           change={
@@ -474,7 +523,7 @@ export function GmDashboard() {
                         </span>
                       </div>
                       <p className="text-xs text-sand-600 line-clamp-1">
-                        {act.explanation}
+                        {act.summary}
                       </p>
                       <p className="text-[11px] text-sand-500">
                         Confidence:{" "}
@@ -612,58 +661,6 @@ export function GmDashboard() {
         </Link>
       </div>
 
-      {/* 6. AI System Readiness & Audit Activity Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
-        <div className="flex flex-wrap items-center gap-6 text-xs">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                (dashboard?.engines?.ready?.length ?? 0) > 0
-                  ? "bg-emerald-500 animate-pulse"
-                  : "bg-amber-500"
-              )}
-            />
-            <span className="font-semibold text-sand-950">AI Engine Readiness:</span>
-            <span className="text-sand-700">
-              {dashboard?.engines?.ready?.length ?? 0} Ready ·{" "}
-              {dashboard?.engines?.warming?.length ?? 0} Warming ·{" "}
-              {dashboard?.engines?.cold?.length ?? 0} Cold
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 border-l border-sand-200 pl-6">
-            <Activity className="h-3.5 w-3.5 text-sage-600" />
-            <span className="font-semibold text-sand-950">Actions Resolved:</span>
-            <span className="text-sand-700">
-              {dashboard?.action_queue?.approved ?? 0} Approved ·{" "}
-              {dashboard?.action_queue?.dismissed ?? 0} Dismissed
-            </span>
-            {dashboard?.generated_at && (
-              <span className="text-sand-400">
-                · Fresh as of {format(new Date(dashboard.generated_at), "HH:mm:ss")}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          <Link
-            href="/admin/users"
-            className="flex items-center gap-1 font-semibold text-sage-800 hover:text-sage-950"
-          >
-            <Shield className="h-3.5 w-3.5" />
-            Role Directory
-          </Link>
-          <span className="text-sand-300">|</span>
-          <Link
-            href="/admin/training"
-            className="flex items-center gap-1 font-semibold text-sage-800 hover:text-sage-950"
-          >
-            Model Governance
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }

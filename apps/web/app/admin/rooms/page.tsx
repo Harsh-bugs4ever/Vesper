@@ -351,7 +351,7 @@ export default function RoomsSpatialPage() {
       {/* Room Detail Drawer */}
       <Drawer
         open={Boolean(selectedRoom)}
-        onClose={() => setSelectedRoom(null)}
+        onOpenChange={(open) => { if (!open) setSelectedRoom(null); }}
         title={selectedRoom ? `Room ${selectedRoom.number} · Overview` : "Room"}
         description={selectedRoom ? `${selectedRoom.category_name} · Floor ${selectedRoom.floor}` : ""}
       >

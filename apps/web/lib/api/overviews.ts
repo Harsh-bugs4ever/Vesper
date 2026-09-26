@@ -8,7 +8,6 @@ type Booking = { id: string; reference: string; status: string; check_in_date: s
 type Request = { id: string; kind: string; status: string; room_number: string; total_amount: number; created_at: string; due_at: string; is_overdue: boolean };
 type Item = { id: string; sku: string; name: string; supplier: string | null; lead_time_days: number; quantity: number; minimum_quantity: number; unit_cost: number; category: string };
 type Order = { id: string; item_id: string; supplier: string | null; status: string; quantity: number; unit_cost: number; total_cost: number; expected_on: string | null; created_at: string };
-type Guest = { id: string; full_name: string; loyalty_tier: string; email: string | null; city: string | null; is_vip: boolean };
 type Attendance = { id: string; user_id: string; work_date: string; checked_in_at: string; checked_out_at: string | null; worked_minutes: number; is_late: boolean };
 type AttendanceTeam = { work_date: string; expected: number; present: number; late: number; absent: number; records: Attendance[] };
 type SentimentSummary = { samples: number; average_sentiment: number; label: string; negative_share: number; top_themes: { theme: string; count: number }[] };
@@ -106,17 +105,6 @@ export async function loadFeedback(): Promise<OverviewData> {
     columns: [{ key: "date", label: "Date" }, { key: "department", label: "Department ID" }, { key: "sentiment", label: "Average sentiment" }, { key: "samples", label: "Samples" }],
     rows,
     note: "Sentiment is aggregated by department and date. Individual comments require a separate, permission-controlled review endpoint.",
-  };
-}
-
-export async function loadLoyalty(): Promise<OverviewData> {
-  const guests = await api.get<Guest[]>("/guests");
-  const tiers = new Set(guests.map((guest) => guest.loyalty_tier));
-  return {
-    metrics: [metric("Guests returned", String(guests.length)), metric("Tiers represented", String(tiers.size)), metric("VIP guests", String(guests.filter((guest) => guest.is_vip).length))],
-    columns: [{ key: "name", label: "Guest" }, { key: "tier", label: "Loyalty tier" }, { key: "vip", label: "VIP" }, { key: "city", label: "City" }],
-    rows: guests.map((guest) => ({ id: guest.id, name: guest.full_name, tier: guest.loyalty_tier, vip: guest.is_vip ? "Yes" : "No", city: guest.city ?? "—" })),
-    note: "The guest API stores a tier only. Points earning, redemption, benefits, and enrollment cannot be managed until those backend capabilities exist. The API returns at most 200 guests here.",
   };
 }
 

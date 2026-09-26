@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   BedDouble,
@@ -23,7 +24,6 @@ import { RangeMeter } from "@/components/ui/range-meter";
 import { SectionTabs } from "@/components/ui/section-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { useToast } from "@/components/ui/toast";
 import {
   revenueApi,
   property,
@@ -45,8 +45,6 @@ type Tab = (typeof TABS)[number]["value"];
 const SOLD_OUT_THRESHOLD = 95;
 
 export default function RateManagementPage() {
-  const { showToast } = useToast();
-  const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
@@ -76,7 +74,7 @@ export default function RateManagementPage() {
     ActionCardDetail[]
   >({
     queryKey: ["revenue-action-cards"],
-    queryFn: () => actionCardsApi.list({ kind: "revenue", limit: 3 }),
+    queryFn: () => actionCardsApi.list({ kind: "rate_change", limit: 3 }),
   });
 
   // 4. Competitor rates (if available from scraper)
@@ -84,31 +82,6 @@ export default function RateManagementPage() {
     queryKey: ["revenue-competitors"],
     queryFn: () => revenueApi.competitors(14),
     staleTime: 120_000,
-  });
-
-  // Apply rate mutation
-  const applyRateMutation = useMutation({
-    mutationFn: (body: {
-      room_category_id: string;
-      dates: string[];
-      rate: number;
-    }) => revenueApi.applyRates(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["revenue-forecast-30"] });
-      queryClient.invalidateQueries({ queryKey: ["revenue-action-cards"] });
-      showToast({
-        title: "Dynamic Rate Applied",
-        description: "New rate published to CRS and channel manager.",
-        type: "success",
-      });
-    },
-    onError: (err: any) => {
-      showToast({
-        title: "Rate Application Failed",
-        description: err.message ?? "The revenue engine rejected the rate update.",
-        type: "error",
-      });
-    },
   });
 
   const topRecommendation = actionCards[0];
@@ -225,7 +198,7 @@ export default function RateManagementPage() {
                     <div className="rounded-xl border border-sand-200 bg-white p-4">
                       <p className="text-xs text-sand-600">Model Recommendation</p>
                       <p className="mt-1 font-sans text-sm text-sand-900">
-                        {topRecommendation.explanation}
+                        {topRecommendation.summary}
                       </p>
                       {topRecommendation.impact_amount !== undefined && (
                         <p className="mt-2 text-xs font-semibold text-emerald-700">
@@ -241,24 +214,9 @@ export default function RateManagementPage() {
                     </div>
 
                     <div className="flex items-center gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        disabled={applyRateMutation.isPending}
-                        onClick={() =>
-                          applyRateMutation.mutate({
-                            room_category_id: categories[0]?.id ?? "",
-                            dates: [new Date().toISOString().split("T")[0]],
-                            rate: categories[0]?.base_price ?? 5000,
-                          })
-                        }
-                      >
-                        {applyRateMutation.isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          "Apply Pricing Update"
-                        )}
-                      </Button>
+                      <Link href="/admin/actions" className="w-full rounded-lg bg-sage-700 px-3 py-2 text-center text-sm font-medium text-white">
+                        Review in Action Queue
+                      </Link>
                     </div>
                   </>
                 )}
@@ -289,7 +247,7 @@ export default function RateManagementPage() {
                   <tr>
                     <TH>Category</TH>
                     <TH>Code</TH>
-                    <TH align="right">Total Inventory</TH>
+                    <TH align="right">Max guests</TH>
                     <TH align="right">Base Rack Rate</TH>
                     <TH>Description</TH>
                   </tr>
@@ -298,15 +256,15 @@ export default function RateManagementPage() {
                   {categories.map((cat) => (
                     <TR key={cat.id}>
                       <TD className="font-semibold text-sand-950">{cat.name}</TD>
-                      <TD className="font-mono text-xs text-sand-600">{cat.code}</TD>
+                      <TD className="font-mono text-xs text-sand-600">{cat.key}</TD>
                       <TD align="right" className="font-semibold text-sand-800">
-                        {cat.total_rooms} rooms
+                        {cat.max_occupancy}
                       </TD>
                       <TD align="right" className="font-semibold text-emerald-700">
-                        ₹{cat.base_price.toLocaleString("en-IN")}
+                        ₹{Number(cat.base_rate).toLocaleString("en-IN")}
                       </TD>
                       <TD className="text-xs text-sand-600 line-clamp-1">
-                        {cat.description ?? "Standard resort layout"}
+                        {cat.amenities.join(", ") || "—"}
                       </TD>
                     </TR>
                   ))}
