@@ -238,8 +238,12 @@ def apply_rates(
 def restore_rates(db: Session, property_id: UUID, previous: list[dict], source_card_id: UUID | None) -> dict:
     """Undo: put each date back exactly as it was, including back to no override."""
     restored = 0
+    from app.api.property.models import RoomCategory
     for entry in previous:
         category_id = UUID(entry["room_category_id"])
+        category = db.get(RoomCategory, category_id)
+        if category is None or category.property_id != property_id:
+            raise NotFound("Room category not found")
         stay_date = date.fromisoformat(entry["stay_date"])
         row = rate_for(db, property_id, category_id, stay_date)
         if entry.get("rate") is None:

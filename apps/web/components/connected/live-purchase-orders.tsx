@@ -14,8 +14,8 @@ export function LivePurchaseOrders() {
   const { user, hasPermission, isConnected } = useAuth();
   const client = useQueryClient();
   const [filter, setFilter] = useState("all");
-  const key = ["purchase-orders", user.propertyId, user.id];
-  const query = useQuery({ queryKey: key, enabled: isConnected, queryFn: async () => {
+  const key = ["purchase-orders", user?.propertyId ?? "", user?.id ?? ""];
+  const query = useQuery({ queryKey: key, enabled: isConnected && Boolean(user), queryFn: async () => {
     const [orders, items] = await Promise.all([api.get<Order[]>("/purchase-orders"), api.get<Item[]>("/inventory/items")]);
     return { orders, names: new Map(items.map((item) => [item.id, item.name])) };
   } });

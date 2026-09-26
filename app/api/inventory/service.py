@@ -312,15 +312,20 @@ def cancel_purchase_order(db: Session, property_id: UUID, order_id: UUID) -> Pur
     return order
 
 
-def summary(db: Session, property_id: UUID) -> dict:
+def summary(db: Session, property_id: UUID, *, department_ids: set[str] | None = None) -> dict:
     """Stock tiles on the owner dashboard."""
     items = list_items(db, property_id)
+    if department_ids is not None:
+        items = [item for item in items if str(item.department_id) in department_ids]
     low = [i for i in items if i.is_low]
     expiring = [
         i for i in items if i.days_to_expiry is not None and i.days_to_expiry <= EXPIRY_WARNING_DAYS
     ]
     value = sum(Decimal(i.quantity) * Decimal(i.unit_cost) for i in items)
     pending = list_purchase_orders(db, property_id, status=PurchaseStatus.SUGGESTED)
+    if department_ids is not None:
+        visible_ids = {item.id for item in items}
+        pending = [order for order in pending if order.item_id in visible_ids]
     return {
         "total_items": len(items),
         "low_stock_items": len(low),

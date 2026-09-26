@@ -22,6 +22,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if "address" in {column["name"] for column in sa.inspect(op.get_bind()).get_columns("properties", schema="property")}:
+        return
     op.add_column(
         "properties",
         sa.Column("address", sa.String(length=240), nullable=True),

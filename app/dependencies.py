@@ -39,11 +39,13 @@ from vesper_common.permissions import (
     ALL_PERMISSIONS,
     Perm,
     Role,
+    allowed_permissions_for_role,
     permission_matrix,
     permissions_for,
 )
 from vesper_common.security import (
     Principal,
+    authorize_staff_principal,
     create_access_token,
     create_guest_token,
     create_refresh_token,
@@ -69,8 +71,10 @@ __all__ = [
     "VesperError", "NotFound", "Conflict", "Forbidden", "Invalid",
     # permissions
     "Perm", "Role", "ALL_PERMISSIONS", "permission_matrix", "permissions_for",
+    "allowed_permissions_for_role",
     # authentication
     "Principal", "current_principal", "current_user", "current_guest", "requires",
+    "authorize_staff_principal",
     "decode_token", "principal_from_payload", "token_from_query",
     "create_access_token", "create_refresh_token", "create_guest_token",
     "hash_password", "verify_password",

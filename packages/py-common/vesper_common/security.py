@@ -23,7 +23,11 @@ from passlib.context import CryptContext
 
 from .clock import utcnow
 from .config import settings
-from .permissions import Role
+from .permissions import DEFAULT_ROLE_PERMISSIONS, Role
+from .db import get_session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
+from uuid import UUID
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -74,7 +78,7 @@ def create_guest_token(*, stay_id: str, room_id: str, property_id: str, guest_id
             "sub": f"stay:{stay_id}",
             "typ": GUEST,
             "pid": property_id,
-            "role": Role.GUEST.value,
+            "role": GUEST,
             "stay": stay_id,
             "room": room_id,
             "guest": guest_id,
@@ -107,6 +111,8 @@ class Principal:
     stay_id: str | None = None
     room_id: str | None = None
     guest_id: str | None = None
+    property_ids: set[str] = field(default_factory=set)
+    department_ids: set[str] = field(default_factory=set)
 
     @property
     def is_guest(self) -> bool:
@@ -118,6 +124,54 @@ class Principal:
     def require(self, permission: str) -> None:
         if not self.can(permission):
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Missing permission: {permission}")
+
+    def require_property(self, property_id: str | UUID) -> None:
+        if str(property_id) not in self.property_ids:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Property is outside your assignment")
+
+    def require_department(self, department_id: str | UUID | None) -> None:
+        if department_id is None or (self.role not in {Role.GM, "service"} and str(department_id) not in self.department_ids):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Department is outside your assignment")
+
+    def can_see_department(self, department_id: str | UUID | None) -> bool:
+        return bool(department_id is not None and (self.role in {Role.GM, "service"} or str(department_id) in self.department_ids))
+
+    def can_see_event(self, department_id: str | UUID | None) -> bool:
+        return self.role == Role.GM or self.can_see_department(department_id)
+
+    def scoped_department(self, requested: str | UUID | None) -> UUID | None:
+        if requested is not None:
+            self.require_department(requested)
+            return UUID(str(requested))
+        if self.role in {Role.GM, "service"}:
+            return None
+        if len(self.department_ids) == 1:
+            return UUID(next(iter(self.department_ids)))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Select an assigned department")
+
+    def require_department_key(self, db: Session, key: str) -> None:
+        if self.role in {Role.GM, "service"}:
+            return
+        from app.api.property.models import Department
+        department_id = db.scalar(select(Department.id).where(Department.property_id == UUID(self.property_id), Department.key == key))
+        self.require_department(department_id)
+
+    def require_department_record(self, db: Session, department_id: str | UUID | None) -> None:
+        self.require_department(department_id)
+        from app.api.property.models import Department
+        if db.scalar(select(Department.id).where(Department.id == UUID(str(department_id)), Department.property_id == UUID(self.property_id))) is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Department does not belong to this property")
+
+    def require_object(self, obj: Any, *, owner_field: str | None = None) -> None:
+        self.require_property(getattr(obj, "property_id", None))
+        if self.role in {Role.GM, "service"}:
+            return
+        department_id = getattr(obj, "department_id", None)
+        if department_id is not None and self.can_see_department(department_id):
+            return
+        if owner_field and str(getattr(obj, owner_field, None)) == self.id:
+            return
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Record not found")
 
 
 def principal_from_payload(payload: dict[str, Any]) -> Principal:
@@ -142,10 +196,48 @@ def current_principal(
     return principal_from_payload(decode_token(credentials.credentials))
 
 
-def current_user(principal: Principal = Depends(current_principal)) -> Principal:
+def current_user(principal: Principal = Depends(current_principal), db: Session = Depends(get_session)) -> Principal:
     """Staff-only routes: rejects guest QR tokens."""
+    return authorize_staff_principal(principal, db)
+
+
+def authorize_staff_principal(principal: Principal, db: Session) -> Principal:
+    """Resolve live grants; JWT role and permissions are never an authority for people."""
     if principal.is_guest:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Staff token required")
+    if principal.role == "service" and principal.id.startswith("service:"):
+        principal.property_ids = {principal.property_id}
+        return principal
+    if principal.kind != ACCESS:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Access token required")
+    from app.api.identity.models import User
+    from app.api.property.models import Department, Property
+    try:
+        user_id = UUID(principal.id)
+    except ValueError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid account") from None
+    user = db.scalars(select(User).options(joinedload(User.role), joinedload(User.assignments)).where(User.id == user_id)).unique().first()
+    if user is None or not user.is_active or user.role.key not in DEFAULT_ROLE_PERMISSIONS or user.role.property_id != user.property_id:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account no longer authorized")
+    assignments = [a for a in user.assignments if a.property_id is not None]
+    property_ids = {str(a.property_id) for a in assignments}
+    if principal.property_id not in property_ids:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Property assignment revoked")
+    if db.get(Property, UUID(principal.property_id)) is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Property no longer exists")
+    departments = {str(a.department_id) for a in assignments if str(a.property_id) == principal.property_id and a.department_id}
+    if departments:
+        existing = {str(value) for value in db.scalars(select(Department.id).where(Department.property_id == UUID(principal.property_id), Department.id.in_([UUID(value) for value in departments])))}
+        departments &= existing
+    if user.role.key != Role.GM and not departments:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Department assignment required")
+    if user.role.key == Role.GM and not any(a.department_id is None and str(a.property_id) == principal.property_id for a in assignments):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Branch overview assignment required")
+    principal.role = user.role.key
+    principal.permissions = set(user.permissions)
+    principal.property_ids = property_ids
+    principal.department_ids = departments
+    principal.department_id = next(iter(sorted(departments)), None)
     return principal
 
 

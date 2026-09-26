@@ -25,9 +25,11 @@ Demo property: **JW Marriott Mumbai, Juhu.**
 | For | They open | They can |
 |---|---|---|
 | **Guest** | Room QR link — no login | Order room service, request cleaning or towels, report a problem, track status live, rate in one tap, ask the AI concierge |
-| **Staff** | Vesper on their phone browser | Mark attendance, work their task list, move rooms dirty → cleaning → ready, accept guest requests, report a broken item or shortage with a photo |
-| **Manager** | Vesper on desktop | Approve or adjust AI action cards, watch their department live, chase overdue requests, manage stock, bookings and rosters |
-| **Owner / GM** | Same site, owner view | One dashboard for occupancy, revenue, staff, stock and guest sentiment — plus the action queue, what-if simulator, shadow mode and engine accuracy |
+| **Staff** | Vesper on their phone browser | Mark attendance and work assigned tasks; departmental operations require explicit grants |
+| **Manager** | Vesper on desktop | Manage assigned departments within assigned branches |
+| **General Manager** | Management dashboard | Administer accounts and view cross-department operations and AI analytics |
+
+Internal accounts use exactly these three roles. Branch and department assignments are stored separately from roles. Guest QR access is stay-scoped and separate from internal accounts.
 
 The spine of the product is the **action card**: the AI recommends, a human decides, the
 system executes, and the outcome is scored back against the engine that suggested it.

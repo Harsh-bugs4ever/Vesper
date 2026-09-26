@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Lock, QrCode, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, QrCode, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 
 export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
@@ -146,27 +146,22 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
 
           {/* Guest Access Alternative */}
           <div className="mt-8 border-t border-sand-200 pt-6">
-            <div className="rounded-xl border border-sand-200 bg-sand-50/60 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sand-200/70 text-sage-800">
-                  <QrCode className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="flex-1">
-                  <h3 className="font-serif text-lg text-sage-950">In-Room Guest?</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-sage-700">
-                    Guests do not require work passwords. Scan the nightstand QR code in your room or visit the guest portal.
-                  </p>
-                  <Link
-                    href="/guest/room"
-                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-gold-900 underline underline-offset-4 hover:text-gold-950"
-                  >
-                    Open Guest Room Portal <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Link>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-sand-500 mb-3">Staying with us as a guest?</p>
+            <Link
+              href="/guest/room"
+              className="group flex w-full items-center gap-4 rounded-xl border border-sand-200 bg-sand-50/60 px-4 py-3 text-left transition-colors hover:border-sage-500 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sage-100 text-sage-700">
+                <QrCode className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-serif text-base text-sage-950">Guest Room Portal</span>
+                <span className="block text-xs text-sage-700">Open in-room dining, services, and amenities</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-sage-700 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
 
-            <p className="mt-5 text-center text-[11px] leading-relaxed text-sage-600 lg:text-left">
+            <p className="mt-4 text-center text-[11px] leading-relaxed text-sage-600 lg:text-left">
               Live operations access requires verified staff credentials on the resort API server. No demo data fallback.
             </p>
           </div>

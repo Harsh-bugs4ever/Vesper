@@ -184,12 +184,12 @@ def main() -> int:
     for label, count in counts.items():
         print(f"  {label:<22} {count}")
     print(f"\nSign in with any email below and the password: {PASSWORD}")
-    print("  owner@vesper.demo      owner   — sees everything")
+    print("  owner@vesper.demo      gm      — legacy demo account, now General Manager")
     print("  gm@vesper.demo         gm      — approves rates and offers")
     print("  fom@vesper.demo        manager — front office")
     print("  exec@vesper.demo       manager — housekeeping")
     print("  chef@vesper.demo       manager — food & beverage")
-    print("  hk1@vesper.demo        employee— a housekeeper")
+    print("  hk1@vesper.demo        staff   — a housekeeper")
     return 0
 
 
@@ -277,7 +277,7 @@ def _seed(db) -> dict[str, int]:
         row = ident.Role(
             property_id=pid,
             key=str(key),
-            label="GM" if key == "gm" else str(key).title(),
+            label="General Manager" if key == "gm" else str(key).title(),
             permissions=sorted(str(p) for p in perms),
             is_system=True,
         )
@@ -289,6 +289,13 @@ def _seed(db) -> dict[str, int]:
     users: list = []
 
     def add_user(email: str, name: str, role: str, department: str | None, code: str):
+        staff_grants = {"issues:write", "guest_review:write"}
+        if department == "housekeeping":
+            staff_grants |= {"rooms:status_write", "requests:read", "requests:accept"}
+        if department in {"fnb", "front_office"}:
+            staff_grants |= {"requests:read", "requests:accept"}
+        if department == "store":
+            staff_grants |= {"stock:read"}
         row = ident.User(
             property_id=pid,
             department_id=departments[department].id if department else None,
@@ -298,12 +305,14 @@ def _seed(db) -> dict[str, int]:
             phone=f"+9198{random.randint(10000000, 99999999)}",
             employee_code=code,
             password_hash=hashed,
+            extra_permissions=sorted(staff_grants) if role == "staff" else [],
         )
         db.add(row)
         users.append(row)
+        db.add(ident.UserAssignment(user=row, property_id=pid, department_id=departments[department].id if department and role != "gm" else None))
         return row
 
-    add_user("owner@vesper.demo", "Rustom Mistry", "owner", None, "EMP0001")
+    add_user("owner@vesper.demo", "Rustom Mistry", "gm", None, "EMP0001")
     add_user("gm@vesper.demo", "Anjali Verma", "gm", None, "EMP0002")
     add_user("fom@vesper.demo", "Nikhil Rao", "manager", "front_office", "EMP0003")
     add_user("exec@vesper.demo", "Sunita Pillai", "manager", "housekeeping", "EMP0004")
@@ -311,7 +320,7 @@ def _seed(db) -> dict[str, int]:
     add_user("chiefeng@vesper.demo", "Prakash Menon", "manager", "maintenance", "EMP0006")
     add_user("store@vesper.demo", "Hemant Shah", "manager", "store", "EMP0007")
     add_user("security@vesper.demo", "Balbir Singh", "manager", "security", "EMP0008")
-    add_user("hk1@vesper.demo", "Laxmi Gaikwad", "employee", "housekeeping", "EMP0009")
+    add_user("hk1@vesper.demo", "Laxmi Gaikwad", "staff", "housekeeping", "EMP0009")
 
     # ~180 staff across six departments, weighted the way a resort really is.
     headcount = {"housekeeping": 62, "fnb": 54, "front_office": 24, "maintenance": 18, "store": 8, "security": 14}
@@ -319,7 +328,7 @@ def _seed(db) -> dict[str, int]:
     for department, total in headcount.items():
         for i in range(total):
             name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
-            role = "supervisor" if i < max(1, total // 12) else "employee"
+            role = "staff"
             add_user(
                 f"{department}{i + 1}@vesper.demo", name, role, department, f"EMP{counter:04d}"
             )

@@ -72,6 +72,12 @@ def list_bookings(
 
 
 def create_booking(db: Session, property_id: UUID, data, *, actor_id: str | None = None) -> Booking:
+    from app.api.guest.models import Guest
+    from app.api.property.models import RoomCategory
+    guest = db.get(Guest, data.guest_id)
+    category = db.get(RoomCategory, data.room_category_id)
+    if guest is None or guest.property_id != property_id or category is None or category.property_id != property_id:
+        raise NotFound("Guest or room category not found at this property")
     if data.check_out_date <= data.check_in_date:
         raise Invalid("Check-out must be after check-in")
 

@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
+from vesper_common.db import session_scope
+from vesper_common.security import Principal, authorize_staff_principal
 from vesper_common.errors import Conflict, NotFound
 
 from .models import Channel, OutboxMessage, OutboxStatus
@@ -180,18 +182,18 @@ class Hub:
         self._connections: dict[str, list[dict]] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket, *, property_id: str, user_id: str, department_id: str | None, role: str) -> None:
+    async def connect(self, websocket, *, principal: Principal) -> None:
         await websocket.accept()
+        property_id = principal.property_id
         async with self._lock:
             self._connections.setdefault(property_id, []).append(
                 {
                     "socket": websocket,
-                    "user_id": user_id,
-                    "department_id": department_id,
-                    "role": role,
+                    "user_id": principal.id,
+                    "principal": principal,
                 }
             )
-        log.info("socket connected: property=%s user=%s", property_id, user_id)
+        log.info("socket connected: property=%s user=%s", property_id, principal.id)
 
     async def disconnect(self, websocket, property_id: str) -> None:
         async with self._lock:
@@ -207,13 +209,19 @@ class Hub:
         delivered = 0
         dead: list = []
         for connection in targets:
-            # Department-scoped events skip staff in other departments. Managers and
-            # owners hold no department and see everything.
-            if (
-                department_id
-                and connection["department_id"]
-                and connection["department_id"] != department_id
-            ):
+            db = session_scope()
+            try:
+                principal = authorize_staff_principal(connection["principal"], db)
+            except Exception:
+                dead.append(connection)
+                try:
+                    await connection["socket"].close(code=1008)
+                except Exception:
+                    pass
+                continue
+            finally:
+                db.close()
+            if not principal.can_see_event(department_id):
                 continue
             try:
                 await connection["socket"].send_text(payload)

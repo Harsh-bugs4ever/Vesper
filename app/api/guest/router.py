@@ -36,7 +36,11 @@ from .schemas import (
 guest_router = APIRouter(prefix="/guest", tags=["guest-qr"])
 requests_router = APIRouter(prefix="/requests", tags=["requests"])
 issues_router = APIRouter(prefix="/issues", tags=["issues"])
-guests_router = APIRouter(prefix="/guests", tags=["guests"])
+def _guest_directory_scope(principal: Principal = Depends(current_user), db: Session = Depends(get_session)) -> None:
+    principal.require_department_key(db, "front_office")
+
+
+guests_router = APIRouter(prefix="/guests", tags=["guests"], dependencies=[Depends(_guest_directory_scope)])
 
 # Demo-grade photo storage: a mounted volume, not S3. Swapping this for object storage
 # is a one-function change and explicitly on the backlog.
@@ -155,9 +159,7 @@ def inbox(
     principal: Principal = Depends(requires(Perm.REQUESTS_READ)),
     db: Session = Depends(get_session),
 ) -> list[RequestDetail]:
-    scope = department_id
-    if scope is None and principal.department_id:
-        scope = UUID(principal.department_id)
+    scope = principal.scoped_department(department_id)
     rows = service.list_requests(
         db, UUID(principal.property_id), department_id=scope, status=status_filter
     )
@@ -170,6 +172,7 @@ def accept(
     principal: Principal = Depends(requires(Perm.REQUESTS_ACCEPT)),
     db: Session = Depends(get_session),
 ) -> RequestDetail:
+    principal.require_object(service.get_request(db, UUID(principal.property_id), request_id), owner_field="accepted_by")
     accepted = service.accept_request(
         db, UUID(principal.property_id), request_id, UUID(principal.id)
     )
@@ -183,6 +186,7 @@ def set_status(
     principal: Principal = Depends(requires(Perm.REQUESTS_ACCEPT)),
     db: Session = Depends(get_session),
 ) -> RequestDetail:
+    principal.require_object(service.get_request(db, UUID(principal.property_id), request_id), owner_field="accepted_by")
     updated = service.set_request_status(
         db, UUID(principal.property_id), request_id, body.status.value, actor_id=principal.id
     )
@@ -195,6 +199,9 @@ def sweep_overdue(
     db: Session = Depends(get_session),
 ) -> dict:
     """Called on a timer by notification-service; alerts each request exactly once."""
+    if principal.role != "service":
+        from vesper_common.errors import Forbidden
+        raise Forbidden("Service access required")
     overdue = service.sweep_overdue(db, UUID(principal.property_id))
     return {"alerted": len(overdue)}
 
@@ -218,7 +225,7 @@ def list_issues(
     principal: Principal = Depends(requires(Perm.ISSUES_WRITE)),
     db: Session = Depends(get_session),
 ) -> list[IssueOut]:
-    rows = service.list_issues(db, UUID(principal.property_id), status=status_filter)
+    rows = [row for row in service.list_issues(db, UUID(principal.property_id), status=status_filter) if principal.can_see_department(row.department_id) or str(row.reported_by) == principal.id]
     return [IssueOut.model_validate(r) for r in rows]
 
 
@@ -229,6 +236,12 @@ def set_issue_status(
     principal: Principal = Depends(requires(Perm.ISSUES_WRITE)),
     db: Session = Depends(get_session),
 ) -> IssueOut:
+    from .models import IssueReport
+    issue_row = db.get(IssueReport, issue_id)
+    if issue_row is None:
+        from vesper_common.errors import NotFound
+        raise NotFound("Issue not found")
+    principal.require_object(issue_row, owner_field="reported_by")
     issue = service.set_issue_status(
         db, UUID(principal.property_id), issue_id, body.status.value
     )
@@ -307,4 +320,4 @@ def guest_history(
         )
         .order_by(ServiceRequest.created_at.desc())
     )
-    return [_detail(r) for r in rows]
+    return [_detail(r) for r in rows if principal.role in {"gm", "service"} or principal.can_see_department(r.department_id)]

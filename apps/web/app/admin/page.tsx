@@ -55,7 +55,7 @@ function DemoDashboardPage() {
   const [actions, setActions] = useState<ActionItem[]>(initialActions.slice(0, 3));
 
   const today = new Date();
-  const firstName = user.name.split(" ")[0];
+  const firstName = user?.name ? user.name.split(" ")[0] : "Manager";
 
   const handleAction = (id: string, type: "approve" | "dismiss") => {
     const act = actions.find((a) => a.id === id);
@@ -77,7 +77,7 @@ function DemoDashboardPage() {
       {/* Header & Quick Strategy Actions */}
       <PageHeader
         title={`${greetingFor(today)}, ${firstName}`}
-        description={`Executive governance cockpit for ${user.propertyName}.`}
+        description={`Executive governance cockpit for ${user?.propertyName ?? "the Resort"}.`}
         meta={format(today, "EEE, d MMM yyyy")}
         actions={
           <div className="flex items-center gap-2">

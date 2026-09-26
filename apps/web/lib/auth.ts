@@ -1,9 +1,19 @@
+/**
+ * Static role/permission configuration.
+ *
+ * - UserRole: the four internal roles that the UI supports, plus guest.
+ *   system_admin is gone; it was never emitted by the backend.
+ * - PERMISSIONS_LIST / PERMISSION_DOMAINS: presentational metadata, not business data.
+ * - DEFAULT_ROLE_PERMISSIONS: the seed set the permission-matrix editor starts from.
+ *   Components must not read this as a proxy for what a signed-in user can do;
+ *   they must read user.permissions from the backend response.
+ */
+
 export type UserRole =
   | "general_manager"
   | "dept_manager_fb"
   | "dept_manager_hk"
   | "employee"
-  | "system_admin"
   | "guest";
 
 export interface User {
@@ -94,15 +104,20 @@ export const PERMISSIONS_LIST: PermissionDefinition[] = [
   // Governance
   { key: "users:manage", domain: "governance", label: "Manage Staff Accounts", description: "Create, edit, suspend, and assign roles to resort team." },
   { key: "roles:manage", domain: "governance", label: "Configure Permission Matrix", description: "Edit role privileges and access control thresholds.", isHighImpact: true },
-  { key: "resort:configure", domain: "governance", label: "Configure Resort Settings", description: "Update resort profile, 355 room keys, outlets, and shifts." },
+  { key: "resort:configure", domain: "governance", label: "Configure Resort Settings", description: "Update resort profile, room keys, outlets, and shifts." },
   { key: "integrations:manage", domain: "governance", label: "Manage PMS/BMS Connectors", description: "Configure API credentials, sync intervals, and telemetry feeds." },
   { key: "audit:view", domain: "governance", label: "View Dept Audit Logs", description: "Inspect audit trail for departmental operations." },
   { key: "audit:view_full", domain: "governance", label: "Inspect Full Audit Ledger", description: "Complete tamper-evident cryptographic log of all AI and staff actions." },
 ];
 
+/**
+ * Seed permissions used by the permission-matrix editor.
+ *
+ * These are the *default* sets the editor starts from, NOT what a signed-in user
+ * actually holds — that always comes from `user.permissions` on the backend response.
+ */
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   general_manager: [
-    "all",
     "rates:view_forecast",
     "rates:approve",
     "rates:approve_high_impact",
@@ -118,19 +133,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "sensors:view",
     "work_orders:resolve",
     "guest:sentiment_view",
-    "resort:configure",
-    "audit:view",
-    "audit:view_full",
-  ],
-  system_admin: [
     "users:manage",
     "roles:manage",
     "resort:configure",
     "integrations:manage",
-    "audit:view_full",
     "audit:view",
-    "sensors:view",
-    "rates:view_forecast",
+    "audit:view_full",
   ],
   dept_manager_fb: [
     "tasks:manage",
@@ -162,288 +170,4 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "guest:request",
     "guest:concierge",
   ],
-};
-
-export const DEMO_USERS: Record<UserRole, User> = {
-  general_manager: {
-    id: "usr_gm_01",
-    name: "Arjun Mehta",
-    email: "arjun.mehta@vesperresorts.com",
-    role: "general_manager",
-    roleTitle: "General Manager",
-    department: "Executive Office",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.general_manager,
-  },
-  dept_manager_fb: {
-    id: "usr_dm_fb_01",
-    name: "Priya Sharma",
-    email: "priya.sharma@vesperresorts.com",
-    role: "dept_manager_fb",
-    roleTitle: "F&B Manager",
-    department: "Food & Beverage",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.dept_manager_fb,
-  },
-  dept_manager_hk: {
-    id: "usr_dm_hk_01",
-    name: "Sunita Rao",
-    email: "sunita.rao@vesperresorts.com",
-    role: "dept_manager_hk",
-    roleTitle: "Executive Housekeeper",
-    department: "Housekeeping",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.dept_manager_hk,
-  },
-  employee: {
-    id: "usr_emp_hk_14",
-    name: "Ramesh Patil",
-    email: "ramesh.p@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Housekeeping Attendant",
-    department: "Housekeeping",
-    shift: "Morning (07:00 - 15:30)",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "on_shift",
-    permissions: DEFAULT_ROLE_PERMISSIONS.employee,
-  },
-  system_admin: {
-    id: "usr_adm_01",
-    name: "Kavita Nair",
-    email: "kavita.nair@vesperresorts.com",
-    role: "system_admin",
-    roleTitle: "System Administrator",
-    department: "IT & Systems",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.system_admin,
-  },
-  guest: {
-    id: "gst_412_09",
-    name: "Guest - Room 412",
-    email: "guest.412@demo.vesper",
-    role: "guest",
-    roleTitle: "In-House Guest",
-    roomNumber: "412",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.guest,
-  },
-};
-
-export const RESORT_STAFF_DIRECTORY: User[] = [
-  {
-    id: "usr_gm_01",
-    name: "Arjun Mehta",
-    email: "arjun.mehta@vesperresorts.com",
-    role: "general_manager",
-    roleTitle: "General Manager",
-    department: "Executive Office",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Executive (09:00 - 18:00)",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.general_manager,
-  },
-  {
-    id: "usr_adm_01",
-    name: "Kavita Nair",
-    email: "kavita.nair@vesperresorts.com",
-    role: "system_admin",
-    roleTitle: "System Administrator",
-    department: "IT & Systems",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Regular (09:30 - 18:30)",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.system_admin,
-  },
-  {
-    id: "usr_dm_hk_01",
-    name: "Sunita Rao",
-    email: "sunita.rao@vesperresorts.com",
-    role: "dept_manager_hk",
-    roleTitle: "Executive Housekeeper",
-    department: "Housekeeping",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Morning (06:30 - 15:30)",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.dept_manager_hk,
-  },
-  {
-    id: "usr_dm_fb_01",
-    name: "Priya Sharma",
-    email: "priya.sharma@vesperresorts.com",
-    role: "dept_manager_fb",
-    roleTitle: "F&B Manager",
-    department: "Food & Beverage",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Split (11:00 - 22:00)",
-    status: "active",
-    permissions: DEFAULT_ROLE_PERMISSIONS.dept_manager_fb,
-  },
-  {
-    id: "usr_emp_hk_14",
-    name: "Ramesh Patil",
-    email: "ramesh.p@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Housekeeping Attendant",
-    department: "Housekeeping",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Morning (07:00 - 15:30)",
-    status: "on_shift",
-    permissions: DEFAULT_ROLE_PERMISSIONS.employee,
-  },
-  {
-    id: "usr_emp_hk_09",
-    name: "Anjali Deshmukh",
-    email: "anjali.d@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Floor Attendant (Villas)",
-    department: "Housekeeping",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Morning (07:00 - 15:30)",
-    status: "on_shift",
-    permissions: DEFAULT_ROLE_PERMISSIONS.employee,
-  },
-  {
-    id: "usr_emp_fb_03",
-    name: "Vikram Malhotra",
-    email: "vikram.m@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Head Barista & Server",
-    department: "Food & Beverage",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Morning (06:30 - 15:00)",
-    status: "on_shift",
-    permissions: DEFAULT_ROLE_PERMISSIONS.employee,
-  },
-  {
-    id: "usr_emp_eng_02",
-    name: "Deepak Chauhan",
-    email: "deepak.c@vesperresorts.com",
-    role: "employee",
-    roleTitle: "HVAC & BMS Technician",
-    department: "Engineering",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "General (08:00 - 17:00)",
-    status: "active",
-    permissions: [
-      "attendance:mark",
-      "tasks:view_assigned",
-      "tasks:update_status",
-      "sensors:view",
-      "equipment:report_issue",
-      "work_orders:resolve",
-    ],
-  },
-  {
-    id: "usr_emp_fo_01",
-    name: "Sneha Kulkarni",
-    email: "sneha.k@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Front Desk Supervisor",
-    department: "Front Office",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Afternoon (14:30 - 23:00)",
-    status: "off_duty",
-    permissions: [
-      "attendance:mark",
-      "tasks:view_assigned",
-      "tasks:update_status",
-      "rooms:manage_status",
-    ],
-  },
-  {
-    id: "usr_emp_sec_04",
-    name: "Balwant Singh",
-    email: "balwant.s@vesperresorts.com",
-    role: "employee",
-    roleTitle: "Security Officer",
-    department: "Security",
-    propertyId: "prop_mumbai_01",
-    propertyName: "JW Marriott Mumbai, Juhu",
-    shift: "Night (22:30 - 07:00)",
-    status: "off_duty",
-    permissions: ["attendance:mark", "tasks:view_assigned", "tasks:update_status"],
-  },
-];
-
-export const DEMO_PROPERTY = {
-  id: "prop_mumbai_01",
-  name: "JW Marriott Mumbai, Juhu",
-  brand: "Vesper Luxury Collection",
-  location: "Juhu Tara Road, Mumbai, Maharashtra 400049",
-  totalRooms: 355,
-  liveOccupancy: 78,
-  weather: "29°C · Coastal Sunny",
-  timezone: "Asia/Kolkata (IST · UTC+5:30)",
-  currency: "INR (₹)",
-  checkInTime: "15:00",
-  checkOutTime: "11:00",
-  roomCategories: [
-    { code: "DLX_OCN", name: "Deluxe Ocean View", count: 80, baseRate: 18500, floor: "Floors 2-4" },
-    { code: "EXEC_STE", name: "Executive Ocean Suite", count: 40, baseRate: 27500, floor: "Floors 4-5" },
-    { code: "PRES_VIL", name: "Presidential Beach Villa", count: 15, baseRate: 65000, floor: "Beachfront Walk" },
-    { code: "SEA_CLB", name: "Sea Breeze Club Room", count: 10, baseRate: 22000, floor: "Floor 1 & Garden" },
-  ],
-  outlets: [
-    { id: "out_01", name: "Lotus Cafe", type: "All-Day Dining & Buffet", hours: "06:30 - 23:30", capacity: 160 },
-    { id: "out_02", name: "Dashanzi", type: "Progressive Asian Cuisine", hours: "18:30 - 00:30", capacity: 85 },
-    { id: "out_03", name: "Reflections Bar", type: "Beachfront Cocktail Lounge", hours: "16:00 - 01:00", capacity: 70 },
-    { id: "out_04", name: "Quan Spa & Wellness", type: "Ayurvedic & Hydrotherapy", hours: "08:00 - 21:00", capacity: 12 },
-  ],
-  staffHeadcount: {
-    total: 180,
-    departments: [
-      { name: "Housekeeping", count: 55, activeOnShift: 18 },
-      { name: "Food & Beverage", count: 48, activeOnShift: 16 },
-      { name: "Front Office", count: 28, activeOnShift: 8 },
-      { name: "Engineering & BMS", count: 22, activeOnShift: 5 },
-      { name: "Security", count: 15, activeOnShift: 4 },
-      { name: "Executive & Admin", count: 12, activeOnShift: 6 },
-    ],
-  },
-  connectors: {
-    pms: {
-      provider: "Demo PMS Connector (Opera Cloud Simulation)",
-      status: "connected",
-      latencyMs: 18,
-      lastSync: "Just now (30s interval)",
-      mappedRooms: 145,
-      activeFolios: 112,
-    },
-    bms: {
-      provider: "Demo BMS IoT Gateway (BACnet/MQTT)",
-      status: "connected",
-      activeSensors: 145,
-      chillersOnline: 12,
-      lastReading: "1m ago",
-      vibrationStatus: "1 Anomaly Alert (Chiller #2 Bearing)",
-    },
-  },
-  aiGuardrails: {
-    confidenceThreshold: 85,
-    requireHumanApprovalAboveImpactPercent: 10,
-    highImpactPurchaseThresholdInr: 50000,
-    undoBufferSeconds: 10,
-    shadowMode: false,
-    dpdpCompliance: true,
-  },
 };

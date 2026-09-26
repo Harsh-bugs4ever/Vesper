@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
-from vesper_common.permissions import Perm
+from vesper_common.permissions import Perm, Role
+from fastapi import HTTPException
 from vesper_common.security import Principal, current_user, requires
 
 from . import service
@@ -28,7 +29,19 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/property", tags=["property"])
-rooms_router = APIRouter(prefix="/rooms", tags=["rooms"])
+
+
+def _room_access(principal: Principal = Depends(current_user), db: Session = Depends(get_session)) -> None:
+    if principal.role in {Role.GM, "service"}:
+        return
+    from .models import Department
+    from sqlalchemy import select
+    ids = db.scalars(select(Department.id).where(Department.property_id == UUID(principal.property_id), Department.key.in_(["housekeeping", "front_office"]))).all()
+    if not any(str(department_id) in principal.department_ids for department_id in ids):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Room operations are outside your departments")
+
+
+rooms_router = APIRouter(prefix="/rooms", tags=["rooms"], dependencies=[Depends(_room_access)])
 assets_router = APIRouter(prefix="/assets", tags=["assets"])
 
 
@@ -44,6 +57,7 @@ def _room_detail(room) -> RoomDetail:
 def get_property(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> PropertyOut:
+    principal.require(Perm.PROPERTY_READ)
     return PropertyOut.model_validate(service.get_property(db, UUID(principal.property_id)))
 
 
@@ -69,27 +83,27 @@ def set_shadow_mode(
 
 
 @router.get("/ids", response_model=list[str])
-def property_ids(db: Session = Depends(get_session)) -> list[str]:
+def property_ids(principal: Principal = Depends(current_user), db: Session = Depends(get_session)) -> list[str]:
     """Every property id this deployment serves.
 
     Used by scheduled jobs, which have to cover all properties and have no property to
     scope a token to until they have this list. It returns ids and nothing else, so it
     carries no information worth protecting.
     """
+    if principal.role != "service":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Service access required")
     return [str(pid) for pid in service.list_property_ids(db)]
 
 
 @router.get("/list", response_model=list[PropertySummary])
 def list_properties(
-    _: Principal = Depends(current_user), db: Session = Depends(get_session)
+    principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> list[PropertySummary]:
-    """Every property, named, for the switcher in the admin header.
+    """Assigned properties, named, for the branch switcher.
 
-    Unlike /ids this identifies the business, so it needs a token. It is every
-    signed-in user rather than a permission: the header renders for all of them, and
-    a switcher that cannot name what it is switching between is not a switcher.
+    This list is scoped to current branch assignments.
     """
-    return [PropertySummary.model_validate(p) for p in service.list_properties(db)]
+    return [PropertySummary.model_validate(p) for p in service.list_properties(db) if str(p.id) in principal.property_ids]
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
@@ -97,7 +111,7 @@ def list_departments(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> list[DepartmentOut]:
     rows = service.list_departments(db, UUID(principal.property_id))
-    return [DepartmentOut.model_validate(r) for r in rows]
+    return [DepartmentOut.model_validate(r) for r in rows if principal.role == Role.GM or str(r.id) in principal.department_ids]
 
 
 @router.get("/public", response_model=PropertySummary)
@@ -139,6 +153,7 @@ def list_public_categories(
 def list_categories(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> list[RoomCategoryOut]:
+    principal.require_department_key(db, "front_office")
     rows = service.list_categories(db, UUID(principal.property_id))
     return [RoomCategoryOut.model_validate(r) for r in rows]
 
@@ -147,6 +162,7 @@ def list_categories(
 def occupancy(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
 ) -> dict:
+    principal.require_department_key(db, "front_office")
     return service.occupancy_snapshot(db, UUID(principal.property_id))
 
 
@@ -213,6 +229,8 @@ def room_qr(
     QR unforgeable, so it goes to callers that already hold a property-scoped token and
     nowhere near a browser.
     """
+    if principal.role != "service":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Service access required")
     room = service.get_room(db, UUID(principal.property_id), room_id)
     return {"id": str(room.id), "number": room.number, "qr_secret": room.qr_secret}
 
@@ -233,6 +251,7 @@ def set_room_status(
     principal: Principal = Depends(requires(Perm.ROOMS_STATUS_WRITE)),
     db: Session = Depends(get_session),
 ) -> RoomDetail:
+    principal.require_department_key(db, "housekeeping")
     room = service.set_room_status(
         db,
         UUID(principal.property_id),
@@ -250,8 +269,9 @@ def list_assets(
     principal: Principal = Depends(current_user),
     db: Session = Depends(get_session),
 ) -> list[AssetOut]:
+    principal.require(Perm.PROPERTY_READ)
     rows = service.list_assets(db, UUID(principal.property_id), asset_type=asset_type)
-    return [AssetOut.model_validate(r) for r in rows]
+    return [AssetOut.model_validate(r) for r in rows if principal.role in {Role.GM, "service"} or principal.can_see_department(r.department_id)]
 
 
 @assets_router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
@@ -260,6 +280,7 @@ def create_asset(
     principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
     db: Session = Depends(get_session),
 ) -> AssetOut:
+    principal.require_department_record(db, body.department_id)
     return AssetOut.model_validate(service.create_asset(db, UUID(principal.property_id), body))
 
 
@@ -269,7 +290,10 @@ def get_asset(
     principal: Principal = Depends(current_user),
     db: Session = Depends(get_session),
 ) -> AssetOut:
-    return AssetOut.model_validate(service.get_asset(db, UUID(principal.property_id), asset_id))
+    principal.require(Perm.PROPERTY_READ)
+    asset = service.get_asset(db, UUID(principal.property_id), asset_id)
+    principal.require_object(asset)
+    return AssetOut.model_validate(asset)
 
 
 @assets_router.post("/{asset_id}/serviced", response_model=AssetOut)
@@ -284,6 +308,7 @@ def mark_serviced(
     maintenance-service calls this when a work order completes, so the asset stops
     scoring as overdue on the next risk sweep.
     """
+    principal.require_object(service.get_asset(db, UUID(principal.property_id), asset_id))
     asset = service.mark_serviced(db, UUID(principal.property_id), asset_id, body.serviced_on)
     return AssetOut.model_validate(asset)
 
@@ -296,7 +321,8 @@ def asset_readings(
     principal: Principal = Depends(current_user),
     db: Session = Depends(get_session),
 ) -> list[SensorReadingOut]:
-    service.get_asset(db, UUID(principal.property_id), asset_id)  # scope check
+    principal.require(Perm.PROPERTY_READ)
+    principal.require_object(service.get_asset(db, UUID(principal.property_id), asset_id))
     rows = service.asset_readings(db, asset_id, metric=metric, hours=hours)
     return [SensorReadingOut.model_validate(r) for r in rows]
 
@@ -308,5 +334,7 @@ def record_readings(
     db: Session = Depends(get_session),
 ) -> dict:
     """BMS connector push endpoint."""
+    for reading in body:
+        principal.require_object(service.get_asset(db, UUID(principal.property_id), reading.asset_id))
     written = service.record_readings(db, UUID(principal.property_id), body)
     return {"accepted": written}

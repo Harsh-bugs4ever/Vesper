@@ -4,7 +4,7 @@ import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { UserRole } from "@/lib/auth";
-import { ShieldAlert, ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,24 +21,43 @@ export function RoleGuard({
   fallbackUrl = "/access-denied",
   renderInlineFallback = false,
 }: RoleGuardProps) {
-  const { role, user, isReady, sessionExpired } = useAuth();
+  const { role, user, isReady, isConnected, sessionExpired } = useAuth();
   const router = useRouter();
 
-  const isAllowed = allowedRoles.includes(role);
+  const isAllowed = role !== null && allowedRoles.includes(role);
 
   useEffect(() => {
-    if (isReady && sessionExpired) {
+    if (!isReady) return;
+    if (sessionExpired) {
       router.replace("/login");
-    } else if (isReady && !isAllowed && !renderInlineFallback) {
+    } else if (!isConnected) {
+      // Not authenticated at all — send to login.
+      router.replace("/login");
+    } else if (!isAllowed && !renderInlineFallback) {
       router.replace(fallbackUrl);
     }
-  }, [isReady, sessionExpired, isAllowed, renderInlineFallback, fallbackUrl, router]);
+  }, [isReady, sessionExpired, isConnected, isAllowed, renderInlineFallback, fallbackUrl, router]);
 
   if (!isReady) {
-    return <div className="min-h-[50vh] flex items-center justify-center p-6 text-xs text-sand-500" role="status">Restoring your session…</div>;
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6 text-xs text-sand-500" role="status">
+        Restoring your session…
+      </div>
+    );
   }
   if (sessionExpired) {
-    return <div className="min-h-[50vh] flex items-center justify-center p-6 text-sm text-sand-600" role="status">Your session has ended. Taking you to sign in…</div>;
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6 text-sm text-sand-600" role="status">
+        Your session has ended. Taking you to sign in…
+      </div>
+    );
+  }
+  if (!isConnected) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6 text-sm text-sand-600" role="status">
+        Please sign in to continue…
+      </div>
+    );
   }
 
   if (!isAllowed) {
@@ -46,11 +65,10 @@ export function RoleGuard({
       return (
         <AccessDeniedCard
           requiredRole={allowedRoles.join(", ")}
-          currentRole={user.roleTitle}
+          currentRole={user?.roleTitle}
         />
       );
     }
-    // Return empty placeholder while redirecting
     return (
       <div className="min-h-[50vh] flex items-center justify-center p-6">
         <div className="animate-pulse text-xs text-sand-500 font-medium">
@@ -86,7 +104,7 @@ export function PermissionGate({
 
   if (requiredRole) {
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-    if (!roles.includes(role)) {
+    if (!role || !roles.includes(role)) {
       hasAccess = false;
     }
   }
@@ -170,7 +188,7 @@ export function AccessDeniedCard({
               onClick={() => router.push("/login")}
               className="text-xs"
             >
-              Switch Role
+              Sign In
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Button>
           </div>

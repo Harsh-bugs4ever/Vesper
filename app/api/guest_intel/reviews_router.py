@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
+from vesper_common.errors import Forbidden, NotFound
+from sqlalchemy import select
+from app.api.frontdesk.models import Stay
+from app.api.staff.models import Task
 from vesper_common.security import Principal, current_user, requires
 
 from . import prompts, reviews, service_notes
@@ -154,6 +158,8 @@ def prompt_departing(
 
     Runs on a timer; exposed so a demo can trigger it.
     """
+    if principal.role != "service":
+        raise Forbidden("Service access required")
     asked = prompts.prompt_departing_stays(principal.property_id)
     return {"asked": asked}
 
@@ -174,6 +180,7 @@ def service_notes_for_stay(
     Carries preferences and useful notes. Never ratings, never who said it, and nothing
     from a review by a department this guest complained about.
     """
+    _require_stay_work(db, principal, stay_id)
     return service_notes.notes_for_stay(
         db, UUID(principal.property_id), stay_id, token=_bearer(request)
     )
@@ -186,4 +193,26 @@ def service_notes_for_guest(
     db: Session = Depends(get_session),
 ) -> dict:
     """The same, for a guest arriving rather than one already in a room."""
+    stays = db.scalars(select(Stay).where(Stay.property_id == UUID(principal.property_id), Stay.guest_id == guest_id)).all()
+    if not stays:
+        raise NotFound("Guest not found")
+    if principal.role not in {"gm", "service"}:
+        if not any(_can_see_stay_work(db, principal, stay) for stay in stays):
+            raise NotFound("Guest not found")
     return service_notes.notes_for_guest(db, UUID(principal.property_id), guest_id)
+
+
+def _can_see_stay_work(db: Session, principal: Principal, stay: Stay) -> bool:
+    tasks = db.scalars(select(Task).where(Task.property_id == stay.property_id, Task.room_id == stay.room_id)).all()
+    return any(
+        task.created_at >= stay.checked_in_at
+        and (stay.checked_out_at is None or task.created_at <= stay.checked_out_at)
+        and (str(task.assignee_id) == principal.id if principal.role == "staff" else principal.can_see_department(task.department_id))
+        for task in tasks
+    )
+
+
+def _require_stay_work(db: Session, principal: Principal, stay_id: UUID) -> None:
+    stay = db.scalars(select(Stay).where(Stay.id == stay_id, Stay.property_id == UUID(principal.property_id))).first()
+    if stay is None or (principal.role not in {"gm", "service"} and not _can_see_stay_work(db, principal, stay)):
+        raise NotFound("Stay not found")

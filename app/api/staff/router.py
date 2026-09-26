@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
-from vesper_common.permissions import Perm
+from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, current_user, requires
+from app.api.identity.models import User
+from app.api.property.models import Room
+from vesper_common.errors import Forbidden
 
 from . import service
 from .schemas import (
@@ -85,10 +88,8 @@ def team_attendance(
     principal: Principal = Depends(requires(Perm.ATTENDANCE_READ_TEAM)),
     db: Session = Depends(get_session),
 ) -> AttendanceSummary:
-    """A supervisor sees their own department unless they ask for another and may."""
-    scope = department_id
-    if scope is None and principal.department_id:
-        scope = UUID(principal.department_id)
+    """Team attendance within an assigned department."""
+    scope = principal.scoped_department(department_id)
     summary = service.team_attendance(
         db,
         UUID(principal.property_id),
@@ -106,6 +107,7 @@ def my_tasks(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> list[TaskDetail]:
+    scope = principal.scoped_department(department_id)
     tasks = service.list_tasks(
         db, UUID(principal.property_id), assignee_id=UUID(principal.id), include_done=include_done
     )
@@ -124,11 +126,13 @@ def list_tasks(
     tasks = service.list_tasks(
         db,
         UUID(principal.property_id),
-        department_id=department_id,
+        department_id=scope,
         status=status_filter,
         room_id=room_id,
         include_done=include_done,
     )
+    if principal.role == Role.STAFF:
+        tasks = [task for task in tasks if str(task.assignee_id) == principal.id]
     counts: dict[str, int] = {}
     for task in tasks:
         counts[task.status] = counts.get(task.status, 0) + 1
@@ -145,6 +149,15 @@ def create_task(
     principal: Principal = Depends(requires(Perm.TASKS_ASSIGN)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
+    principal.require_department_record(db, body.department_id)
+    if body.assignee_id is not None:
+        assignee = db.get(User, body.assignee_id)
+        if assignee is None or not assignee.is_active or not any(str(a.property_id) == principal.property_id and a.department_id == body.department_id for a in assignee.assignments):
+            raise Forbidden("Assignee is outside the task department")
+    if body.room_id is not None:
+        room = db.get(Room, body.room_id)
+        if room is None or str(room.property_id) != principal.property_id:
+            raise Forbidden("Room is outside this property")
     task = service.create_task(db, UUID(principal.property_id), body, actor_id=principal.id)
     return _detail(task)
 
@@ -154,7 +167,7 @@ def overdue(
     principal: Principal = Depends(requires(Perm.TASKS_ASSIGN)),
     db: Session = Depends(get_session),
 ) -> list[TaskDetail]:
-    return [_detail(t) for t in service.overdue_tasks(db, UUID(principal.property_id))]
+    return [_detail(t) for t in service.overdue_tasks(db, UUID(principal.property_id)) if principal.can_see_department(t.department_id)]
 
 
 @tasks_router.get("/progress/{department_id}", response_model=TeamProgress)
@@ -163,6 +176,8 @@ def progress(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> TeamProgress:
+    principal.require(Perm.TASKS_ASSIGN)
+    principal.require_department(department_id)
     return TeamProgress(
         **service.department_progress(db, UUID(principal.property_id), department_id)
     )
@@ -174,6 +189,7 @@ def claim(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
+    principal.require_object(service.get_task(db, UUID(principal.property_id), task_id), owner_field="assignee_id")
     return _detail(
         service.claim_task(db, UUID(principal.property_id), task_id, UUID(principal.id))
     )
@@ -186,6 +202,11 @@ def assign(
     principal: Principal = Depends(requires(Perm.TASKS_ASSIGN)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
+    task = service.get_task(db, UUID(principal.property_id), task_id)
+    principal.require_object(task)
+    assignee = db.get(User, body.assignee_id)
+    if assignee is None or not assignee.is_active or not any(str(a.property_id) == principal.property_id and a.department_id == task.department_id for a in assignee.assignments):
+        raise Forbidden("Assignee is outside the task department")
     task = service.assign_task(
         db, UUID(principal.property_id), task_id, body.assignee_id, principal.id
     )
@@ -199,6 +220,7 @@ def set_status(
     principal: Principal = Depends(requires(Perm.TASKS_COMPLETE)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
+    principal.require_object(service.get_task(db, UUID(principal.property_id), task_id), owner_field="assignee_id")
     task = service.update_status(
         db,
         UUID(principal.property_id),

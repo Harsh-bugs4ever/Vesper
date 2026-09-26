@@ -1,23 +1,22 @@
 "use client";
 
 /**
- * Auth for the whole app, in two modes.
+ * Auth context for the whole app.
  *
- * **Connected** — a real email and password go to `/auth/login`, tokens are stored, and
- * `user.permissions` is whatever the backend actually granted.
+ * **Connected** — email and password go to `/auth/login`, tokens are stored in
+ * localStorage, and `user.permissions` is whatever the backend actually granted.
  *
- * **Demo** — the original hardcoded users, still there. The design work does not need a
- * running backend, and a demo can carry on if the API is down. Switching demo roles
- * explicitly leaves the connected session, so preview data never inherits a live token.
+ * There is no demo fallback. Unauthenticated users see a loading state while session
+ * restoration is in progress, then are redirected to /login if no valid token exists.
  *
- * Components see one shape either way, and `hasPermission` is the honest question in
- * both — the difference is only where the list came from.
+ * Components gate on `hasPermission(key)` — derived from the backend's permission list,
+ * never from a hardcoded role assumption.
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { ApiError, api, auth as authApi, property as propertyApi, tokens } from "@/lib/api";
-import { DEMO_PROPERTY, DEMO_USERS, DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
+import { DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
 import {
   type Department,
   type Property,
@@ -30,27 +29,26 @@ import {
 } from "@/lib/session";
 
 interface AuthContextType {
-  user: User;
-  role: UserRole;
+  user: User | null;
+  role: UserRole | null;
   rolePermissions: Record<UserRole, string[]>;
   /**
-   * The branch, from `GET /property` once connected. Falls back to the demo property
-   * so screens render identically with the backend down — which is the whole point of
-   * demo mode, and the reason this is not left null.
+   * The branch from `GET /property`, populated once connected.
+   * Null until the session is established; screens must handle the absent state.
    */
-  property: Property;
-  /** Properties the current UI can select. A live token is scoped to one property. */
+  property: Property | null;
+  /** Properties the current user can select. Scoped to the live token. */
   properties: PropertyOption[];
   /** True once a real backend session is established. */
   isConnected: boolean;
+  /** True once the initial token check (or its absence) has been determined. */
   isReady: boolean;
+  /** True when a previously valid session expired or the token was rejected. */
   sessionExpired: boolean;
   isLoading: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<User>;
-  login: (role: UserRole) => void;
   logout: () => void;
-  switchRole: (role: UserRole) => void;
   updateRolePermissions: (role: UserRole, permissions: string[]) => void;
   resetPermissions: () => void;
   hasPermission: (permission: string) => boolean;
@@ -61,36 +59,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = "vesper_auth_role";
 const STORAGE_KEY_PERMISSIONS = "vesper_role_permissions";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<UserRole>("general_manager");
-  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(DEFAULT_ROLE_PERMISSIONS);
   const [backendUser, setBackendUser] = useState<User | null>(null);
   const [backendProperty, setBackendProperty] = useState<Property | null>(null);
   const [properties, setProperties] = useState<PropertyOption[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(DEFAULT_ROLE_PERMISSIONS);
+  const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  // Restore whatever was in play before a refresh: a real session if the stored token
-  // is still good, otherwise the demo role & permissions matrix.
+  // On mount: restore a live session if the stored token is still valid.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const saved = window.localStorage.getItem(STORAGE_KEY) as UserRole | null;
-      if (saved && DEMO_USERS[saved]) setRole(saved);
-
+      // Restore locally-persisted permission-matrix edits (used by the admin editor).
       try {
         const savedPerms = window.localStorage.getItem(STORAGE_KEY_PERMISSIONS);
         if (savedPerms) {
           setRolePermissions(JSON.parse(savedPerms));
         }
       } catch {
-        // Fallback to default permissions
+        // Corrupt entry — use defaults, keep going.
       }
 
       if (tokens.access()) {
@@ -107,18 +100,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               propertyName: branch?.name,
             });
             setBackendUser(uiUser);
-            setRole(uiUser.role);
             if (branch) setBackendProperty(branch);
             if (branches.length) setProperties(branches);
           }
         } catch {
-          // Never turn an expired live session into an unlabeled demo dashboard.
+          // An expired or invalid token — clear it so the app reaches a clean state.
           tokens.clear();
-          window.localStorage.removeItem(STORAGE_KEY);
           if (!cancelled) setSessionExpired(true);
         }
       }
-      if (!cancelled) setMounted(true);
+
+      if (!cancelled) setIsReady(true);
     })();
 
     return () => {
@@ -139,13 +131,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uiUser = toUiUser(me, { departments, propertyName: branch?.name });
       setBackendUser(uiUser);
       setSessionExpired(false);
-      setRole(uiUser.role);
       if (branch) setBackendProperty(branch);
       if (branches.length) setProperties(branches);
-      window.localStorage.setItem(STORAGE_KEY, uiUser.role);
       return uiUser;
     } catch (caught) {
-      // The backend writes these for the person reading the screen.
       const message =
         caught instanceof ApiError ? caught.message : "Could not sign in. Please try again.";
       setError(message);
@@ -155,12 +144,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const logout = useCallback(() => {
+    void authApi.logout();
+    // Clear all protected state immediately. Leaving stale data behind risks showing
+    // the next user another person's session data during the loading flash.
+    setBackendUser(null);
+    setBackendProperty(null);
+    setProperties([]);
+    setSessionExpired(false);
+    setError(null);
+  }, []);
+
   const updateRolePermissions = useCallback((targetRole: UserRole, newPerms: string[]) => {
     setRolePermissions((prev) => {
-      const updated = {
-        ...prev,
-        [targetRole]: newPerms,
-      };
+      const updated = { ...prev, [targetRole]: newPerms };
       try {
         window.localStorage.setItem(STORAGE_KEY_PERMISSIONS, JSON.stringify(updated));
       } catch {}
@@ -175,108 +172,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const switchRole = useCallback((newRole: UserRole) => {
-    if (!DEMO_USERS[newRole]) return;
-    void authApi.logout();
-    setSessionExpired(false);
-    setBackendUser(null);
-    setBackendProperty(null);
-    setProperties([]);
-    setError(null);
-    setRole(newRole);
-    window.localStorage.setItem(STORAGE_KEY, newRole);
-  }, []);
-
-  // The role picker is a local demo entry point. Do not let an existing connected
-  // session override the selected role or trigger a background seeded-account login.
-  const login = useCallback((newRole: UserRole) => {
-    if (!DEMO_USERS[newRole]) return;
-    void authApi.logout();
-    setSessionExpired(false);
-    setBackendUser(null);
-    setBackendProperty(null);
-    setProperties([]);
-    setError(null);
-    setRole(newRole);
-    window.localStorage.setItem(STORAGE_KEY, newRole);
-  }, []);
-
-  const logout = useCallback(() => {
-    void authApi.logout();
-    setBackendUser(null);
-    setSessionExpired(false);
-    // The branch came with the session, so it goes with it. Leaving it behind would
-    // show a signed-out screen the name of a property nobody is authenticated to.
-    setBackendProperty(null);
-    setProperties([]);
-    setRole("general_manager");
-    setError(null);
-    window.localStorage.removeItem(STORAGE_KEY);
-  }, []);
-
-  // Compute active user with permissions from either backend or local permission matrix
-  const activePermissions = rolePermissions[role] || DEMO_USERS[role]?.permissions || [];
-  const demoUser: User = {
-    ...DEMO_USERS[role],
-    permissions: activePermissions,
-  };
-  const user = backendUser ?? demoUser;
-
   const hasPermission = useCallback(
     (permission: string) => {
-      if (user.permissions.includes("all")) return true;
-      return holdsPermission(user.permissions, permission);
+      if (!backendUser) return false;
+      return holdsPermission(backendUser.permissions, permission);
     },
-    [user],
+    [backendUser],
   );
 
   const value = useMemo<AuthContextType>(() => {
-    // Before mount, render the default GM view to avoid a hydration mismatch.
-    const effective = mounted ? user : DEMO_USERS.general_manager;
-    const branch = mounted
-      ? backendProperty ?? (backendUser ? { ...DEMO_PROPERTY, id: backendUser.propertyId, name: backendUser.propertyName, location: "Location unavailable" } : DEMO_PROPERTY)
-      : DEMO_PROPERTY;
+    const user = backendUser;
+    const role = user?.role ?? null;
+
     return {
-      user: effective,
-      role: mounted ? role : "general_manager",
+      user,
+      role,
       rolePermissions,
-      property: branch,
-      // Do not let the header appear to switch live properties while the bearer token
-      // and every API call remain scoped to the original property.
-      properties: backendUser ? [{ id: branch.id, name: branch.name, locality: branch.location }] : properties.length ? properties : [{ id: branch.id, name: branch.name, locality: branch.location }],
+      property: backendProperty,
+      properties,
       isConnected: backendUser !== null,
-      isReady: mounted,
+      isReady,
       sessionExpired,
       isLoading,
       error,
       signIn,
-      login,
       logout,
-      switchRole,
       updateRolePermissions,
       resetPermissions,
-      hasPermission: mounted
-        ? hasPermission
-        : (p: string) => holdsPermission(DEMO_USERS.general_manager.permissions, p),
-      isAdmin: mounted ? isAdminUser(effective) : true,
-      isStaff: effective.role === "employee",
-      isGuest: effective.role === "guest",
+      hasPermission,
+      isAdmin: user ? isAdminUser(user) : false,
+      isStaff: user?.role === "employee",
+      isGuest: user?.role === "guest",
     };
   }, [
-    mounted,
-    user,
-    role,
-    rolePermissions,
+    backendUser,
     backendProperty,
     properties,
-    backendUser,
+    rolePermissions,
+    isReady,
+    sessionExpired,
     isLoading,
     error,
-    sessionExpired,
     signIn,
-    login,
     logout,
-    switchRole,
     updateRolePermissions,
     resetPermissions,
     hasPermission,
@@ -297,9 +235,7 @@ async function loadDepartments(): Promise<Department[]> {
 /**
  * The branch, from the backend.
  *
- * Swallowing the failure is deliberate and matches loadDepartments: a property lookup
- * that fails should cost the screen its address, not the user their session. The
- * caller falls back to the demo property.
+ * A failure here costs the screen its address; it must not cost the user their session.
  */
 async function loadProperty(): Promise<Property | null> {
   try {

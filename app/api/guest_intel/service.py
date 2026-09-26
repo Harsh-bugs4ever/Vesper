@@ -91,7 +91,7 @@ def record_sentiment(
     return record
 
 
-def department_trend(db: Session, property_id: UUID, *, days: int = 30) -> list[dict]:
+def department_trend(db: Session, property_id: UUID, *, days: int = 30, department_ids: set[str] | None = None) -> list[dict]:
     """Average sentiment per department per day — the trend chart on the guests page."""
     since = local_today() - timedelta(days=days)
     rows = db.execute(
@@ -111,6 +111,8 @@ def department_trend(db: Session, property_id: UUID, *, days: int = 30) -> list[
 
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
+        if department_ids is not None and str(row.department_id) not in department_ids:
+            continue
         key = str(row.department_id) if row.department_id else "unassigned"
         grouped[key].append(
             {
@@ -122,13 +124,15 @@ def department_trend(db: Session, property_id: UUID, *, days: int = 30) -> list[
     return [{"department_id": k, "points": v} for k, v in grouped.items()]
 
 
-def sentiment_summary(db: Session, property_id: UUID, *, days: int = 30) -> dict:
+def sentiment_summary(db: Session, property_id: UUID, *, days: int = 30, department_ids: set[str] | None = None) -> dict:
     since = local_today() - timedelta(days=days)
     records = db.scalars(
         select(SentimentRecord).where(
             SentimentRecord.property_id == property_id, SentimentRecord.occurred_on >= since
         )
     ).all()
+    if department_ids is not None:
+        records = [record for record in records if str(record.department_id) in department_ids]
     if not records:
         return {"samples": 0, "average_sentiment": 0.0, "label": "neutral", "top_themes": []}
 

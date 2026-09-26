@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { DEMO_PROPERTY } from "@/lib/auth";
 import {
   SlidersHorizontal,
   Building2,
@@ -54,25 +53,20 @@ export default function ResortSettingsPage() {
     "profile" | "outlets" | "connectors" | "ai_guardrails" | "audit"
   >("profile");
 
-  // Property Profile State. Seeded from whatever the context has on first render and
-  // re-seeded below when the backend's answer lands, because `property` starts as the
-  // demo fallback and is replaced once GET /property resolves.
-  const [resortName, setResortName] = useState(property.name);
-  const [brandName, setBrandName] = useState(property.brand);
-  const [locationStr, setLocationStr] = useState(property.location);
-  const [currency, setCurrency] = useState(property.currency);
-  const [checkIn, setCheckIn] = useState(property.checkInTime);
-  const [checkOut, setCheckOut] = useState(property.checkOutTime);
+  // Property Profile State
+  const [resortName, setResortName] = useState(property?.name ?? "");
+  const [brandName, setBrandName] = useState(property?.brand ?? "");
+  const [locationStr, setLocationStr] = useState(property?.location ?? "");
+  const [currency, setCurrency] = useState(property?.currency ?? "");
+  const [checkIn, setCheckIn] = useState(property?.checkInTime ?? "");
+  const [checkOut, setCheckOut] = useState(property?.checkOutTime ?? "");
 
-  // Keyed on the property id: it changes exactly once, when the real branch arrives.
-  // Without the key this would overwrite whatever the user had typed on every render
-  // the context happens to produce.
-  const [loadedPropertyId, setLoadedPropertyId] = useState(property.id);
+  const [loadedPropertyId, setLoadedPropertyId] = useState(property?.id ?? "");
   useEffect(() => {
-    if (property.id === loadedPropertyId) return;
+    if (!property || property.id === loadedPropertyId) return;
     setLoadedPropertyId(property.id);
     setResortName(property.name);
-    setBrandName(property.brand);
+    setBrandName(property.brand ?? "");
     setLocationStr(property.location);
     setCurrency(property.currency);
     setCheckIn(property.checkInTime);
@@ -81,20 +75,22 @@ export default function ResortSettingsPage() {
 
   // AI Guardrail States
   const [confidenceThreshold, setConfidenceThreshold] = useState(
-    DEMO_PROPERTY.aiGuardrails.confidenceThreshold
+    property?.aiGuardrails?.confidenceThreshold ?? 85
   );
   const [highImpactRateThreshold, setHighImpactRateThreshold] = useState(
-    DEMO_PROPERTY.aiGuardrails.requireHumanApprovalAboveImpactPercent
+    property?.aiGuardrails?.requireHumanApprovalAboveImpactPercent ?? 15
   );
   const [highImpactPoThreshold, setHighImpactPoThreshold] = useState(
-    DEMO_PROPERTY.aiGuardrails.highImpactPurchaseThresholdInr
+    property?.aiGuardrails?.highImpactPurchaseThresholdInr ?? 50000
   );
   const [undoDuration, setUndoDuration] = useState(
-    DEMO_PROPERTY.aiGuardrails.undoBufferSeconds
+    property?.aiGuardrails?.undoBufferSeconds ?? 30
   );
-  const [shadowMode, setShadowMode] = useState(DEMO_PROPERTY.aiGuardrails.shadowMode);
+  const [shadowMode, setShadowMode] = useState(
+    property?.aiGuardrails?.shadowMode ?? false
+  );
   const [dpdpCompliance, setDpdpCompliance] = useState(
-    DEMO_PROPERTY.aiGuardrails.dpdpCompliance
+    property?.aiGuardrails?.dpdpCompliance ?? true
   );
 
   // Connector States
@@ -157,7 +153,7 @@ export default function ResortSettingsPage() {
     },
   ]);
 
-  const isAuthorized = ["system_admin", "general_manager"].includes(role);
+  const isAuthorized = role === "general_manager";
 
   const handleSaveSettings = () => {
     showToast({
@@ -217,8 +213,8 @@ export default function ResortSettingsPage() {
       <div className="space-y-6">
         <AccessDeniedCard
           title="Resort Settings Restricted"
-          message="Resort profile configuration, PMS/BMS connector settings, and AI guardrail management are restricted to General Managers and System Administrators."
-          currentRole={user.roleTitle}
+          message="Resort profile configuration, PMS/BMS connector settings, and AI guardrail management are restricted to General Managers."
+          currentRole={user?.roleTitle ?? "User"}
           requiredPermission="resort:configure or system:configure"
         />
       </div>
@@ -411,35 +407,39 @@ export default function ResortSettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
-                  {DEMO_PROPERTY.roomCategories.map((cat) => (
-                    <div
-                      key={cat.code}
-                      className="p-3 rounded-xl bg-white border border-sand-200/90 shadow-2xs flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sand-950">{cat.name}</span>
-                          <span className="text-[10px] font-mono text-sand-400">
-                            ({cat.code})
+                  {(property?.roomCategories ?? []).length === 0 ? (
+                    <div className="p-4 text-center text-sand-500 italic">No room category data available from backend</div>
+                  ) : (
+                    (property?.roomCategories ?? []).map((cat: any) => (
+                      <div
+                        key={cat.code}
+                        className="p-3 rounded-xl bg-white border border-sand-200/90 shadow-2xs flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sand-950">{cat.name}</span>
+                            <span className="text-[10px] font-mono text-sand-400">
+                              ({cat.code})
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-sand-500 mt-0.5">{cat.floor}</p>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="font-sans text-base font-bold text-sage-900 block tabular-nums">
+                            {cat.count} Keys
+                          </span>
+                          <span className="text-[10px] text-sand-500 font-medium">
+                            Base: ₹{cat.baseRate.toLocaleString("en-IN")}/night
                           </span>
                         </div>
-                        <p className="text-[11px] text-sand-500 mt-0.5">{cat.floor}</p>
                       </div>
-
-                      <div className="text-right">
-                        <span className="font-sans text-base font-bold text-sage-900 block tabular-nums">
-                          {cat.count} Keys
-                        </span>
-                        <span className="text-[10px] text-sand-500 font-medium">
-                          Base: ₹{cat.baseRate.toLocaleString("en-IN")}/night
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
 
                   <div className="pt-2 border-t border-sand-200/80 flex items-center justify-between text-xs font-semibold text-sand-800">
                     <span>Total Key Inventory:</span>
-                    <span className="text-sage-900 font-sans text-lg font-bold tabular-nums">355 Rooms</span>
+                    <span className="text-sage-900 font-sans text-lg font-bold tabular-nums">{property?.totalRooms ?? 0} Rooms</span>
                   </div>
                 </CardContent>
               </Card>
@@ -455,77 +455,86 @@ export default function ResortSettingsPage() {
             {/* Outlets */}
             <div className="lg:col-span-6 space-y-3">
               <h3 className="text-base font-bold text-sand-950 font-serif">
-                Resort Outlets & Dining Venues (4)
+                Resort Outlets & Dining Venues ({(property?.outlets ?? []).length})
               </h3>
               <div className="space-y-3">
-                {DEMO_PROPERTY.outlets.map((outlet) => (
-                  <Card key={outlet.id} className="border-sand-200 shadow-2xs bg-white">
-                    <CardContent className="p-4 flex items-start justify-between gap-3 text-xs">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-sand-950">
-                            {outlet.name}
-                          </h4>
-                          <Badge variant="sage" className="text-[10px] py-0 px-1.5">
-                            {outlet.type}
-                          </Badge>
+                {(property?.outlets ?? []).length === 0 ? (
+                  <div className="p-4 text-center text-sand-500 italic border border-sand-200 rounded-xl bg-white">No outlet data available from backend</div>
+                ) : (
+                  (property?.outlets ?? []).map((outlet: any) => (
+                    <Card key={outlet.id} className="border-sand-200 shadow-2xs bg-white">
+                      <CardContent className="p-4 flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-sand-950">
+                              {outlet.name}
+                            </h4>
+                            <Badge variant="sage" className="text-[10px] py-0 px-1.5">
+                              {outlet.type}
+                            </Badge>
+                          </div>
+                          <p className="text-sand-500 mt-1 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-sand-400" />
+                            Hours: {outlet.hours}
+                          </p>
                         </div>
-                        <p className="text-sand-500 mt-1 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-sand-400" />
-                          Hours: {outlet.hours}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[11px] font-semibold text-sand-800 block">
-                          Capacity: {outlet.capacity} Pax
-                        </span>
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium mt-1 inline-block">
-                          QR Menus Active
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        <div className="text-right shrink-0">
+                          <span className="text-[11px] font-semibold text-sand-800 block">
+                            Capacity: {outlet.capacity} Pax
+                          </span>
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium mt-1 inline-block">
+                            QR Menus Active
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             </div>
 
-            {/* ~180 Staff Headcount Breakdown */}
+            {/* Staff Headcount Breakdown */}
             <div className="lg:col-span-6 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-sand-950 font-serif">
-                  ~180 Staff Roster Breakdown (6 Divisions)
+                  Staff Roster Breakdown
                 </h3>
                 <Badge variant="outline" className="text-xs">
-                  180 Total Personnel
+                  {property?.staffHeadcount?.total ?? 0} Total Personnel
                 </Badge>
               </div>
 
               <Card className="border-sand-200 bg-white shadow-soft">
                 <CardContent className="p-4 divide-y divide-sand-100 text-xs">
-                  {DEMO_PROPERTY.staffHeadcount.departments.map((dept) => {
-                    const percentage = Math.round((dept.count / 180) * 100);
+                  {(property?.staffHeadcount?.departments ?? []).length === 0 ? (
+                    <div className="py-4 text-center text-sand-500 italic">No department headcount data available from backend</div>
+                  ) : (
+                    (property?.staffHeadcount?.departments ?? []).map((dept: any) => {
+                      const total = property?.staffHeadcount?.total ?? 1;
+                      const percentage = Math.round((dept.count / total) * 100);
 
-                    return (
-                      <div key={dept.name} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-sand-950">{dept.name}</span>
-                          <span className="font-semibold text-sage-900">
-                            {dept.count} Staff ({percentage}%)
-                          </span>
+                      return (
+                        <div key={dept.name} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sand-950">{dept.name}</span>
+                            <span className="font-semibold text-sage-900">
+                              {dept.count} Staff ({percentage}%)
+                            </span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-sand-100 overflow-hidden">
+                            <div
+                              className="h-full bg-sage-600 rounded-full"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-sand-500">
+                            <span>Active On Shift: {dept.activeOnShift} on duty</span>
+                            <span>Three Shifts · 24/7 Coverage</span>
+                          </div>
                         </div>
-                        <div className="w-full h-2 rounded-full bg-sand-100 overflow-hidden">
-                          <div
-                            className="h-full bg-sage-600 rounded-full"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-sand-500">
-                          <span>Active On Shift: {dept.activeOnShift} on duty</span>
-                          <span>Three Shifts · 24/7 Coverage</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </CardContent>
               </Card>
             </div>

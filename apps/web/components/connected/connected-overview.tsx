@@ -31,9 +31,9 @@ export function ConnectedOverview({
   const { isConnected, user } = useAuth();
   const [search, setSearch] = useState("");
   const query = useQuery({
-    queryKey: ["connected-overview", queryKey, user.propertyId, user.id],
+    queryKey: ["connected-overview", queryKey, user?.propertyId, user?.id],
     queryFn: load,
-    enabled: isConnected,
+    enabled: isConnected && Boolean(user),
     retry: false,
     staleTime: 30_000,
   });

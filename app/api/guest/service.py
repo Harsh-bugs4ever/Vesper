@@ -443,7 +443,14 @@ def report_issue(
     department_id = None
     if data.room_id:
         room = property_client.get(f"/rooms/{data.room_id}", property_id=property_id)
-        room_number = (room or {}).get("number")
+        if room is None:
+            raise NotFound("Room not found at this property")
+        room_number = room.get("number")
+    if data.asset_id:
+        from app.api.property.models import Asset
+        asset = db.get(Asset, data.asset_id)
+        if asset is None or asset.property_id != property_id:
+            raise NotFound("Asset not found at this property")
     department = _department(property_id, "maintenance")
     if department:
         department_id = UUID(department["id"])

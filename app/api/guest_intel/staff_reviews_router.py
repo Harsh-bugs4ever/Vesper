@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
+from app.api.identity.models import User
+from vesper_common.errors import NotFound
 from vesper_common.security import Principal, current_guest, current_user, requires
 
 from . import staff_reviews
@@ -150,12 +152,13 @@ def board(
     by department before reading too much into the order.
     """
     property_id = UUID(principal.property_id)
-    ranked, unranked = staff_reviews.leaderboard(db, property_id, department_id=department_id)
+    scope = principal.scoped_department(department_id)
+    ranked, unranked = staff_reviews.leaderboard(db, property_id, department_id=scope)
 
     return StaffPerformanceBoard(
         ranked=[StaffPerformanceOut.model_validate(row) for row in ranked],
         unranked=[StaffPerformanceOut.model_validate(row) for row in unranked],
-        house_average=staff_reviews._house_average(db, property_id),
+        house_average=staff_reviews._house_average(db, property_id, scope),
         minimum_reviews_for_score=staff_rating.MIN_REVIEWS_FOR_SCORE,
     )
 
@@ -168,6 +171,9 @@ def staff_detail(
 ) -> StaffPerformanceDetail:
     """One person's score and the reviews behind it."""
     property_id = UUID(principal.property_id)
+    user = db.get(User, staff_id)
+    if user is None or not any(str(a.property_id) == principal.property_id and (principal.role in {"gm", "service"} or principal.can_see_department(a.department_id)) for a in user.assignments):
+        raise NotFound("Staff member not found")
     row = staff_reviews.rebuild_summary(db, property_id, staff_id)
     reviews = staff_reviews.reviews_for_staff(db, property_id, staff_id)
 
@@ -183,5 +189,8 @@ def recompute(
     db: Session = Depends(get_session),
 ) -> StaffPerformanceOut:
     """Rebuild one person's summary from their ratings."""
+    user = db.get(User, staff_id)
+    if user is None or not any(str(a.property_id) == principal.property_id and (principal.role in {"gm", "service"} or principal.can_see_department(a.department_id)) for a in user.assignments):
+        raise NotFound("Staff member not found")
     row = staff_reviews.rebuild_summary(db, UUID(principal.property_id), staff_id)
     return StaffPerformanceOut.model_validate(row)

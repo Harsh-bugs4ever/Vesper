@@ -206,13 +206,12 @@ def _severity_correction(
     )
 
 
-def _house_average(db: Session, property_id: UUID) -> float:
+def _house_average(db: Session, property_id: UUID, department_id: UUID | None = None) -> float:
     """What guests at this property average across every staff member they rate."""
-    value = db.scalar(
-        select(func.avg(GuestStaffReview.rating)).where(
-            GuestStaffReview.property_id == property_id
-        )
-    )
+    query = select(func.avg(GuestStaffReview.rating)).where(GuestStaffReview.property_id == property_id)
+    if department_id is not None:
+        query = query.where(GuestStaffReview.department_id == department_id)
+    value = db.scalar(query)
     return float(value) if value is not None else staff_rating.HOUSE_AVERAGE
 
 
