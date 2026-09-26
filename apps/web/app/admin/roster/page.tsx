@@ -1,14 +1,19 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
   Info,
+  Loader2,
   Sparkle,
+  UploadCloud,
   UserRound,
+  Users,
 } from "lucide-react";
 
 import { StaffingChart } from "@/components/charts/staffing-chart";
@@ -18,92 +23,199 @@ import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { PeriodSelect } from "@/components/ui/period-select";
 import { useToast } from "@/components/ui/toast";
 import {
-  SHIFTS,
-  WEEK,
-  alerts,
-  roster,
-  shiftTone,
-  staffing,
-  type ShiftName,
-} from "@/lib/demo/roster";
+  workforceApi,
+  property,
+  type RosterDetail,
+  type RosterOut,
+  type StaffingRow,
+  type LeaveOut,
+  type DepartmentOut,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-const WEEKS = [
-  "17 Nov 2026 – 23 Nov 2026",
-  "24 Nov 2026 – 30 Nov 2026",
-  "1 Dec 2026 – 7 Dec 2026",
-] as const;
-
-const DEPARTMENT_OPTIONS = ["All Departments", ...staffing.map((row) => row.department)];
 
 export default function RosterPage() {
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [week, setWeek] = useState<string>(WEEKS[0]);
-  const [department, setDepartment] = useState<string>(DEPARTMENT_OPTIONS[0]);
-  const [shift, setShift] = useState<string>(SHIFTS[0]);
-  const [byPerson, setByPerson] = useState(false);
-
-  const scheduledTotal = staffing.reduce((sum, row) => sum + row.scheduled, 0);
-  const requiredTotal = staffing.reduce((sum, row) => sum + row.required, 0);
-  const coverage = Math.round((scheduledTotal / requiredTotal) * 100);
-
-  const visible = useMemo(
-    () =>
-      roster.filter((row) => department === "All Departments" || row.department === department),
-    [department]
+  // Week selection state (starts on Monday)
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 })
   );
+  const weekStartStr = format(currentWeekStart, "yyyy-MM-dd");
 
-  /** Count per department, for the label under each row name. */
-  const counts = useMemo(
-    () => new Map(staffing.map((row) => [row.department, row])),
-    []
-  );
+  const [selectedDeptId, setSelectedDeptId] = useState<string>("all");
+
+  // 1. Fetch available departments
+  const { data: departments = [] } = useQuery<DepartmentOut[]>({
+    queryKey: ["departments"],
+    queryFn: () => property.departments(),
+    staleTime: 300_000,
+  });
+
+  // 2. Fetch current/active roster for the selected week
+  const {
+    data: roster,
+    isLoading: rosterLoading,
+    isError: rosterError,
+  } = useQuery<RosterDetail | null>({
+    queryKey: ["workforce-roster", weekStartStr],
+    queryFn: () => workforceApi.currentRoster(weekStartStr),
+  });
+
+  // 3. Fetch staffing chart data if roster exists
+  const { data: staffingRows = [], isLoading: staffingLoading } = useQuery<
+    StaffingRow[]
+  >({
+    queryKey: ["workforce-staffing", roster?.id],
+    queryFn: () => (roster?.id ? workforceApi.staffingChart(roster.id) : []),
+    enabled: Boolean(roster?.id),
+  });
+
+  // 4. Fetch pending leave requests
+  const { data: pendingLeave = [] } = useQuery<LeaveOut[]>({
+    queryKey: ["workforce-leave-pending"],
+    queryFn: () => workforceApi.leave({ status: "pending" }),
+  });
+
+  // Generate roster mutation
+  const generateMutation = useMutation({
+    mutationFn: () =>
+      workforceApi.generateRoster({
+        week_start: weekStartStr,
+        department_id: selectedDeptId !== "all" ? selectedDeptId : undefined,
+      }),
+    onSuccess: (newRoster) => {
+      queryClient.invalidateQueries({ queryKey: ["workforce-roster"] });
+      queryClient.invalidateQueries({ queryKey: ["workforce-staffing"] });
+      showToast({
+        title: "Roster Generated",
+        description: `Created schedule with ${newRoster.total_shifts} shifts for week of ${weekStartStr}.`,
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Generation Failed",
+        description: err.message ?? "The solver could not generate a valid roster.",
+        type: "error",
+      });
+    },
+  });
+
+  // Publish roster mutation
+  const publishMutation = useMutation({
+    mutationFn: (rosterId: string) => workforceApi.publishRoster(rosterId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workforce-roster"] });
+      showToast({
+        title: "Roster Published",
+        description: "Schedule is now active and notifications dispatched to staff.",
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Publish Failed",
+        description: err.message ?? "Could not publish roster.",
+        type: "error",
+      });
+    },
+  });
+
+  // Staffing calculations
+  const scheduledTotal = staffingRows.reduce((sum, row) => sum + row.scheduled, 0);
+  const requiredTotal = staffingRows.reduce((sum, row) => sum + row.required, 0);
+  const coverage =
+    requiredTotal > 0 ? Math.round((scheduledTotal / requiredTotal) * 100) : 0;
+
+  // Department staffing aggregated chart data
+  const chartData = useMemo(() => {
+    const deptMap = new Map<
+      string,
+      { department: string; scheduled: number; required: number; gap: number }
+    >();
+
+    staffingRows.forEach((row) => {
+      const name = row.department_name ?? row.department_id;
+      const current = deptMap.get(name) ?? {
+        department: name,
+        scheduled: 0,
+        required: 0,
+        gap: 0,
+      };
+      current.scheduled += row.scheduled;
+      current.required += row.required;
+      current.gap += row.gap;
+      deptMap.set(name, current);
+    });
+
+    return Array.from(deptMap.values());
+  }, [staffingRows]);
+
+  const gaps = staffingRows.filter((r) => r.gap > 0);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Staff Roster"
-        description="Plan the right people, in the right place, at the right time."
+        description="Workforce shift scheduling, capacity planning, and live roster enforcement."
         actions={
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setCurrentWeekStart((prev) => subWeeks(prev, 1))}
               className="rounded-xl border border-sand-200 bg-white p-2 text-sand-500 transition-colors hover:bg-sand-50"
               aria-label="Previous week"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white py-1 pl-3 pr-1">
+            <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-3 py-2 text-xs font-semibold text-sand-800 shadow-xs">
               <CalendarRange className="h-4 w-4 shrink-0 text-sand-500" />
-              <PeriodSelect
-                value={week}
-                onChange={setWeek}
-                options={WEEKS}
-                className="[&>select]:border-0 [&>select]:bg-transparent"
-              />
+              <span>
+                Week of {format(currentWeekStart, "d MMM yyyy")}
+              </span>
             </div>
+            <button
+              onClick={() => setCurrentWeekStart((prev) => addWeeks(prev, 1))}
+              className="rounded-xl border border-sand-200 bg-white p-2 text-sand-500 transition-colors hover:bg-sand-50"
+              aria-label="Next week"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+
+            {roster?.status === "draft" && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={publishMutation.isPending}
+                onClick={() => publishMutation.mutate(roster.id)}
+              >
+                <UploadCloud className="h-3.5 w-3.5" />
+                Publish Roster
+              </Button>
+            )}
+
             <Button
               size="sm"
-              onClick={() =>
-                showToast({
-                  title: "Roster generated",
-                  description:
-                    "Solver filled 4 unassigned shifts within leave and rest-period rules. Review before publishing.",
-                  type: "success",
-                })
-              }
+              disabled={generateMutation.isPending}
+              onClick={() => generateMutation.mutate()}
             >
-              <CalendarRange className="h-3.5 w-3.5" />
-              Generate Roster
+              {generateMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkle className="h-3.5 w-3.5" />
+              )}
+              {roster ? "Regenerate" : "Generate Roster"}
             </Button>
           </div>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+        {/* Staffing Overview Chart */}
         <Panel>
           <PanelHeader
-            title="Staffing Overview"
+            title="Staffing Capacity Overview"
+            description="Scheduled vs Required headcount from workforce solver"
             action={
               <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
                 <span className="flex items-center gap-1.5">
@@ -118,195 +230,166 @@ export default function RosterPage() {
             }
           />
           <PanelBody className="pt-4">
-            <StaffingChart data={staffing} />
+            {staffingLoading ? (
+              <p role="status" className="py-12 text-center text-sm text-sand-500">
+                Loading capacity metrics…
+              </p>
+            ) : chartData.length > 0 ? (
+              <StaffingChart data={chartData} />
+            ) : (
+              <div className="py-16 text-center text-sm text-sand-500">
+                <Users className="mx-auto h-8 w-8 text-sand-300" />
+                <p className="mt-2 font-semibold text-sand-800">
+                  No Roster Data for Week of {format(currentWeekStart, "d MMM yyyy")}
+                </p>
+                <p className="text-xs text-sand-400 mt-1 max-w-sm mx-auto">
+                  Click &ldquo;Generate Roster&rdquo; above to run the constraint solver for this week.
+                </p>
+              </div>
+            )}
           </PanelBody>
         </Panel>
 
+        {/* Alerts & Coverage Metrics */}
         <Panel>
           <PanelHeader
-            title="Alerts & Insights"
-            action={
-              <button className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900">
-                View all
-              </button>
-            }
+            title="Workforce Alerts & Coverage"
+            description="Solver constraint warnings and unallocated shifts"
           />
           <PanelBody className="space-y-3 pt-4">
-            {alerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={cn(
-                  "flex items-start gap-3 rounded-xl border p-3.5",
-                  alert.severity === "warning"
-                    ? "border-gold-200 bg-gold-50/50"
-                    : "border-sage-200 bg-sage-50/50"
-                )}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-                    alert.severity === "warning"
-                      ? "bg-gold-100 text-gold-800"
-                      : "bg-sage-100 text-sage-800"
-                  )}
+            {gaps.length > 0 ? (
+              gaps.slice(0, 3).map((gap, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5"
                 >
-                  {alert.severity === "warning" ? (
-                    <CircleAlert className="h-3.5 w-3.5" />
-                  ) : (
-                    <Info className="h-3.5 w-3.5" />
-                  )}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium leading-snug text-sand-950">{alert.title}</p>
-                  <p className="mt-0.5 text-xs text-sand-600">{alert.detail}</p>
+                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-sand-950">
+                      Staffing Gap: {gap.department_name ?? gap.department_id}
+                    </p>
+                    <p className="text-xs text-sand-600 mt-0.5">
+                      Short by {gap.gap} staff on {gap.work_date} ({gap.shift_name} shift).
+                    </p>
+                  </div>
                 </div>
-
-                {alert.severity === "warning" && (
-                  <button
-                    onClick={() =>
-                      showToast({
-                        title: alert.title,
-                        description:
-                          "Opening the gap against forecast demand and available staff.",
-                        type: "default",
-                      })
-                    }
-                    className="shrink-0 rounded-lg bg-gold-100 px-3 py-1 text-xs font-medium text-gold-900 transition-colors hover:bg-gold-200"
-                  >
-                    Review
-                  </button>
-                )}
+              ))
+            ) : (
+              <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-sand-50/40 p-3.5 text-xs text-sand-600">
+                <Info className="h-4 w-4 text-sand-400" />
+                <span>Zero staffing gaps flagged for active schedules.</span>
               </div>
-            ))}
+            )}
+
+            {pendingLeave.length > 0 && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3.5">
+                <p className="text-xs font-semibold text-blue-950">
+                  {pendingLeave.length} Pending Leave Requests
+                </p>
+                <p className="text-xs text-blue-800 mt-0.5">
+                  Employees have submitted time-off requests awaiting manager decision.
+                </p>
+              </div>
+            )}
 
             <div className="rounded-xl border border-sand-200 bg-sand-50/60 p-3.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs text-sand-600">Coverage this week</span>
-                <span className="font-sans text-lg font-semibold text-sand-950 tabular-nums">{coverage}%</span>
+                <span className="text-xs text-sand-600">Weekly Coverage</span>
+                <span className="font-sans text-lg font-semibold text-sand-950 tabular-nums">
+                  {requiredTotal > 0 ? `${coverage}%` : "—"}
+                </span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sand-200">
                 <div
                   className={cn(
-                    "h-full rounded-full",
-                    coverage >= 98 ? "bg-sage-600" : coverage >= 90 ? "bg-gold-500" : "bg-rose-400"
+                    "h-full rounded-full transition-all",
+                    coverage >= 98
+                      ? "bg-sage-600"
+                      : coverage >= 90
+                      ? "bg-amber-500"
+                      : "bg-rose-400"
                   )}
-                  style={{ width: `${coverage}%` }}
+                  style={{ width: `${Math.min(coverage, 100)}%` }}
                 />
               </div>
               <p className="mt-1.5 text-xs text-sand-500">
-                {scheduledTotal} scheduled against {requiredTotal} required
+                {scheduledTotal} shifts scheduled against {requiredTotal} required
               </p>
             </div>
           </PanelBody>
         </Panel>
       </div>
 
+      {/* Roster Entries Table */}
       <Panel>
         <PanelHeader
-          title="Weekly Roster"
+          title="Scheduled Shift Entries"
+          description={
+            roster
+              ? `Roster #${roster.id.slice(0, 8)} · Status: ${roster.status.toUpperCase()} · ${roster.total_hours} Total Hours`
+              : "No schedule loaded for this week"
+          }
           action={
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <PeriodSelect value={department} onChange={setDepartment} options={DEPARTMENT_OPTIONS} />
-              <PeriodSelect value={shift} onChange={setShift} options={SHIFTS} />
-              <button
-                onClick={() => setByPerson((current) => !current)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                  byPerson
-                    ? "border-sage-600 bg-sage-600 text-white"
-                    : "border-sand-200 bg-white text-sand-700 hover:bg-sand-50"
-                )}
+            <div className="flex items-center gap-2 pt-1">
+              <select
+                value={selectedDeptId}
+                onChange={(e) => setSelectedDeptId(e.target.value)}
+                className="rounded-lg border border-sand-200 bg-white px-2.5 py-1 text-xs text-sand-800"
               >
-                <UserRound className="h-3.5 w-3.5" />
-                View by Person
-              </button>
+                <option value="all">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
             </div>
           }
         />
-
         <PanelBody className="pt-4">
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-1">
-              <thead>
-                <tr>
-                  <th className="w-44 px-2 pb-2 text-left text-xs font-medium text-sand-500">
-                    Department
-                  </th>
-                  {WEEK.map((day) => (
-                    <th key={day.label} className="min-w-[130px] px-2 pb-2 text-center">
-                      <span className="block text-sm font-semibold text-sand-900">{day.label}</span>
-                      <span className="block text-xs text-sand-500">{day.date}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {visible.map((row) => {
-                  const count = counts.get(row.department);
-                  const short = count ? count.scheduled < count.required : false;
-
-                  return (
-                    <tr key={row.department}>
-                      <th className="rounded-xl bg-sand-50/70 px-3 py-3 text-left align-middle">
-                        <span className="block text-sm font-medium text-sand-950">
-                          {row.department}
-                        </span>
-                        {count && (
-                          <span
-                            className={cn(
-                              "block text-xs tabular-nums",
-                              short ? "font-semibold text-rose-600" : "text-sand-500"
-                            )}
-                          >
-                            {count.scheduled} / {count.required}
-                          </span>
-                        )}
-                      </th>
-
-                      {row.days.map((day, index) => {
-                        // A shift filter hides cells that do not match rather than
-                        // removing the row: the week's shape stays readable.
-                        const dimmed = shift !== "All Shifts" && day.shift !== shift;
-
-                        return (
-                          <td key={index} className="align-middle">
-                            <div
-                              className={cn(
-                                "rounded-xl border px-3 py-2.5 transition-opacity",
-                                shiftTone[day.shift as ShiftName],
-                                dimmed && "opacity-25"
-                              )}
-                            >
-                              <span className="block text-xs font-medium">
-                                {day.person === null ? "—" : day.shift}
-                              </span>
-                              <span
-                                className={cn(
-                                  "block truncate text-sm",
-                                  day.person === null ? "font-medium" : "text-sand-800"
-                                )}
-                              >
-                                {day.person ?? "Unassigned"}
-                              </span>
-                            </div>
-                          </td>
-                        );
-                      })}
+          {rosterLoading ? (
+            <p role="status" className="py-12 text-center text-sm text-sand-500">
+              Loading weekly roster entries…
+            </p>
+          ) : !roster || roster.entries.length === 0 ? (
+            <div className="py-16 text-center text-sm text-sand-500">
+              <p className="font-medium text-sand-800">No Roster Entries</p>
+              <p className="text-xs text-sand-400 mt-1">
+                No shift assignments found for the current filter criteria.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-sand-200 text-sand-500">
+                    <th className="pb-2 font-medium">Work Date</th>
+                    <th className="pb-2 font-medium">Staff ID</th>
+                    <th className="pb-2 font-medium">Shift Window</th>
+                    <th className="pb-2 font-medium">Shift ID</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand-100">
+                  {roster.entries.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-sand-50/50">
+                      <td className="py-2.5 font-medium text-sand-900">
+                        {entry.work_date}
+                      </td>
+                      <td className="py-2.5 font-mono text-sand-700">
+                        {entry.user_id.slice(0, 8)}…
+                      </td>
+                      <td className="py-2.5 text-sand-800">
+                        {entry.start_time} – {entry.end_time}
+                      </td>
+                      <td className="py-2.5 text-sand-500">
+                        {entry.shift_id.slice(0, 8)}
+                      </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="mt-4 flex items-center gap-2 text-xs text-sand-500">
-            <Sparkle className="h-3.5 w-3.5 text-sand-400" />
-            Generated rosters respect leave, weekly rest periods and maximum consecutive
-            nights. Unassigned shifts are left blank rather than filled with someone who
-            would breach one.
-          </p>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </PanelBody>
       </Panel>
     </div>

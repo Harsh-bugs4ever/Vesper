@@ -29,34 +29,6 @@ interface DepartingStay {
   interactions: string[];
 }
 
-/** Shown when there is no session — the demo has to run without a backend. */
-const DEMO_DEPARTING: DepartingStay[] = [
-  {
-    stayId: "BKG-20883",
-    guest: "Dr. Sanjay Kulkarni",
-    room: "507",
-    nights: 3,
-    departsAt: "Tomorrow, 05:30",
-    interactions: ["Turndown service ×3", "Airport transfer arranged"],
-  },
-  {
-    stayId: "BKG-20882",
-    guest: "Ms. Kavya Iyer",
-    room: "204",
-    nights: 1,
-    departsAt: "Tomorrow, 11:00",
-    interactions: ["Extra towels delivered", "Room cleaned twice"],
-  },
-  {
-    stayId: "BKG-20886",
-    guest: "Mr. Nikhil Bose",
-    room: "308",
-    nights: 1,
-    departsAt: "Today, 14:00",
-    interactions: ["Late check-out handled"],
-  },
-];
-
 export default function StaffReviewsPage() {
   const { showToast } = useToast();
 
@@ -64,19 +36,17 @@ export default function StaffReviewsPage() {
   const [comments, setComments] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Record<string, boolean>>({});
 
-  const { stays: liveStays, isDemo, isLoading, error: staysError } = useDepartingStays();
+  const { stays: liveStays, isLoading, error: staysError } = useDepartingStays();
   const reviewGuest = useReviewGuest();
 
-  const departing: DepartingStay[] = isDemo
-    ? DEMO_DEPARTING
-    : liveStays.map((stay) => ({
-        stayId: stay.stay_id,
-        guest: `Room ${stay.room_number ?? "—"}`,
-        room: stay.room_number ?? "—",
-        nights: 0,
-        departsAt: stay.departs_on ?? "Today",
-        interactions: [],
-      }));
+  const departing: DepartingStay[] = liveStays.map((stay) => ({
+    stayId: stay.stay_id,
+    guest: `Room ${stay.room_number ?? "—"}`,
+    room: stay.room_number ?? "—",
+    nights: 0,
+    departsAt: stay.departs_on ?? "Today",
+    interactions: [],
+  }));
 
   const submit = (stay: DepartingStay) => {
     const rating = ratings[stay.stayId];
@@ -95,9 +65,9 @@ export default function StaffReviewsPage() {
         onSuccess: (result) => {
           setDone((current) => ({ ...current, [stay.stayId]: true }));
           showToast({
-            title: result.delivered ? `Review recorded for ${stay.guest}` : "Demo review completed",
-            description: result.delivered ? "Final once submitted. The guest never sees it." : "This preview did not send a review to the resort.",
-            type: result.delivered ? "success" : "default",
+            title: `Review recorded for ${stay.guest}`,
+            description: "Final once submitted. The guest never sees it.",
+            type: "success",
           });
         },
         onError: (error) => {

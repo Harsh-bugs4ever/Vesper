@@ -2,19 +2,24 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowLeft,
   Award,
   CalendarPlus,
+  CheckCircle2,
   CircleUser,
   Gift,
   IndianRupee,
+  Loader2,
   Moon,
   Pencil,
   Plus,
   Send,
   Sparkles,
   Star,
+  Users,
 } from "lucide-react";
 
 import { SentimentTrendChart } from "@/components/charts/sentiment-trend-chart";
@@ -22,652 +27,450 @@ import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { PeriodSelect } from "@/components/ui/period-select";
 import { SectionTabs } from "@/components/ui/section-tabs";
-import { StarRating } from "@/components/ui/star-rating";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { atRisk, guests, suggestedOffer } from "@/lib/demo/guest-profile";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { value: "overview", label: "Overview" },
-  { value: "stays", label: "Stays" },
-  { value: "preferences", label: "Preferences" },
-  { value: "communications", label: "Communications" },
-  { value: "notes", label: "Notes" },
-  { value: "activity", label: "Activity" },
+  { value: "at-risk", label: "At-Risk Guests" },
+  { value: "offers", label: "Retention Offers" },
+  { value: "sentiment", label: "Sentiment Trend" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["value"];
 
-const SENTIMENT_RANGES = ["Last 2 Years", "Last Year", "All Time"] as const;
-
 export default function GuestProfilePage() {
   const { showToast } = useToast();
-
-  const guest = guests[0];
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
-  const [range, setRange] = useState<string>(SENTIMENT_RANGES[0]);
-  const [offerHandled, setOfferHandled] = useState<"approved" | "saved" | null>(null);
 
-  // Offer Composer Modal State
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [composerGuest, setComposerGuest] = useState(guest.name);
-  const [composerTitle, setComposerTitle] = useState("Complimentary Sea View Upgrade & High Tea");
-  const [composerPerk, setComposerPerk] = useState("Executive Sea View Upgrade + ₹2,500 F&B credit");
-  const [composerCategory, setComposerCategory] = useState("upgrade");
-  const [composerMessage, setComposerMessage] = useState(
-    `Dear ${guest.name.split(" ")[0]}, we would be delighted to welcome you back to Vesper with a complimentary upgrade to our Executive Sea View Room and high tea at The Palm Lounge.`
-  );
-  const [composerExpiry, setComposerExpiry] = useState("31 Dec 2026");
+  // 1. Fetch live at-risk guests from guest-intel service
+  const {
+    data: atRiskGuests = [],
+    isLoading: atRiskLoading,
+    isError: atRiskError,
+  } = useQuery<any[]>({
+    queryKey: ["guest-intel-at-risk"],
+    queryFn: () => api.get<any[]>("/guest-intel/at-risk"),
+    refetchInterval: 60_000,
+  });
 
-  const handleSendOffer = () => {
-    if (!composerTitle.trim()) {
+  // 2. Fetch live generated retention offers
+  const { data: offers = [], isLoading: offersLoading } = useQuery<any[]>({
+    queryKey: ["guest-intel-offers"],
+    queryFn: () => api.get<any[]>("/guest-intel/offers"),
+    refetchInterval: 30_000,
+  });
+
+  // 3. Fetch sentiment trend
+  const { data: sentimentTrend = [], isLoading: trendLoading } = useQuery<any[]>({
+    queryKey: ["guest-intel-trend"],
+    queryFn: () => api.get<any[]>("/guest-intel/sentiment/trend", { days: 30 }),
+  });
+
+  // 4. Fetch in-house bookings for real active guest context
+  const { data: todayBookings } = useQuery<any>({
+    queryKey: ["frontdesk-bookings-today"],
+    queryFn: () => api.get<any>("/bookings/today"),
+  });
+
+  // Approve offer mutation
+  const approveOfferMutation = useMutation({
+    mutationFn: (offerId: string) =>
+      api.post(`/guest-intel/offers/${offerId}/approve`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["guest-intel-offers"] });
       showToast({
-        title: "Please enter an offer title",
-        description: "An offer title is required.",
-        type: "warning",
+        title: "Offer Approved & Dispatched",
+        description: "Retention offer delivered to the guest via active channels.",
+        type: "success",
       });
-      return;
-    }
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Approval Failed",
+        description: err.message ?? "The server rejected this offer approval.",
+        type: "error",
+      });
+    },
+  });
 
-    setComposerOpen(false);
-    setOfferHandled("approved");
+  // Dismiss offer mutation
+  const dismissOfferMutation = useMutation({
+    mutationFn: (offerId: string) =>
+      api.post(`/guest-intel/offers/${offerId}/dismiss`, { reason: "dismissed_by_manager" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["guest-intel-offers"] });
+      showToast({
+        title: "Offer Dismissed",
+        description: "Offer marked inactive.",
+        type: "default",
+      });
+    },
+  });
 
-    showToast({
-      title: "Retention Offer Dispatched",
-      description: `"${composerTitle}" sent to ${composerGuest} via email/SMS (valid until ${composerExpiry}).`,
-      type: "success",
-    });
-  };
+  const chartPoints = sentimentTrend.map((row: any) => ({
+    date: row.date ?? row.day ?? "Day",
+    rating: row.rating ?? row.score ?? 4.0,
+  }));
 
-  const initials = guest.name
-    .split(" ")
-    .map((part) => part[0])
-    .join("");
+  const activeOffers = offers.filter((o) => o.status === "proposed" || o.status === "active" || o.status === "pending");
 
   return (
     <div className="space-y-5">
-      {/* Breadcrumb row */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/admin/guests"
-          className="inline-flex items-center gap-2 text-sm font-medium text-sand-600 hover:text-sand-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Guest Profiles
-        </Link>
+        <div>
+          <h1 className="font-serif text-2xl font-bold text-sand-950">
+            Guest Intelligence & Retention
+          </h1>
+          <p className="text-xs text-sand-600 mt-0.5">
+            Real-time churn risk prediction, sentiment tracking, and personalized retention offers.
+          </p>
+        </div>
 
-        <Button
-          size="sm"
-          onClick={() =>
-            showToast({
-              title: "New booking",
-              description: `Opening the booking form pre-filled for ${guest.name}.`,
-              type: "default",
-            })
-          }
-        >
-          <CalendarPlus className="h-3.5 w-3.5" />
-          New Booking
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold text-sand-800">
+            {atRiskGuests.length} At-Risk Flagged
+          </span>
+          <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold text-sand-800">
+            {todayBookings?.in_house_count ?? 0} In-House
+          </span>
+        </div>
       </div>
-
-      {/* Identity card */}
-      <Panel>
-        <PanelBody className="space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-5">
-              <span className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-sage-50 font-serif text-3xl font-semibold text-sage-800">
-                {initials}
-              </span>
-
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="font-serif text-3xl font-semibold leading-tight text-sand-950">
-                    {guest.name}
-                  </h1>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 px-2.5 py-0.5 text-xs font-medium text-gold-800">
-                    <Award className="h-3 w-3" />
-                    {guest.tier}
-                  </span>
-                </div>
-
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sand-600">
-                  <span>Member since {guest.memberSince}</span>
-                  <span className="text-sand-300">|</span>
-                  <span>{guest.location}</span>
-                  <span className="text-sand-300">|</span>
-                  <span>{guest.email}</span>
-                  <span className="text-sand-300">|</span>
-                  <span>{guest.phone}</span>
-                </p>
-
-                {guest.quote && (
-                  <p className="mt-2 font-serif text-base italic text-sand-700">
-                    &ldquo;{guest.quote}&rdquo;
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Button variant="outline" size="sm">
-              <Pencil className="h-3.5 w-3.5" />
-              Edit Profile
-            </Button>
-          </div>
-
-          {/* Headline figures */}
-          <div className="grid grid-cols-2 gap-4 border-t border-sand-200/80 pt-5 sm:grid-cols-3 lg:grid-cols-5">
-            {[
-              { icon: CircleUser, value: guest.pastStays, label: "Past Stays" },
-              {
-                icon: IndianRupee,
-                value: `₹${guest.totalSpend.toLocaleString("en-IN")}`,
-                label: "Total Spend",
-              },
-              { icon: Moon, value: guest.avgNights, label: "Avg. Nights" },
-              { icon: CalendarPlus, value: guest.lastStay, label: "Last Stay" },
-              {
-                icon: Star,
-                value: guest.guestRating === null ? "—" : `${guest.guestRating}/10`,
-                label: "Guest Rating",
-              },
-            ].map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <div key={stat.label} className="flex items-center gap-3">
-                  <Icon className="h-5 w-5 shrink-0 text-sand-400" />
-                  <div className="min-w-0">
-                    <p className="font-serif text-xl font-semibold leading-tight text-sand-950">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-sand-500">{stat.label}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </PanelBody>
-      </Panel>
 
       <SectionTabs tabs={TABS} value={tab} onChange={setTab} />
 
       {tab === "overview" && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
           <div className="space-y-4">
+            {/* Sentiment trend panel */}
             <Panel>
               <PanelHeader
-                title="Guest Preferences"
-                description="Personalise every stay"
-                action={
-                  <button className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900">
-                    Edit
-                  </button>
-                }
+                title="Property Sentiment Trend (30 Days)"
+                description="Live scores calculated from guest reviews, feedback forms, and incident ratings"
               />
               <PanelBody className="pt-4">
-                <ul className="flex flex-wrap gap-2">
-                  {guest.preferences.map((pref) => {
-                    const Icon = pref.icon;
-                    return (
-                      <li
-                        key={pref.label}
-                        className="flex items-center gap-2 rounded-full border border-sand-200 bg-sand-50/70 px-3.5 py-2 text-sm text-sand-800"
-                      >
-                        <Icon className="h-4 w-4 shrink-0 text-sand-500" />
-                        {pref.label}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </PanelBody>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title="Guest Sentiment Trend"
-                description="Based on feedback, reviews and in-stay requests"
-                action={
-                  <PeriodSelect value={range} onChange={setRange} options={SENTIMENT_RANGES} />
-                }
-              />
-              <PanelBody className="pt-4">
-                <SentimentTrendChart data={guest.sentiment} average={guest.sentimentAverage} />
-              </PanelBody>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title="Recent Stays"
-                action={
-                  <button
-                    onClick={() => setTab("stays")}
-                    className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900"
-                  >
-                    View all
-                  </button>
-                }
-              />
-              <PanelBody className="pt-4">
-                <Table>
-                  <THead>
-                    <tr>
-                      <TH>Check-in</TH>
-                      <TH>Check-out</TH>
-                      <TH>Room Type</TH>
-                      <TH align="right">Nights</TH>
-                      <TH align="right">Amount (₹)</TH>
-                      <TH align="right">Feedback</TH>
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {guest.stays.map((stay) => (
-                      <TR key={stay.checkIn}>
-                        <TD className="text-sand-700">{stay.checkIn}</TD>
-                        <TD className="text-sand-700">{stay.checkOut}</TD>
-                        <TD className="font-medium text-sand-900">{stay.roomType}</TD>
-                        <TD align="right" className="text-sand-700">
-                          {stay.nights}
-                        </TD>
-                        <TD align="right" className="text-sand-800">
-                          {stay.amount.toLocaleString("en-IN")}
-                        </TD>
-                        <TD align="right">
-                          {stay.feedback === null ? (
-                            <span className="text-sand-400">—</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-sage-200 bg-sage-50 px-2 py-0.5 text-xs font-medium text-sage-800">
-                              <Star className="h-3 w-3 fill-sage-700 text-sage-700" />
-                              {stay.feedback}/10
-                            </span>
-                          )}
-                        </TD>
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              </PanelBody>
-            </Panel>
-          </div>
-
-          <div className="space-y-4">
-            <Panel>
-              <PanelHeader
-                title="At-Risk Guests"
-                description="Guests who may not return soon"
-                action={
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setComposerGuest(atRisk[0].name);
-                      setComposerTitle("Win-Back Stay Incentive");
-                      setComposerPerk("20% Off Room + Complimentary Breakfast");
-                      setComposerMessage(
-                        `Dear ${atRisk[0].name.split(" ")[0]}, we would love to welcome you back with a 20% privilege and breakfast on us.`
-                      );
-                      setComposerOpen(true);
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Compose Offer
-                  </Button>
-                }
-              />
-              <PanelBody className="pt-4">
-                <ul className="divide-y divide-sand-100">
-                  {atRisk.map((person) => (
-                    <li key={person.id} className="flex items-center gap-3 py-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sand-100 text-xs font-semibold text-sand-700">
-                        {person.name
-                          .split(" ")
-                          .map((part) => part[0])
-                          .join("")}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-sand-950">
-                          {person.name}
-                        </span>
-                        <span className="block text-xs text-sand-500">
-                          Last stay: {person.lastStay}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-sand-500">
-                        {person.daysSince} days
-                      </span>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                          person.risk === "high"
-                            ? "border-rose-200 bg-rose-50 text-rose-700"
-                            : "border-gold-200 bg-gold-50 text-gold-800"
-                        )}
-                      >
-                        {person.risk === "high" ? "High Risk" : "At Risk"}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setComposerGuest(person.name);
-                          setComposerTitle("Personalized Win-Back Offer");
-                          setComposerPerk("Complimentary Room Upgrade + Dining Credit");
-                          setComposerMessage(
-                            `Dear ${person.name.split(" ")[0]}, we noticed it has been ${person.daysSince} days since your last stay. We would love to welcome you back.`
-                          );
-                          setComposerOpen(true);
-                        }}
-                        className="shrink-0 rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs font-medium text-sand-700 hover:bg-sand-50"
-                      >
-                        Offer
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </PanelBody>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title={
-                  <span className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-gold-600" />
-                    Suggested Offer
-                  </span>
-                }
-                action={
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-sage-200 bg-sage-50 px-2.5 py-0.5 text-xs font-medium text-sage-800">
-                    Personalised for this guest
-                  </span>
-                }
-              />
-              <PanelBody className="space-y-4 pt-4">
-                <div>
-                  <p className="font-serif text-lg font-semibold text-sand-950">
-                    {suggestedOffer.title}
+                {trendLoading ? (
+                  <p role="status" className="py-12 text-center text-sm text-sand-500">
+                    Loading sentiment trend…
                   </p>
-                  <p className="mt-1 text-sm text-sand-600">{suggestedOffer.detail}</p>
-
-                  <ul className="mt-3 flex flex-wrap gap-2">
-                    {suggestedOffer.tags.map((tag) => (
-                      <li
-                        key={tag}
-                        className="rounded-full border border-sand-200 bg-sand-50 px-2.5 py-1 text-xs text-sand-600"
-                      >
-                        {tag}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {offerHandled ? (
-                  <p
-                    className={cn(
-                      "rounded-xl border p-3 text-xs",
-                      offerHandled === "approved"
-                        ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
-                        : "border-sand-200 bg-sand-50 text-sand-600"
-                    )}
-                  >
-                    {offerHandled === "approved"
-                      ? "Approved. It will be attached to their next booking and logged to the audit trail."
-                      : "Saved. It stays on the shelf until someone approves it."}
-                  </p>
+                ) : chartPoints.length > 0 ? (
+                  <SentimentTrendChart data={chartPoints} />
                 ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        setOfferHandled("approved");
-                        showToast({
-                          title: "Offer approved",
-                          description: `Sea view upgrade attached to ${guest.name}'s next stay.`,
-                          type: "success",
-                        });
-                      }}
-                    >
-                      Approve Offer
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        setComposerGuest(guest.name);
-                        setComposerTitle(suggestedOffer.title);
-                        setComposerPerk("Sea view upgrade + high tea");
-                        setComposerMessage(
-                          `Dear ${guest.name.split(" ")[0]}, ${suggestedOffer.detail}`
-                        );
-                        setComposerOpen(true);
-                      }}
-                    >
-                      Customize
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setOfferHandled("saved")}
-                    >
-                      Save
-                    </Button>
+                  <div className="py-12 text-center text-sm text-sand-500">
+                    <p className="font-semibold text-sand-800">No Sentiment Points</p>
+                    <p className="text-xs text-sand-400 mt-1">
+                      No scored feedback recorded during the last 30 days.
+                    </p>
                   </div>
                 )}
               </PanelBody>
             </Panel>
 
+            {/* In-House Guests Overview */}
             <Panel>
               <PanelHeader
-                title="Guest Notes"
+                title="Current In-House Arrivals & Stays"
+                description="Synchronized with front desk board"
+              />
+              <PanelBody className="pt-4">
+                {!todayBookings || todayBookings.arrivals?.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-sand-500">
+                    No scheduled arrivals recorded for today.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-sand-100">
+                    {todayBookings.arrivals.slice(0, 5).map((arr: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between py-2 text-xs">
+                        <div>
+                          <p className="font-semibold text-sand-900">
+                            {arr.guest_name ?? `Guest #${arr.id?.slice(0, 6)}`}
+                          </p>
+                          <p className="text-sand-500">Room {arr.room_number ?? "TBD"}</p>
+                        </div>
+                        <span className="rounded bg-sage-100 px-2 py-0.5 text-[10px] font-semibold text-sage-800">
+                          {arr.status ?? "Confirmed"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PanelBody>
+            </Panel>
+          </div>
+
+          <div className="space-y-4">
+            {/* At-Risk Guests Summary */}
+            <Panel>
+              <PanelHeader
+                title="High Churn Risk Profiles"
+                description="Identified by the guest intelligence engine"
                 action={
                   <button
-                    onClick={() => setTab("notes")}
-                    className="pt-1 text-xs font-medium text-sage-700 hover:text-sage-900"
+                    onClick={() => setTab("at-risk")}
+                    className="pt-1 text-xs font-semibold text-sage-800 hover:text-sage-950"
                   >
-                    View all
+                    View all ({atRiskGuests.length}) →
                   </button>
                 }
               />
               <PanelBody className="pt-4">
-                <ul className="divide-y divide-sand-100">
-                  {guest.notes.map((note) => (
-                    <li key={note.note} className="py-2.5">
-                      <p className="text-sm text-sand-800">{note.note}</p>
-                      <p className="mt-0.5 text-xs text-sand-500">
-                        {note.source} · {note.date}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
+                {atRiskLoading ? (
+                  <p role="status" className="py-8 text-center text-sm text-sand-500">
+                    Scanning churn indicators…
+                  </p>
+                ) : atRiskGuests.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-sand-500">
+                    <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
+                    <p className="mt-2 font-semibold text-sand-900">
+                      Zero At-Risk Guests Flagged
+                    </p>
+                    <p className="text-xs text-sand-400 mt-1">
+                      No negative sentiment or churn patterns detected across active profiles.
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-sand-100">
+                    {atRiskGuests.slice(0, 4).map((g: any) => (
+                      <li key={g.id ?? g.guest_id} className="flex items-center justify-between py-3">
+                        <div>
+                          <p className="text-xs font-semibold text-sand-950">
+                            {g.guest_name ?? `Guest #${(g.guest_id ?? g.id).slice(0, 8)}`}
+                          </p>
+                          <p className="text-[11px] text-sand-500">
+                            Churn Risk:{" "}
+                            <span className="font-semibold text-rose-700">
+                              {g.churn_risk ? `${Math.round(g.churn_risk * 100)}%` : "High"}
+                            </span>
+                            {g.sentiment_score !== undefined && (
+                              <> · Sentiment: {g.sentiment_score.toFixed(1)}/5</>
+                            )}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                          At Risk
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </PanelBody>
+            </Panel>
+
+            {/* Suggested Retention Offers */}
+            <Panel>
+              <PanelHeader
+                title="Retention Offers"
+                description="Model-generated retention perks awaiting approval"
+              />
+              <PanelBody className="space-y-3 pt-4">
+                {offersLoading ? (
+                  <p role="status" className="py-8 text-center text-sm text-sand-500">
+                    Loading retention queue…
+                  </p>
+                ) : activeOffers.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-sand-500">
+                    <Gift className="mx-auto h-8 w-8 text-sand-300" />
+                    <p className="mt-2 font-semibold text-sand-800">
+                      No Pending Retention Offers
+                    </p>
+                    <p className="text-xs text-sand-400 mt-1">
+                      All generated win-back perks have been reviewed.
+                    </p>
+                  </div>
+                ) : (
+                  activeOffers.slice(0, 3).map((offer: any) => (
+                    <div
+                      key={offer.id}
+                      className="rounded-xl border border-sand-200 bg-sand-50/50 p-3.5"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-sand-950">
+                            {offer.title ?? "Personalized Stay Incentive"}
+                          </p>
+                          <p className="text-xs text-sand-600 mt-1">
+                            {offer.description ?? offer.perk ?? "Special upgrade & dining credit"}
+                          </p>
+                          {offer.guest_name && (
+                            <p className="text-[11px] text-sage-800 font-medium mt-1">
+                              Recipient: {offer.guest_name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-end gap-2 border-t border-sand-200/60 pt-2">
+                        <button
+                          type="button"
+                          disabled={dismissOfferMutation.isPending}
+                          onClick={() => dismissOfferMutation.mutate(offer.id)}
+                          className="rounded-lg border border-sand-200 bg-white px-2.5 py-1 text-xs text-sand-600 hover:bg-sand-50"
+                        >
+                          Dismiss
+                        </button>
+                        <Button
+                          size="sm"
+                          disabled={approveOfferMutation.isPending}
+                          onClick={() => approveOfferMutation.mutate(offer.id)}
+                          className="text-xs"
+                        >
+                          Approve & Send
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </PanelBody>
             </Panel>
           </div>
         </div>
       )}
 
-      {tab === "stays" && (
-        <Panel>
-          <PanelHeader title="Every Stay" description="All bookings on record for this guest." />
-          <PanelBody className="pt-4">
-            <Table>
-              <THead>
-                <tr>
-                  <TH>Check-in</TH>
-                  <TH>Check-out</TH>
-                  <TH>Room Type</TH>
-                  <TH align="right">Nights</TH>
-                  <TH align="right">Amount</TH>
-                  <TH align="right">Feedback</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {guest.stays.map((stay) => (
-                  <TR key={stay.checkIn}>
-                    <TD className="text-sand-700">{stay.checkIn}</TD>
-                    <TD className="text-sand-700">{stay.checkOut}</TD>
-                    <TD className="font-medium text-sand-900">{stay.roomType}</TD>
-                    <TD align="right" className="text-sand-700">
-                      {stay.nights}
-                    </TD>
-                    <TD align="right" className="text-sand-800">
-                      ₹{stay.amount.toLocaleString("en-IN")}
-                    </TD>
-                    <TD align="right">
-                      {stay.feedback === null ? (
-                        <span className="text-sand-400">—</span>
-                      ) : (
-                        <span className="flex justify-end">
-                          <StarRating value={Math.round(stay.feedback / 2)} size="sm" />
-                        </span>
-                      )}
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </PanelBody>
-        </Panel>
-      )}
-
-      {tab === "preferences" && (
+      {tab === "at-risk" && (
         <Panel>
           <PanelHeader
-            title="Preferences"
-            description="Gathered from past stays, requests and what the guest has told us."
+            title="Complete At-Risk Guest Registry"
+            description="Profiles flagged with high probability of customer churn or negative service encounters."
           />
           <PanelBody className="pt-4">
-            <ul className="flex flex-wrap gap-2">
-              {guest.preferences.map((pref) => {
-                const Icon = pref.icon;
-                return (
-                  <li
-                    key={pref.label}
-                    className="flex items-center gap-2 rounded-full border border-sand-200 bg-sand-50/70 px-3.5 py-2 text-sm text-sand-800"
-                  >
-                    <Icon className="h-4 w-4 shrink-0 text-sand-500" />
-                    {pref.label}
-                  </li>
-                );
-              })}
-            </ul>
+            {atRiskLoading ? (
+              <p role="status" className="py-12 text-center text-sm text-sand-500">
+                Loading at-risk records…
+              </p>
+            ) : atRiskGuests.length === 0 ? (
+              <div className="py-16 text-center text-sm text-sand-500">
+                <p className="font-semibold text-sand-800">Registry Clear</p>
+                <p className="text-xs text-sand-400 mt-1">
+                  Zero guests currently meet the churn risk threshold.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Guest Identifier</TH>
+                    <TH>Churn Risk</TH>
+                    <TH>Sentiment Score</TH>
+                    <TH>Preferences / Tags</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {atRiskGuests.map((g: any) => (
+                    <TR key={g.id ?? g.guest_id}>
+                      <TD className="font-mono text-xs font-semibold text-sand-900">
+                        {g.guest_name ?? (g.guest_id ?? g.id).slice(0, 12)}…
+                      </TD>
+                      <TD>
+                        <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
+                          {g.churn_risk ? `${Math.round(g.churn_risk * 100)}%` : "High"}
+                        </span>
+                      </TD>
+                      <TD className="text-xs text-sand-800">
+                        {g.sentiment_score !== undefined ? `${g.sentiment_score.toFixed(1)} / 5` : "—"}
+                      </TD>
+                      <TD className="text-xs text-sand-600">
+                        {Array.isArray(g.tags) ? g.tags.join(", ") : "Standard profile"}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
           </PanelBody>
         </Panel>
       )}
 
-      {tab === "notes" && (
+      {tab === "offers" && (
         <Panel>
-          <PanelHeader title="Notes" description="What colleagues have recorded about this guest." />
+          <PanelHeader
+            title="Retention Offers Ledger"
+            description="Historical and pending personalized incentives generated by the retention engine."
+          />
           <PanelBody className="pt-4">
-            <ul className="divide-y divide-sand-100">
-              {guest.notes.map((note) => (
-                <li key={note.note} className="py-3">
-                  <p className="text-sm text-sand-800">{note.note}</p>
-                  <p className="mt-0.5 text-xs text-sand-500">
-                    {note.source} · {note.date}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            {offers.length === 0 ? (
+              <div className="py-16 text-center text-sm text-sand-500">
+                <p className="font-semibold text-sand-800">No Offers Found</p>
+                <p className="text-xs text-sand-400 mt-1">
+                  No retention offers generated by the model.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Offer</TH>
+                    <TH>Target Guest</TH>
+                    <TH>Status</TH>
+                    <TH align="right">Actions</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {offers.map((off: any) => (
+                    <TR key={off.id}>
+                      <TD>
+                        <p className="font-semibold text-sand-900">{off.title}</p>
+                        <p className="text-xs text-sand-500">{off.description}</p>
+                      </TD>
+                      <TD className="text-xs text-sand-700">
+                        {off.guest_name ?? off.guest_id?.slice(0, 8)}
+                      </TD>
+                      <TD>
+                        <span className="rounded bg-sand-100 px-2 py-0.5 text-xs font-medium capitalize text-sand-800">
+                          {off.status}
+                        </span>
+                      </TD>
+                      <TD align="right">
+                        {off.status === "pending" || off.status === "proposed" ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => dismissOfferMutation.mutate(off.id)}
+                            >
+                              Dismiss
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => approveOfferMutation.mutate(off.id)}
+                            >
+                              Approve
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-sand-400">—</span>
+                        )}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
           </PanelBody>
         </Panel>
       )}
 
-      {(tab === "communications" || tab === "activity") && (
+      {tab === "sentiment" && (
         <Panel>
-          <PanelBody className="py-14 text-center">
-            <h3 className="font-serif text-lg font-semibold text-sand-950">
-              {tab === "communications" ? "Communications" : "Activity"} lands on Day 9
-            </h3>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-sand-600">
-              {tab === "communications"
-                ? "Every message sent to this guest and whether it was delivered."
-                : "A single timeline of stays, orders, requests and ratings."}
-            </p>
+          <PanelHeader
+            title="30-Day Sentiment Score Evolution"
+            description="Daily aggregations of guest review scores"
+          />
+          <PanelBody className="pt-4">
+            {chartPoints.length > 0 ? (
+              <SentimentTrendChart data={chartPoints} />
+            ) : (
+              <p className="py-12 text-center text-sm text-sand-500">
+                No sentiment trend data available.
+              </p>
+            )}
           </PanelBody>
         </Panel>
       )}
-      {/* Offer Composer Modal Drawer */}
-      <Drawer
-        open={composerOpen}
-        onOpenChange={setComposerOpen}
-        title="Compose Retention Offer"
-        description={`Craft a personalized incentive for ${composerGuest}`}
-        footer={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setComposerOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSendOffer}>
-              <Send className="h-3.5 w-3.5" />
-              Send & Attach Offer
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="rounded-xl border border-sand-200 bg-sand-50/70 p-3.5 text-xs text-sand-700">
-            <span className="font-semibold text-sand-900">Guest:</span> {composerGuest} · Member
-            since 2024 · Past Stays: {guest.pastStays}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-sand-700">Offer Title</label>
-            <Input
-              value={composerTitle}
-              onChange={(e) => setComposerTitle(e.target.value)}
-              placeholder="e.g. Complimentary Suite Upgrade + Spa Credit"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-sand-700">Category</label>
-              <select
-                value={composerCategory}
-                onChange={(e) => setComposerCategory(e.target.value)}
-                className="w-full rounded-xl border border-sand-200 bg-white p-2.5 text-sm text-sand-900 focus:border-sage-500 focus:outline-none"
-              >
-                <option value="upgrade">Room Upgrade</option>
-                <option value="fnb">Dining / F&B Credit</option>
-                <option value="spa">Spa & Wellness Voucher</option>
-                <option value="discount">Direct Rate Discount</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-sand-700">Valid Until</label>
-              <Input
-                value={composerExpiry}
-                onChange={(e) => setComposerExpiry(e.target.value)}
-                placeholder="31 Dec 2026"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-sand-700">Specific Perk</label>
-            <Input
-              value={composerPerk}
-              onChange={(e) => setComposerPerk(e.target.value)}
-              placeholder="e.g. Executive Sea View Upgrade + ₹2,500 F&B credit"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-sand-700">
-              Personalized Guest Message
-            </label>
-            <textarea
-              rows={4}
-              value={composerMessage}
-              onChange={(e) => setComposerMessage(e.target.value)}
-              className="w-full rounded-xl border border-sand-200 p-3 text-sm focus:border-sage-500 focus:outline-none focus:ring-1 focus:ring-sage-500"
-              placeholder="Write a warm, personalized invitation..."
-            />
-          </div>
-        </div>
-      </Drawer>
     </div>
   );
 }

@@ -9,25 +9,38 @@ import {
   type StaffPerformanceBoardResponse,
   type StaffPerformanceResponse,
 } from "@/lib/api/performance";
-import {
-  HOUSE_AVERAGE,
-  MIN_REVIEWS_FOR_SCORE,
-  ranked as demoRanked,
-  reviewsByStaff as demoReviews,
-  unranked as demoUnranked,
-  type GuestReviewOfStaff,
-  type StaffPerformance,
-  type Tier,
-} from "@/lib/demo/performance";
 
-/**
- * Performance data, from the API when there is a session and from the demo fixtures
- * when there is not.
- *
- * The same two-mode arrangement `auth-context` already uses: the design work and the
- * demo must keep running with no backend, and components should not each grow their own
- * fallback. Callers get one shape either way and a flag saying which it came from.
- */
+export type Tier = "top" | "solid" | "developing" | "unranked";
+
+export interface StaffPerformance {
+  staffId: string;
+  name: string;
+  role: string;
+  department: string;
+  departmentId?: string | null;
+  reviewCount: number;
+  meanRating: number | null;
+  score: number | null;
+  confidence: number;
+  tier: Tier;
+  reasons: string[];
+  complaintContextReviews: number;
+  thinEvidence: boolean;
+  deservesRecognition: boolean;
+  meritsAConversation: boolean;
+  previousScore: number | null;
+  trend: number[];
+}
+
+export interface GuestReviewOfStaff {
+  id: string;
+  staffId: string;
+  guest: string;
+  rating: number;
+  comment: string | null;
+  when: string;
+  duringComplaint: boolean;
+}
 
 interface UserRow {
   id: string;
@@ -51,23 +64,20 @@ function join(
 
   return {
     staffId: row.staff_id,
-    // A score with no name attached is unusable on screen, but it is also not a reason
-    // to drop the row — someone who has left still shaped the averages.
-    name: user?.full_name ?? "Former team member",
+    name: user?.full_name ?? "Team member",
     role: "",
     department: departmentId ? (departments.get(departmentId) ?? "Unassigned") : "Unassigned",
+    departmentId,
     reviewCount: row.review_count,
     meanRating: row.mean_rating,
     score: row.score,
     confidence: row.confidence,
-    tier: row.tier as Tier,
-    reasons: row.reasons,
+    tier: (row.tier as Tier) || "unranked",
+    reasons: row.reasons ?? [],
     complaintContextReviews: row.complaint_context_reviews,
     thinEvidence: row.thin_evidence,
     deservesRecognition: row.deserves_recognition,
     meritsAConversation: row.merits_a_conversation,
-    // The API does not keep a previous score; the movement column stays blank on live
-    // data rather than inventing a trend from one reading.
     previousScore: null,
     trend: [],
   };
@@ -81,67 +91,62 @@ export interface PerformanceBoard {
   isDemo: boolean;
 }
 
+const EMPTY_BOARD: PerformanceBoard = {
+  ranked: [],
+  unranked: [],
+  houseAverage: 0,
+  minimumReviews: 5,
+  isDemo: false,
+};
+
 export function usePerformanceBoard(departmentId?: string) {
-  const { isConnected } = useAuth();
+  const { user } = useAuth();
+  const scope = [user?.propertyId ?? "", departmentId ?? "all"];
 
   const query = useQuery({
-    queryKey: ["performance-board", departmentId ?? "all"],
-    enabled: isConnected,
+    queryKey: ["performance-board", ...scope],
     queryFn: async (): Promise<PerformanceBoard> => {
-      // Three calls rather than one fat endpoint: guest-intel holds the scores and has
-      // no business holding the staff directory, and asking it to resolve names would
-      // mean one identity lookup per person on every board render.
       const [board, users, departments] = await Promise.all([
         performanceApi.board(departmentId),
-        api.get<UserRow[]>("/admin/users"),
+        api.get<UserRow[]>("/admin/users").catch(() => [] as UserRow[]),
         api.get<DepartmentRow[]>("/property/departments").catch(() => [] as DepartmentRow[]),
       ]);
 
-      const userMap = new Map(users.map((user) => [user.id, user]));
-      const deptMap = new Map(departments.map((dept) => [dept.id, dept.name]));
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      const deptMap = new Map(departments.map((d) => [d.id, d.name]));
 
       return {
-        ranked: board.ranked.map((row) => join(row, userMap, deptMap)),
-        unranked: board.unranked.map((row) => join(row, userMap, deptMap)),
-        houseAverage: board.house_average,
-        minimumReviews: board.minimum_reviews_for_score,
+        ranked: (board?.ranked ?? []).map((row) => join(row, userMap, deptMap)),
+        unranked: (board?.unranked ?? []).map((row) => join(row, userMap, deptMap)),
+        houseAverage: board?.house_average ?? 0,
+        minimumReviews: board?.minimum_reviews_for_score ?? 5,
         isDemo: false,
       };
     },
+    staleTime: 60_000,
   });
 
-  const demo: PerformanceBoard = {
-    ranked: demoRanked,
-    unranked: demoUnranked,
-    houseAverage: HOUSE_AVERAGE,
-    minimumReviews: MIN_REVIEWS_FOR_SCORE,
-    isDemo: true,
-  };
-
   return {
-    // A failed fetch falls back to the fixtures rather than an empty board, and
-    // `isDemo` on the returned data is what the page shows the viewer.
-    data: isConnected && query.data ? query.data : demo,
-    isLoading: isConnected && query.isLoading,
+    data: query.data ?? EMPTY_BOARD,
+    isLoading: query.isLoading,
+    isError: query.isError,
     error: query.error,
+    refetch: query.refetch,
   };
 }
 
 /** The comments behind one person's score. Managers only. */
 export function useStaffReviews(staffId: string | null) {
-  const { isConnected } = useAuth();
-
   const query = useQuery({
     queryKey: ["staff-reviews", staffId],
-    enabled: isConnected && staffId !== null,
+    enabled: Boolean(staffId),
     queryFn: async (): Promise<GuestReviewOfStaff[]> => {
-      const detail = await performanceApi.detail(staffId as string);
-      return detail.reviews.map((review) => ({
+      if (!staffId) return [];
+      const detail = await performanceApi.detail(staffId);
+      return (detail.reviews ?? []).map((review) => ({
         id: review.id,
         staffId: review.staff_id,
-        // Guests are not named to the manager on this screen. The rating is about the
-        // staff member; surfacing who said what invites a conversation with the guest.
-        guest: "A guest",
+        guest: "Verified Guest",
         rating: review.rating,
         comment: review.comment,
         when: new Date(review.created_at).toLocaleDateString("en-IN", {
@@ -151,11 +156,14 @@ export function useStaffReviews(staffId: string | null) {
         duringComplaint: review.during_complaint,
       }));
     },
+    staleTime: 60_000,
   });
 
-  if (!isConnected) {
-    return { reviews: staffId ? (demoReviews[staffId] ?? []) : [], isLoading: false };
-  }
-
-  return { reviews: query.data ?? [], isLoading: query.isLoading };
+  return {
+    reviews: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+  };
 }

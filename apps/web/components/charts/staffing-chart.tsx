@@ -14,7 +14,12 @@ import {
 } from "recharts";
 
 import { axisProps, chartColors, gridProps, tooltipProps } from "@/lib/chart-theme";
-import type { DepartmentStaffing } from "@/lib/demo/roster";
+
+export interface DepartmentStaffing {
+  department: string;
+  required: number;
+  scheduled: number;
+}
 
 /**
  * Required against scheduled headcount, per department.

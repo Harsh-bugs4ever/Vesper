@@ -1,214 +1,407 @@
 "use client";
 
-import React, { useState, lazy, Suspense } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  AlertTriangle,
+  Bed,
   Building2,
+  CheckCircle2,
+  Clock,
+  Compass,
+  Layers,
   MapPin,
-  Thermometer,
-  Wifi,
-  Zap,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Wrench,
+  X,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Drawer } from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth/auth-context";
+import { roomsApi, type BackendRoom, type BackendRoomBoard } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/* ---------- Lazy-loaded 3D scene component ---------- */
-const Resort3DScene = lazy(() =>
-  new Promise<{ default: React.ComponentType }>((resolve) => {
-    // Simulate a 1.5s load for the heavy 3D scene bundle
-    setTimeout(() => resolve({ default: Resort3DSceneInner }), 1500);
-  })
-);
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; badge: string; text: string }
+> = {
+  occupied: {
+    label: "Occupied",
+    color: "bg-sage-600",
+    badge: "border-sage-300 bg-sage-50 text-sage-800",
+    text: "text-sage-700",
+  },
+  ready: {
+    label: "Ready",
+    color: "bg-emerald-500",
+    badge: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    text: "text-emerald-700",
+  },
+  dirty: {
+    label: "Dirty (Turnover Required)",
+    color: "bg-amber-400",
+    badge: "border-amber-300 bg-amber-50 text-amber-800",
+    text: "text-amber-700",
+  },
+  cleaning: {
+    label: "Housekeeping in Progress",
+    color: "bg-blue-400",
+    badge: "border-blue-300 bg-blue-50 text-blue-800",
+    text: "text-blue-700",
+  },
+  inspection: {
+    label: "Inspection Pending",
+    color: "bg-purple-400",
+    badge: "border-purple-300 bg-purple-50 text-purple-800",
+    text: "text-purple-700",
+  },
+  out_of_order: {
+    label: "Out of Order / Maintenance",
+    color: "bg-rose-500",
+    badge: "border-rose-300 bg-rose-50 text-rose-800",
+    text: "text-rose-700",
+  },
+};
 
-/* ---------- The simulated 3D resort view ---------- */
-function Resort3DSceneInner() {
-  const [selectedFloor, setSelectedFloor] = useState(3);
-  const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
+export default function RoomsSpatialPage() {
+  const { user } = useAuth();
 
-  const floors = [
-    { floor: 1, label: "Ground · Garden & Sea Breeze Club", rooms: 10, occupied: 8, cleaning: 1, vacant: 1 },
-    { floor: 2, label: "Floor 2 · Deluxe Ocean View", rooms: 30, occupied: 24, cleaning: 3, vacant: 3 },
-    { floor: 3, label: "Floor 3 · Deluxe Ocean View", rooms: 30, occupied: 22, cleaning: 4, vacant: 4 },
-    { floor: 4, label: "Floor 4 · Deluxe Ocean + Exec Suite", rooms: 35, occupied: 28, cleaning: 2, vacant: 5 },
-    { floor: 5, label: "Floor 5 · Executive Ocean Suite", rooms: 25, occupied: 19, cleaning: 2, vacant: 4 },
-    { floor: 6, label: "Beachfront · Presidential Villas", rooms: 15, occupied: 11, cleaning: 1, vacant: 3 },
-  ];
+  // Role Gate: Restrict Resort 3D / Spatial access strictly to Managers & GM
+  const isManagerOrGm =
+    user?.role === "general_manager" ||
+    user?.role === "dept_manager_hk" ||
+    user?.role === "dept_manager_fb" ||
+    Boolean(user?.roleTitle?.toLowerCase().includes("manager"));
 
-  const selected = floors.find((f) => f.floor === selectedFloor)!;
+  const [selectedFloorNum, setSelectedFloorNum] = useState<number | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<BackendRoom | null>(null);
+  const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
 
-  // Deterministic room grid based on floor + index to avoid hydration mismatch
-  const rooms = Array.from({ length: selected.rooms }, (_, i) => {
-    const roomNum = `${selectedFloor}${String(i + 1).padStart(2, "0")}`;
-    // Deterministic status based on room number pattern
-    const idx = selectedFloor * 100 + i;
-    const status: "occupied" | "vacant" | "cleaning" | "maintenance" =
-      idx % 10 < 7 ? "occupied" : idx % 10 < 8 ? "vacant" : idx % 10 < 9 ? "cleaning" : "maintenance";
-    const temp = 21 + (idx % 5);
-    return { id: roomNum, status, temp };
+  // 1. Fetch live room board from backend
+  const {
+    data: roomBoard,
+    isLoading: boardLoading,
+    isError: boardError,
+    refetch: refetchBoard,
+  } = useQuery({
+    queryKey: ["rooms-board-spatial", user?.propertyId],
+    enabled: isManagerOrGm,
+    queryFn: () => roomsApi.board(),
   });
 
-  const statusColors = {
-    occupied: "bg-sage-500",
-    vacant: "bg-sand-300",
-    cleaning: "bg-amber-400",
-    maintenance: "bg-rose-400",
-  };
+  // 2. Fetch live occupancy snapshot
+  const { data: occupancy, isLoading: occLoading } = useQuery({
+    queryKey: ["rooms-occupancy-spatial", user?.propertyId],
+    enabled: isManagerOrGm,
+    queryFn: () => roomsApi.occupancy(),
+  });
 
-  return (
-    <div className="space-y-4">
-      {/* Isometric building view */}
-      <div className="relative overflow-hidden rounded-2xl border border-sand-200 bg-gradient-to-b from-sky-50 via-white to-sand-50 p-4 sm:p-6">
-        <div className="flex flex-col items-center gap-1 py-4 sm:py-6">
-          {floors.slice().reverse().map((f) => (
-            <button
-              key={f.floor}
-              onClick={() => setSelectedFloor(f.floor)}
-              className={cn(
-                "relative flex h-11 items-center justify-center transition-all duration-200",
-                "rounded-md border text-[10px] sm:text-xs font-semibold",
-                selectedFloor === f.floor
-                  ? "border-sage-500 bg-sage-100 text-sage-900 shadow-card z-10 scale-105"
-                  : "border-sand-200 bg-white text-sand-700 hover:bg-sand-50 hover:scale-[1.02]"
-              )}
-              style={{
-                width: `${Math.min(100, 50 + f.rooms * 1.4)}%`,
-              }}
-            >
-              <span className="flex items-center gap-1 sm:gap-2">
-                <Building2 className="hidden h-3.5 w-3.5 sm:block" />
-                <span className="truncate">{f.label}</span>
-              </span>
-              <span className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 hidden items-center gap-1.5 text-[10px] sm:flex">
-                <span className="h-2 w-2 rounded-full bg-sage-500" /> {f.occupied}
-                <span className="h-2 w-2 rounded-full bg-sand-300" /> {f.vacant}
-                <span className="h-2 w-2 rounded-full bg-amber-400" /> {f.cleaning}
-              </span>
-            </button>
-          ))}
-        </div>
+  const floors = roomBoard?.floors ?? [];
+  const counts = roomBoard?.counts ?? {};
 
-        <div className="mx-auto mt-2 h-1 w-3/4 rounded-full bg-gradient-to-r from-transparent via-sand-300 to-transparent" />
-        <p className="mt-1 text-center text-[10px] text-sand-500">
-          <MapPin className="mr-1 inline h-3 w-3" />
-          Juhu Tara Road · Beachfront Orientation · North-facing
-        </p>
-      </div>
+  // Default to first floor available when data loads
+  const activeFloor = useMemo(() => {
+    if (floors.length === 0) return null;
+    if (selectedFloorNum !== null) {
+      const match = floors.find((f) => f.floor === selectedFloorNum);
+      if (match) return match;
+    }
+    return floors[0];
+  }, [floors, selectedFloorNum]);
 
-      {/* Selected floor room grid */}
-      <Panel>
-        <PanelHeader
-          title={`Floor ${selectedFloor} · Room Grid`}
-          description={selected.label}
-          action={
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-sand-500">
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sage-500" /> Occupied</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-sand-300" /> Vacant</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Cleaning</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Maintenance</span>
-            </div>
-          }
+  if (!isManagerOrGm) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Resort Spatial Layout"
+          description="Architectural room inventory and floor status schematics."
         />
-        <PanelBody className="pt-4">
-          <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
-            {rooms.map((room) => (
-              <button
-                key={room.id}
-                onMouseEnter={() => setHoveredRoom(room.id)}
-                onMouseLeave={() => setHoveredRoom(null)}
-                className={cn(
-                  "relative flex flex-col items-center justify-center rounded-lg border p-1.5 sm:p-2 text-xs transition-all duration-150",
-                  hoveredRoom === room.id
-                    ? "scale-110 shadow-card z-10 border-sage-500 bg-white"
-                    : "border-sand-200/80 bg-sand-50/60 hover:shadow-xs"
-                )}
-              >
-                <span className={cn("mb-1 h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-sm", statusColors[room.status])} />
-                <span className="font-mono text-[9px] sm:text-[10px] font-semibold text-sand-800">{room.id}</span>
-                {hoveredRoom === room.id && (
-                  <span className="mt-0.5 text-[9px] text-sand-500">{room.temp}°C</span>
-                )}
-              </button>
-            ))}
+        <div className="rounded-3xl border border-sand-200 bg-white p-12 text-center shadow-xs">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+            <ShieldAlert className="h-7 w-7" />
           </div>
-        </PanelBody>
-      </Panel>
+          <h2 className="mt-4 font-serif text-2xl font-bold text-sand-950">
+            Manager Access Required
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-sand-600">
+            Resort 3D schematics and architectural room status monitoring are restricted to General Management and Department Managers.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-      {/* Live telemetry strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-sand-200/80 bg-white p-3">
-          <div className="flex items-center gap-2 text-xs text-sand-500">
-            <Thermometer className="h-3.5 w-3.5" /> Avg. Room Temp
-          </div>
-          <p className="mt-1 font-sans text-lg font-semibold text-sand-950 tabular-nums">23.4°C</p>
-        </div>
-        <div className="rounded-xl border border-sand-200/80 bg-white p-3">
-          <div className="flex items-center gap-2 text-xs text-sand-500">
-            <Wifi className="h-3.5 w-3.5" /> IoT Sensors Online
-          </div>
-          <p className="mt-1 font-sans text-lg font-semibold text-emerald-800 tabular-nums">145 / 145</p>
-        </div>
-        <div className="rounded-xl border border-sand-200/80 bg-white p-3">
-          <div className="flex items-center gap-2 text-xs text-sand-500">
-            <Activity className="h-3.5 w-3.5" /> HVAC Status
-          </div>
-          <p className="mt-1 font-sans text-lg font-semibold text-sand-950 tabular-nums">12 / 12 Online</p>
-        </div>
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3">
-          <div className="flex items-center gap-2 text-xs text-amber-600">
-            <Zap className="h-3.5 w-3.5" /> Active Alerts
-          </div>
-          <p className="mt-1 font-sans text-lg font-semibold text-amber-900 tabular-nums">1 Anomaly</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Loading skeleton ---------- */
-function Resort3DLoadingSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-sand-200 bg-sand-50/50 p-6">
-        <div className="flex flex-col items-center gap-2 py-6">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-11 rounded-md" style={{ width: `${50 + (6 - i) * 8}%` }} />
-          ))}
-        </div>
-        <Skeleton className="mx-auto mt-2 h-1 w-3/4" />
-        <Skeleton className="mx-auto mt-2 h-4 w-48" />
-      </div>
-      <div className="rounded-2xl border border-sand-200 bg-white p-6">
-        <Skeleton className="h-5 w-48 mb-4" />
-        <div className="grid grid-cols-8 gap-2">
-          {[...Array(32)].map((_, i) => (
-            <Skeleton key={i} className="h-12 rounded-lg" />
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-xl" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Page ---------- */
-export default function RoomsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="3D Resort Digital Twin"
-        description="Interactive floor-by-floor view of 145 keys with live IoT telemetry, room status, and BMS sensor overlay."
+        title="Resort Spatial Layout & Floor Schematics"
+        description="Live floor-by-floor room status mapped directly from property room turnover data."
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sand-200 bg-sand-100/80 px-3 py-1 text-xs font-semibold text-sand-700">
+              <Layers className="h-3.5 w-3.5 text-sage-700" />
+              Floorplan Schematic Active
+            </span>
+          </div>
+        }
       />
 
-      <Suspense fallback={<Resort3DLoadingSkeleton />}>
-        <Resort3DScene />
-      </Suspense>
+      {/* 3D Asset Disclaimer Badge */}
+      <div className="flex items-start gap-3 rounded-2xl border border-sand-200 bg-sand-50/70 p-4 text-xs text-sand-600">
+        <Compass className="mt-0.5 h-4 w-4 shrink-0 text-sage-700" />
+        <div>
+          <strong className="font-semibold text-sand-950">
+            Architectural Schematic Mode:
+          </strong>{" "}
+          Rendering verified room configurations and live turn-over telemetry from the property database. High-polygon photogrammetric 3D CAD mesh is withheld pending sensor package calibration.
+        </div>
+      </div>
+
+      {/* Live Floorplan Strip & Elevator Stack */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Elevator / Floor Stack Selector */}
+        <div className="space-y-3 lg:col-span-1">
+          <Panel>
+            <PanelHeader
+              title="Building Floor Stack"
+              description="Select a vertical level to inspect room distribution"
+            />
+            <PanelBody className="space-y-2 p-3">
+              {boardLoading ? (
+                <div className="space-y-2 p-4 text-center text-xs text-sand-500">
+                  <RefreshCw className="mx-auto h-5 w-5 animate-spin text-sage-600" />
+                  <p className="mt-2">Loading building floors…</p>
+                </div>
+              ) : boardError ? (
+                <div className="p-4 text-center">
+                  <p className="text-xs text-rose-700">Failed to load room board.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchBoard()}
+                    className="mt-2 text-xs"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : floors.length === 0 ? (
+                <p className="p-4 text-center text-xs text-sand-500">No floors found on property.</p>
+              ) : (
+                floors
+                  .slice()
+                  .reverse()
+                  .map((f) => {
+                    const isSelected = activeFloor?.floor === f.floor;
+                    const occupiedCount = f.rooms.filter((r) => r.status === "occupied").length;
+                    const readyCount = f.rooms.filter((r) => r.status === "ready").length;
+                    const dirtyCount = f.rooms.filter((r) => r.status === "dirty").length;
+
+                    return (
+                      <button
+                        key={f.floor}
+                        type="button"
+                        onClick={() => setSelectedFloorNum(f.floor)}
+                        className={cn(
+                          "w-full rounded-xl border p-3.5 text-left transition-all",
+                          isSelected
+                            ? "border-sage-600 bg-sage-50 text-sage-950 shadow-sm ring-1 ring-sage-600"
+                            : "border-sand-200 bg-white text-sand-700 hover:border-sand-300 hover:bg-sand-50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-serif text-sm font-bold">
+                            Floor {f.floor}
+                          </span>
+                          <span className="text-[11px] font-mono text-sand-500">
+                            {f.rooms.length} Rooms
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-3 text-[10px]">
+                          <span className="inline-flex items-center gap-1 text-sage-800">
+                            <span className="h-2 w-2 rounded-full bg-sage-600" />
+                            {occupiedCount} Occupied
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-emerald-800">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            {readyCount} Ready
+                          </span>
+                          {dirtyCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-amber-800">
+                              <span className="h-2 w-2 rounded-full bg-amber-400" />
+                              {dirtyCount} Dirty
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+              )}
+            </PanelBody>
+          </Panel>
+        </div>
+
+        {/* Selected Floor Layout Grid */}
+        <div className="space-y-6 lg:col-span-2">
+          <Panel>
+            <PanelHeader
+              title={`Floor ${activeFloor?.floor ?? "—"} Layout & Room Grid`}
+              description={
+                activeFloor
+                  ? `${activeFloor.rooms.length} registered room keys on this floor`
+                  : "No floor selected"
+              }
+              action={
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-sand-600">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-sage-600" /> Occupied
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Ready
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Dirty
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> OOO
+                  </span>
+                </div>
+              }
+            />
+            <PanelBody className="p-6">
+              {!activeFloor ? (
+                <p className="py-12 text-center text-sm text-sand-500">
+                  Select a floor from the building stack to view its layout.
+                </p>
+              ) : activeFloor.rooms.length === 0 ? (
+                <p className="py-12 text-center text-sm text-sand-500">
+                  No rooms configured on this level.
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
+                  {activeFloor.rooms.map((room) => {
+                    const cfg = STATUS_CONFIG[room.status] ?? STATUS_CONFIG.ready;
+                    const isHovered = hoveredRoomId === room.id;
+
+                    return (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => setSelectedRoom(room)}
+                        onMouseEnter={() => setHoveredRoomId(room.id)}
+                        onMouseLeave={() => setHoveredRoomId(null)}
+                        className={cn(
+                          "relative flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all",
+                          isHovered
+                            ? "scale-105 shadow-md ring-2 ring-sage-600 bg-white z-10"
+                            : "border-sand-200 bg-sand-50/60 hover:bg-white hover:border-sand-300"
+                        )}
+                      >
+                        <span className={cn("mb-1.5 h-2 w-2 rounded-full", cfg.color)} />
+                        <span className="font-mono text-xs font-bold text-sand-900">
+                          {room.number}
+                        </span>
+                        <span className="mt-0.5 truncate text-[9px] text-sand-500 max-w-full">
+                          {room.category_name?.split(" ")[0] ?? "Room"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </PanelBody>
+          </Panel>
+
+          {/* Real Property Telemetry Cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
+              <span className="text-xs text-sand-500">Total Rooms</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-sand-950">
+                {occLoading ? "…" : occupancy?.total_rooms ?? counts.total ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
+              <span className="text-xs text-sand-500">Occupied</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-sage-800">
+                {occLoading ? "…" : occupancy?.occupied_rooms ?? counts.occupied ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
+              <span className="text-xs text-sand-500">Ready for Arrival</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-emerald-700">
+                {boardLoading ? "…" : counts.ready ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sand-200 bg-white p-4 shadow-xs">
+              <span className="text-xs text-sand-500">Turnover / Dirty</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-amber-700">
+                {boardLoading ? "…" : counts.dirty ?? "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Room Detail Drawer */}
+      <Drawer
+        open={Boolean(selectedRoom)}
+        onClose={() => setSelectedRoom(null)}
+        title={selectedRoom ? `Room ${selectedRoom.number} · Overview` : "Room"}
+        description={selectedRoom ? `${selectedRoom.category_name} · Floor ${selectedRoom.floor}` : ""}
+      >
+        {selectedRoom && (
+          <div className="space-y-5 p-4">
+            <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-sand-600">Current Status:</span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                    STATUS_CONFIG[selectedRoom.status]?.badge ?? "bg-sand-100 text-sand-800"
+                  )}
+                >
+                  {STATUS_CONFIG[selectedRoom.status]?.label ?? selectedRoom.status}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-sand-600">
+                <span>Room Category:</span>
+                <strong className="text-sand-900">{selectedRoom.category_name}</strong>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-sand-600">
+                <span>Level / Floor:</span>
+                <strong className="text-sand-900">Floor {selectedRoom.floor}</strong>
+              </div>
+
+              {selectedRoom.status_changed_at && (
+                <div className="flex items-center justify-between text-xs text-sand-600">
+                  <span>Last Turnover:</span>
+                  <span className="font-mono text-sand-700">
+                    {new Date(selectedRoom.status_changed_at).toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {selectedRoom.notes && (
+              <div className="rounded-xl border border-sand-200 bg-white p-3.5 text-xs text-sand-700">
+                <p className="font-semibold text-sand-950 mb-1">Housekeeping Notes:</p>
+                <p>{selectedRoom.notes}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

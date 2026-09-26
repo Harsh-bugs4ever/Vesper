@@ -77,10 +77,16 @@ class StockMovementOut(ORMModel):
 
 class PurchaseOrderOut(ORMModel):
     id: UUID
+    department_id: UUID | None = None
+    budget_id: UUID | None = None
+    request_line_id: UUID | None = None
+    currency: str
     item_id: UUID
     quantity: Decimal
     unit_cost: Decimal
     total_cost: Decimal
+    received_quantity: Decimal
+    returned_quantity: Decimal
     supplier: str | None = None
     status: str
     expected_on: date | None = None
@@ -92,7 +98,90 @@ class PurchaseOrderOut(ORMModel):
 
 class PurchaseApprove(BaseModel):
     # Set when the manager adjusts what the engine suggested before approving.
-    quantity: Decimal | None = None
+    quantity: Decimal | None = Field(default=None, gt=0)
+
+
+class PurchaseReceive(BaseModel):
+    quantity: Decimal | None = Field(default=None, gt=0, decimal_places=3)
+    operation_id: UUID | None = None
+
+
+class PurchaseReturn(BaseModel):
+    quantity: Decimal = Field(gt=0, decimal_places=3)
+    operation_id: UUID
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class RequisitionLineCreate(BaseModel):
+    item_id: UUID
+    quantity: Decimal = Field(gt=0, decimal_places=3)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class RequisitionCreate(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+    items: list[RequisitionLineCreate] = Field(min_length=1, max_length=50)
+
+
+class RequisitionDecision(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class RequisitionLineOut(ORMModel):
+    id: UUID
+    item_id: UUID
+    quantity: Decimal
+    unit_cost: Decimal
+    reason: str
+
+
+class RequisitionAuditOut(ORMModel):
+    actor_id: UUID
+    action: str
+    reason: str | None
+    created_at: datetime
+
+
+class RequisitionOut(ORMModel):
+    id: UUID
+    property_id: UUID
+    department_id: UUID
+    requested_by: UUID
+    responsible_manager_id: UUID
+    currency: str
+    status: str
+    reason: str | None
+    decided_by: UUID | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    lines: list[RequisitionLineOut]
+    history: list[RequisitionAuditOut]
+    created_at: datetime
+
+
+class BudgetWrite(BaseModel):
+    department_id: UUID
+    period_start: date
+    period_end: date
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    allocated: Decimal = Field(ge=0, decimal_places=2)
+
+
+class BudgetAllocationUpdate(BaseModel):
+    allocated: Decimal = Field(ge=0, decimal_places=2)
+
+
+class BudgetOut(BaseModel):
+    id: UUID
+    property_id: UUID
+    department_id: UUID
+    period_start: date
+    period_end: date
+    currency: str
+    allocated: Decimal
+    committed: Decimal
+    spent: Decimal
+    remaining: Decimal
 
 
 class InventorySummary(BaseModel):

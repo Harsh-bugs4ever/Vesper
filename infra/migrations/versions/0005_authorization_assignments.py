@@ -6,7 +6,7 @@ backfilled as a grant; accounts without a department receive no implicit access.
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0005"
+revision = "0005_auth"
 down_revision = "0004"
 branch_labels = None
 depends_on = None

@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0006"
-down_revision = "0005"
+down_revision = ("0005", "0005_auth")
 branch_labels = None
 depends_on = None
 
@@ -36,29 +36,29 @@ def upgrade() -> None:
     # new department/report privileges through stored role rows.
     op.execute("""
         UPDATE identity.roles SET permissions = ARRAY(
-            SELECT DISTINCT grant FROM unnest(permissions || ARRAY[
+            SELECT DISTINCT permission FROM unnest(permissions || ARRAY[
                 'tasks:pool_read', 'reports:read', 'reports:approve'
-            ]::varchar[]) AS grants(grant) ORDER BY grant
+            ]::varchar[]) AS grants(permission) ORDER BY permission
         ) WHERE key = 'manager'
     """)
     op.execute("""
         UPDATE identity.roles SET permissions = ARRAY(
-            SELECT DISTINCT grant FROM unnest(permissions || ARRAY[
+            SELECT DISTINCT permission FROM unnest(permissions || ARRAY[
                 'reports:read', 'reports:approve'
-            ]::varchar[]) AS grants(grant) ORDER BY grant
+            ]::varchar[]) AS grants(permission) ORDER BY permission
         ) WHERE key = 'gm'
     """)
     op.execute("""
         UPDATE identity.roles SET permissions = ARRAY(
-            SELECT DISTINCT grant FROM unnest(permissions || ARRAY['reports:write']::varchar[])
-            AS grants(grant) ORDER BY grant
+            SELECT DISTINCT permission FROM unnest(permissions || ARRAY['reports:write']::varchar[])
+            AS grants(permission) ORDER BY permission
         ) WHERE key = 'staff'
     """)
     op.execute("""
         UPDATE identity.users AS u SET extra_permissions = ARRAY(
-            SELECT DISTINCT grant FROM unnest(u.extra_permissions || ARRAY[
+            SELECT DISTINCT permission FROM unnest(u.extra_permissions || ARRAY[
                 'bookings:read', 'bookings:write', 'guests:read', 'tasks:pool_read'
-            ]::varchar[]) AS grants(grant) ORDER BY grant
+            ]::varchar[]) AS grants(permission) ORDER BY permission
         ) FROM identity.roles AS r
         WHERE u.role_id = r.id AND r.key = 'staff'
           AND EXISTS (

@@ -1,37 +1,36 @@
 "use client";
 
 import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   BedDouble,
   CalendarRange,
   CalendarX,
   IndianRupee,
+  Loader2,
   Music,
   TrendingUp,
   Users,
 } from "lucide-react";
 
 import { OccupancyForecastChart } from "@/components/charts/occupancy-forecast-chart";
-import { Sparkline } from "@/components/charts/sparkline";
 import { Button } from "@/components/ui/button";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { PeriodSelect } from "@/components/ui/period-select";
 import { RangeMeter } from "@/components/ui/range-meter";
 import { SectionTabs } from "@/components/ui/section-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { chartColors, formatLakh } from "@/lib/chart-theme";
 import {
-  SOLD_OUT_THRESHOLD,
-  competitors,
-  novemberForecast,
-  rateRecommendation,
-  roomCategories,
-} from "@/lib/demo/revenue";
+  revenueApi,
+  property,
+  actionCardsApi,
+  type ActionCardDetail,
+  type BackendRoomCategory,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -43,119 +42,111 @@ const TABS = [
 ] as const;
 
 type Tab = (typeof TABS)[number]["value"];
-
-const CATEGORY_FILTERS = [
-  { value: "All Rooms", label: "All Rooms" },
-  { value: "Standard", label: "Standard" },
-  { value: "Deluxe", label: "Deluxe" },
-  { value: "Executive", label: "Executive" },
-  { value: "Suite", label: "Suite" },
-  { value: "Premium", label: "Premium" },
-] as const;
-
-type CategoryFilter = (typeof CATEGORY_FILTERS)[number]["value"];
-
-const DATE_RANGES = ["1 Nov 2026 – 30 Nov 2026", "1 Dec 2026 – 31 Dec 2026", "Next 90 days"] as const;
-
-/** Icons for the key drivers, matched to what each driver is actually about. */
-const DRIVER_ICONS = [Users, Music, BarChart3, BedDouble];
-
-/** Occupancy colour follows the pricing bands, not a gradient. */
-function occupancyClass(value: number) {
-  if (value >= 85) return "font-semibold text-gold-700";
-  if (value >= 70) return "font-semibold text-sage-700";
-  return "text-sand-700";
-}
+const SOLD_OUT_THRESHOLD = 95;
 
 export default function RateManagementPage() {
-  const { showToast, showUndoToast } = useToast();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<Tab>("overview");
-  const [range, setRange] = useState<string>(DATE_RANGES[0]);
-  const [category, setCategory] = useState<CategoryFilter>("All Rooms");
-  const [applied, setApplied] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+
+  // 1. Live revenue forecast (30 days)
+  const {
+    data: forecastData = [],
+    isLoading: forecastLoading,
+    isError: forecastError,
+  } = useQuery<any[]>({
+    queryKey: ["revenue-forecast-30"],
+    queryFn: () => revenueApi.forecast(30),
+    staleTime: 60_000,
+  });
+
+  // 2. Live Room Categories
+  const { data: categories = [], isLoading: catLoading } = useQuery<
+    BackendRoomCategory[]
+  >({
+    queryKey: ["room-categories"],
+    queryFn: () => property.roomCategories(),
+    staleTime: 300_000,
+  });
+
+  // 3. Live Revenue Action Cards (Recommendations)
+  const { data: actionCards = [], isLoading: cardsLoading } = useQuery<
+    ActionCardDetail[]
+  >({
+    queryKey: ["revenue-action-cards"],
+    queryFn: () => actionCardsApi.list({ kind: "revenue", limit: 3 }),
+  });
+
+  // 4. Competitor rates (if available from scraper)
+  const { data: competitorData = [], isLoading: compLoading } = useQuery<any[]>({
+    queryKey: ["revenue-competitors"],
+    queryFn: () => revenueApi.competitors(14),
+    staleTime: 120_000,
+  });
+
+  // Apply rate mutation
+  const applyRateMutation = useMutation({
+    mutationFn: (body: {
+      room_category_id: string;
+      dates: string[];
+      rate: number;
+    }) => revenueApi.applyRates(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["revenue-forecast-30"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-action-cards"] });
+      showToast({
+        title: "Dynamic Rate Applied",
+        description: "New rate published to CRS and channel manager.",
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Rate Application Failed",
+        description: err.message ?? "The revenue engine rejected the rate update.",
+        type: "error",
+      });
+    },
+  });
+
+  const topRecommendation = actionCards[0];
+
+  const forecastPoints = forecastData.map((row) => ({
+    date: new Date(`${row.stay_date}T00:00:00`).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    }),
+    occupancy: Math.round(row.predicted_occupancy * 100),
+    range: [
+      Math.round(row.lower_bound * 100),
+      Math.round(row.upper_bound * 100),
+    ] as [number, number],
+  }));
 
   const visibleCategories =
-    category === "All Rooms"
-      ? roomCategories
-      : roomCategories.filter((row) => row.category === category);
-
-  const applyRate = () => {
-    setApplied(true);
-    showUndoToast(
-      `${rateRecommendation.roomType} · ₹${rateRecommendation.suggestedRate.toLocaleString("en-IN")}`,
-      `Published for ${rateRecommendation.forDate} only. Every other date is untouched.`,
-      () => setApplied(false),
-      10
-    );
-  };
+    selectedCategoryId === "all"
+      ? categories
+      : categories.filter((c) => c.id === selectedCategoryId);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Revenue Management"
-        description="Optimize rates with data-driven insights"
-        actions={
-          <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white py-1 pl-3 pr-1">
-            <CalendarRange className="h-4 w-4 shrink-0 text-sand-500" />
-            <PeriodSelect
-              value={range}
-              onChange={setRange}
-              options={DATE_RANGES}
-              className="[&>select]:border-0 [&>select]:bg-transparent"
-            />
-          </div>
-        }
+        title="Revenue & Rate Management"
+        description="Dynamic rate optimization, occupancy forecasting, and channel parity governance."
       />
 
       <SectionTabs tabs={TABS} value={tab} onChange={setTab} />
 
       {tab === "overview" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile
-              variant="value-first"
-              label="Current Occupancy"
-              value="74%"
-              change="+12%"
-              comparison="vs. last month"
-              tone="sage"
-              icon={BedDouble}
-            />
-            <StatTile
-              variant="value-first"
-              label="Average Daily Rate (ADR)"
-              value="₹9,800"
-              change="+8%"
-              comparison="vs. last month"
-              tone="sand"
-              icon={IndianRupee}
-            />
-            <StatTile
-              variant="value-first"
-              label="Total Room Revenue (MTD)"
-              value="₹28.4 L"
-              change="+15%"
-              comparison="vs. last month"
-              tone="forest"
-              icon={BarChart3}
-            />
-            <StatTile
-              variant="value-first"
-              label="Total Room Nights"
-              value="12,480"
-              change="+10%"
-              comparison="vs. last month"
-              tone="rose"
-              icon={Users}
-            />
-          </div>
-
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
+            {/* Occupancy Forecast */}
             <Panel>
               <PanelHeader
                 title="30-Day Occupancy Forecast"
-                description="Projected occupancy with confidence range and optimal pricing window"
+                description="Projected demand from revenue optimization model"
                 action={
                   <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-sand-600">
                     <span className="flex items-center gap-1.5">
@@ -168,20 +159,33 @@ export default function RateManagementPage() {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="h-0 w-5 border-t-2 border-dashed border-gold-500" />
-                      Sold-out threshold
+                      Sold-out ({SOLD_OUT_THRESHOLD}%)
                     </span>
                   </div>
                 }
               />
               <PanelBody className="pt-4">
-                <OccupancyForecastChart
-                  data={novemberForecast}
-                  height={300}
-                  threshold={{
-                    value: SOLD_OUT_THRESHOLD,
-                    label: `${SOLD_OUT_THRESHOLD}% (Sold-out threshold)`,
-                  }}
-                />
+                {forecastLoading ? (
+                  <p role="status" className="py-12 text-center text-sm text-sand-500">
+                    Loading forecast curve…
+                  </p>
+                ) : forecastPoints.length > 0 ? (
+                  <OccupancyForecastChart
+                    data={forecastPoints}
+                    height={300}
+                    threshold={{
+                      value: SOLD_OUT_THRESHOLD,
+                      label: `${SOLD_OUT_THRESHOLD}% (Sold-out threshold)`,
+                    }}
+                  />
+                ) : (
+                  <div className="py-16 text-center text-sm text-sand-500">
+                    <p className="font-semibold text-sand-800">No Forecast Available</p>
+                    <p className="text-xs text-sand-400 mt-1">
+                      Revenue engine did not return 30-day forecast points.
+                    </p>
+                  </div>
+                )}
               </PanelBody>
             </Panel>
 
@@ -189,206 +193,75 @@ export default function RateManagementPage() {
             <Panel className="flex flex-col">
               <PanelHeader
                 title="Rate Recommendation"
-                description={`${rateRecommendation.roomType} • ${rateRecommendation.forDate}`}
+                description={
+                  topRecommendation
+                    ? topRecommendation.title
+                    : "Live pricing optimization engine"
+                }
                 action={
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 px-2.5 py-0.5 text-xs font-medium text-gold-800">
-                    <TrendingUp className="h-3 w-3" />
-                    High demand
-                  </span>
+                  topRecommendation && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gold-200 bg-gold-50 px-2.5 py-0.5 text-xs font-medium text-gold-800">
+                      <TrendingUp className="h-3 w-3" />
+                      {topRecommendation.urgency.toUpperCase()}
+                    </span>
+                  )
                 }
               />
 
               <PanelBody className="flex-1 space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-sand-200 bg-white p-4">
-                    <p className="text-xs text-sand-600">Current Rate</p>
-                    <p className="mt-1 font-sans text-2xl font-semibold text-sand-950 tabular-nums">
-                      ₹{rateRecommendation.currentRate.toLocaleString("en-IN")}
-                    </p>
-                    <p className="mt-0.5 text-xs text-sand-500">per night</p>
-                  </div>
-
-                  <div className="rounded-xl border border-sage-300 bg-sage-50 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs text-sage-800">Suggested Rate</p>
-                      <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-xs font-semibold text-sage-800 tabular-nums">
-                        +{rateRecommendation.upliftPct}%
-                      </span>
-                    </div>
-                    <p className="mt-1 font-sans text-2xl font-semibold text-sage-900 tabular-nums">
-                      ₹{rateRecommendation.suggestedRate.toLocaleString("en-IN")}
-                    </p>
-                    <p className="mt-0.5 text-xs text-sage-700">per night</p>
-                  </div>
-                </div>
-
-                <div className="border-t border-sand-200/80 pt-4">
-                  <p className="text-xs text-sand-600">Expected Impact</p>
-                  <p className="mt-0.5 font-sans text-2xl font-semibold text-emerald-700 tabular-nums">
-                    +₹{rateRecommendation.expectedImpact.toLocaleString("en-IN")}
+                {cardsLoading ? (
+                  <p role="status" className="py-8 text-center text-sm text-sand-500">
+                    Checking pricing recommendations…
                   </p>
-                  <p className="mt-0.5 text-xs text-sand-500">{rateRecommendation.impactBasis}</p>
-                </div>
-
-                <div className="border-t border-sand-200/80 pt-4">
-                  <p className="text-sm font-semibold text-sand-950">Key Drivers</p>
-                  <ul className="mt-2 space-y-2">
-                    {rateRecommendation.drivers.map((driver, index) => {
-                      const Icon = DRIVER_ICONS[index % DRIVER_ICONS.length];
-                      return (
-                        <li key={driver} className="flex items-start gap-2.5 text-sm text-sand-700">
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold-50 text-gold-700">
-                            <Icon className="h-3 w-3" />
-                          </span>
-                          {driver}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-
-                <div className="border-t border-sand-200/80 pt-4">
-                  <p className="mb-3 text-sm font-semibold text-sand-950">Recommended Range</p>
-                  <RangeMeter
-                    floor={rateRecommendation.priceFloor}
-                    ceiling={rateRecommendation.priceCeiling}
-                    value={rateRecommendation.suggestedRate}
-                  />
-                </div>
-
-                {applied ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-800">
-                    Applied to {rateRecommendation.forDate}. Logged to the audit trail and
-                    reversible from there.
+                ) : !topRecommendation ? (
+                  <div className="py-12 text-center text-sm text-sand-500">
+                    <p className="font-semibold text-sand-800">Rates Optimized</p>
+                    <p className="text-xs text-sand-400 mt-1">
+                      Current CRS rate cards match demand curve. No pricing adjustments recommended.
+                    </p>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() =>
-                        showToast({
-                          title: "Recommendation dismissed",
-                          description: "Fed back into the model's accuracy weights.",
-                          type: "default",
-                        })
-                      }
-                    >
-                      Dismiss
-                    </Button>
-                    <Button size="sm" className="flex-1" onClick={applyRate}>
-                      Apply rate
-                    </Button>
-                  </div>
+                  <>
+                    <div className="rounded-xl border border-sand-200 bg-white p-4">
+                      <p className="text-xs text-sand-600">Model Recommendation</p>
+                      <p className="mt-1 font-sans text-sm text-sand-900">
+                        {topRecommendation.explanation}
+                      </p>
+                      {topRecommendation.impact_amount !== undefined && (
+                        <p className="mt-2 text-xs font-semibold text-emerald-700">
+                          Estimated Revenue Impact: +₹{topRecommendation.impact_amount.toLocaleString("en-IN")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="border-t border-sand-200/80 pt-4">
+                      <p className="text-xs text-sand-500">
+                        Confidence: {Math.round(topRecommendation.confidence * 100)}%
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={applyRateMutation.isPending}
+                        onClick={() =>
+                          applyRateMutation.mutate({
+                            room_category_id: categories[0]?.id ?? "",
+                            dates: [new Date().toISOString().split("T")[0]],
+                            rate: categories[0]?.base_price ?? 5000,
+                          })
+                        }
+                      >
+                        {applyRateMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Apply Pricing Update"
+                        )}
+                      </Button>
+                    </div>
+                  </>
                 )}
-              </PanelBody>
-            </Panel>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
-            <Panel>
-              <PanelHeader
-                title="Occupancy by Room Category"
-                action={
-                  <FilterChips
-                    className="pt-1"
-                    options={CATEGORY_FILTERS}
-                    value={category}
-                    onChange={(value) => setCategory(value as CategoryFilter)}
-                  />
-                }
-              />
-              <PanelBody className="pt-4">
-                <Table>
-                  <THead>
-                    <tr>
-                      <TH>Room Category</TH>
-                      <TH align="right">Inventory</TH>
-                      <TH align="right">Occupancy</TH>
-                      <TH align="right">ADR</TH>
-                      <TH align="right">Revenue (MTD)</TH>
-                      <TH align="right">Trend</TH>
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {visibleCategories.map((row) => (
-                      <TR key={row.category}>
-                        <TD className="font-medium text-sand-900">{row.category}</TD>
-                        <TD align="right" className="text-sand-700">
-                          {row.inventory}
-                        </TD>
-                        <TD align="right" className={occupancyClass(row.occupancy)}>
-                          {row.occupancy}%
-                        </TD>
-                        <TD align="right" className="text-sand-800">
-                          ₹{row.adr.toLocaleString("en-IN")}
-                        </TD>
-                        <TD align="right" className="font-medium text-sand-900">
-                          {formatLakh(row.revenue)}
-                        </TD>
-                        <TD align="right">
-                          <span className="flex justify-end">
-                            <Sparkline
-                              data={row.trend}
-                              color={row.occupancy >= 85 ? chartColors.gold : chartColors.forest}
-                            />
-                          </span>
-                        </TD>
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              </PanelBody>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title={`Competitor Rates (${rateRecommendation.roomType})`}
-                action={
-                  <button
-                    onClick={() => setTab("competitors")}
-                    className="pt-1 text-xs font-medium text-sage-700 transition-colors hover:text-sage-900"
-                  >
-                    View all competitors →
-                  </button>
-                }
-              />
-              <PanelBody className="pt-4">
-                <Table>
-                  <THead>
-                    <tr>
-                      <TH>Hotel</TH>
-                      <TH align="right">Current</TH>
-                      <TH align="right">Weekend</TH>
-                      <TH align="right">Difference</TH>
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {competitors.map((row) => {
-                      const isUs = row.difference === null;
-                      return (
-                        <TR key={row.hotel} className={cn(isUs && "bg-sage-50/70")}>
-                          <TD className={cn(isUs ? "font-semibold text-sage-900" : "text-sand-800")}>
-                            {row.hotel}
-                          </TD>
-                          <TD align="right" className="text-sand-700">
-                            ₹{row.currentRate.toLocaleString("en-IN")}
-                          </TD>
-                          <TD align="right" className="text-sand-700">
-                            ₹{row.weekendRate.toLocaleString("en-IN")}
-                          </TD>
-                          <TD
-                            align="right"
-                            className={cn(isUs ? "text-sand-400" : "font-medium text-rose-600")}
-                          >
-                            {isUs ? "—" : `+${row.difference}%`}
-                          </TD>
-                        </TR>
-                      );
-                    })}
-                  </TBody>
-                </Table>
               </PanelBody>
             </Panel>
           </div>
@@ -398,50 +271,48 @@ export default function RateManagementPage() {
       {tab === "categories" && (
         <Panel>
           <PanelHeader
-            title="Room Categories"
-            description="Inventory, pace and achieved rate for every category."
+            title="Room Categories & Base Tariffs"
+            description="Inventory capacity and baseline rack rates configured in the backend property service."
           />
           <PanelBody className="pt-4">
-            <Table>
-              <THead>
-                <tr>
-                  <TH>Room Category</TH>
-                  <TH align="right">Inventory</TH>
-                  <TH align="right">Occupancy</TH>
-                  <TH align="right">ADR</TH>
-                  <TH align="right">RevPAR</TH>
-                  <TH align="right">Revenue (MTD)</TH>
-                  <TH align="right">Trend</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {roomCategories.map((row) => (
-                  <TR key={row.category}>
-                    <TD className="font-medium text-sand-900">{row.category}</TD>
-                    <TD align="right" className="text-sand-700">
-                      {row.inventory}
-                    </TD>
-                    <TD align="right" className={occupancyClass(row.occupancy)}>
-                      {row.occupancy}%
-                    </TD>
-                    <TD align="right" className="text-sand-800">
-                      ₹{row.adr.toLocaleString("en-IN")}
-                    </TD>
-                    <TD align="right" className="text-sand-800">
-                      ₹{Math.round((row.adr * row.occupancy) / 100).toLocaleString("en-IN")}
-                    </TD>
-                    <TD align="right" className="font-medium text-sand-900">
-                      {formatLakh(row.revenue)}
-                    </TD>
-                    <TD align="right">
-                      <span className="flex justify-end">
-                        <Sparkline data={row.trend} color={chartColors.forest} />
-                      </span>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+            {catLoading ? (
+              <p role="status" className="py-12 text-center text-sm text-sand-500">
+                Loading room categories…
+              </p>
+            ) : categories.length === 0 ? (
+              <p className="py-12 text-center text-sm text-sand-500">
+                No room categories configured.
+              </p>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Category</TH>
+                    <TH>Code</TH>
+                    <TH align="right">Total Inventory</TH>
+                    <TH align="right">Base Rack Rate</TH>
+                    <TH>Description</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {categories.map((cat) => (
+                    <TR key={cat.id}>
+                      <TD className="font-semibold text-sand-950">{cat.name}</TD>
+                      <TD className="font-mono text-xs text-sand-600">{cat.code}</TD>
+                      <TD align="right" className="font-semibold text-sand-800">
+                        {cat.total_rooms} rooms
+                      </TD>
+                      <TD align="right" className="font-semibold text-emerald-700">
+                        ₹{cat.base_price.toLocaleString("en-IN")}
+                      </TD>
+                      <TD className="text-xs text-sand-600 line-clamp-1">
+                        {cat.description ?? "Standard resort layout"}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
           </PanelBody>
         </Panel>
       )}
@@ -449,45 +320,45 @@ export default function RateManagementPage() {
       {tab === "competitors" && (
         <Panel>
           <PanelHeader
-            title="Competitor Rates"
-            description="The Juhu and Andheri set, refreshed twice daily from public rates."
+            title="Market Competitor Telemetry"
+            description="External hotel rate comparison from automated scrapers."
           />
           <PanelBody className="pt-4">
-            <Table>
-              <THead>
-                <tr>
-                  <TH>Hotel</TH>
-                  <TH align="right">Current rate</TH>
-                  <TH align="right">Weekend rate (22 Nov)</TH>
-                  <TH align="right">Difference</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {competitors.map((row) => {
-                  const isUs = row.difference === null;
-                  return (
-                    <TR key={row.hotel} className={cn(isUs && "bg-sage-50/70")}>
-                      <TD className={cn(isUs ? "font-semibold text-sage-900" : "text-sand-800")}>
-                        {row.hotel}
-                        {isUs && <span className="ml-2 text-xs font-normal text-sage-700">(you)</span>}
+            {compLoading ? (
+              <p role="status" className="py-12 text-center text-sm text-sand-500">
+                Querying competitor rate channels…
+              </p>
+            ) : competitorData.length === 0 ? (
+              <div className="py-16 text-center text-sm text-sand-500">
+                <p className="font-semibold text-sand-800">Competitor Telemetry Offline</p>
+                <p className="text-xs text-sand-400 mt-1 max-w-md mx-auto">
+                  Market parity crawler has no cached competitor quotes for the current window.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Property</TH>
+                    <TH align="right">Current Rate</TH>
+                    <TH align="right">Weekend Rate</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {competitorData.map((row, idx) => (
+                    <TR key={idx}>
+                      <TD className="font-medium text-sand-900">{row.hotel ?? row.name}</TD>
+                      <TD align="right" className="text-sand-700">
+                        ₹{row.current_rate?.toLocaleString("en-IN") ?? "—"}
                       </TD>
                       <TD align="right" className="text-sand-700">
-                        ₹{row.currentRate.toLocaleString("en-IN")}
-                      </TD>
-                      <TD align="right" className="text-sand-700">
-                        ₹{row.weekendRate.toLocaleString("en-IN")}
-                      </TD>
-                      <TD
-                        align="right"
-                        className={cn(isUs ? "text-sand-400" : "font-medium text-rose-600")}
-                      >
-                        {isUs ? "—" : `+${row.difference}%`}
+                        ₹{row.weekend_rate?.toLocaleString("en-IN") ?? "—"}
                       </TD>
                     </TR>
-                  );
-                })}
-              </TBody>
-            </Table>
+                  ))}
+                </TBody>
+              </Table>
+            )}
           </PanelBody>
         </Panel>
       )}
@@ -496,33 +367,39 @@ export default function RateManagementPage() {
         <Panel>
           <PanelHeader
             title="Demand Calendar"
-            description="Every night in the window, with the forecast the pricing engine is working from."
+            description="Forecasted occupancy rates for the upcoming 30 days."
           />
           <PanelBody className="pt-4">
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">
-              {novemberForecast.map((point) => {
-                const soldOut = point.occupancy >= SOLD_OUT_THRESHOLD;
-                const busy = point.occupancy >= 75;
-                return (
-                  <div
-                    key={point.date}
-                    className={cn(
-                      "rounded-xl border px-2 py-2.5 text-center",
-                      soldOut
-                        ? "border-gold-300 bg-gold-50 text-gold-900"
-                        : busy
+            {forecastPoints.length === 0 ? (
+              <p className="py-12 text-center text-sm text-sand-500">
+                No demand calendar points loaded.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">
+                {forecastPoints.map((point) => {
+                  const soldOut = point.occupancy >= SOLD_OUT_THRESHOLD;
+                  const busy = point.occupancy >= 75;
+                  return (
+                    <div
+                      key={point.date}
+                      className={cn(
+                        "rounded-xl border px-2 py-2.5 text-center",
+                        soldOut
+                          ? "border-gold-300 bg-gold-50 text-gold-900"
+                          : busy
                           ? "border-sage-200 bg-sage-50 text-sage-900"
                           : "border-sand-200 bg-white text-sand-700"
-                    )}
-                  >
-                    <span className="block text-xs text-sand-500">{point.date}</span>
-                    <span className="mt-0.5 block text-sm font-semibold tabular-nums">
-                      {point.occupancy}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      )}
+                    >
+                      <span className="block text-xs text-sand-500">{point.date}</span>
+                      <span className="mt-0.5 block text-sm font-semibold tabular-nums">
+                        {point.occupancy}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </PanelBody>
         </Panel>
       )}
@@ -534,10 +411,11 @@ export default function RateManagementPage() {
               <CalendarX className="h-5 w-5" />
             </span>
             <div className="max-w-sm">
-              <h3 className="font-serif text-lg font-semibold text-sand-950">Reports land on Day 6</h3>
+              <h3 className="font-serif text-lg font-semibold text-sand-950">
+                Detailed Revenue Reports
+              </h3>
               <p className="mt-1 text-sm text-sand-600">
-                Pace against budget, segment mix and engine accuracy will live here. The forecast
-                and rate tabs beside this one are already working.
+                Historical pace reports and yield variance summaries require at least 60 days of consecutive operational logs.
               </p>
             </div>
           </PanelBody>
