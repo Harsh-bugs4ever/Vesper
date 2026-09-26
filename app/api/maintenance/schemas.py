@@ -27,7 +27,9 @@ class AssetHealthOut(ORMModel):
 
 class WorkOrderOut(ORMModel):
     id: UUID
-    asset_id: UUID
+    asset_id: UUID | None = None
+    room_id: UUID | None = None
+    source_issue_id: UUID | None = None
     department_id: UUID | None = None
     source_card_id: UUID | None = None
     task_id: UUID | None = None

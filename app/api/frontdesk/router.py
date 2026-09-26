@@ -72,6 +72,7 @@ def today(
         date=data["date"],
         arrivals=[BookingOut.model_validate(b) for b in data["arrivals"]],
         departures=[StayOut.model_validate(s) for s in data["departures"]],
+        in_house=[StayOut.model_validate(s) for s in data["in_house"]],
         in_house_count=data["in_house_count"],
     )
 

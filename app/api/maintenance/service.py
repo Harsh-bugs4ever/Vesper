@@ -202,6 +202,8 @@ def create_work_order(db: Session, property_id: UUID, data, *, source_card_id: U
     order = WorkOrder(
         property_id=property_id,
         asset_id=data.asset_id,
+        room_id=getattr(data, "room_id", None),
+        source_issue_id=getattr(data, "source_issue_id", None),
         department_id=data.department_id,
         source_card_id=source_card_id,
         title=data.title,
@@ -239,24 +241,51 @@ def get_work_order(db: Session, property_id: UUID, order_id: UUID) -> WorkOrder:
 
 
 def complete_work_order(db: Session, property_id: UUID, order_id: UUID, *, actual_cost: Decimal | None, notes: str | None) -> WorkOrder:
-    order = get_work_order(db, property_id, order_id)
-    if order.status == WorkOrderStatus.COMPLETED:
-        raise Conflict("That work order is already complete")
+    from app.api.guest.models import IssueReport, IssueStatus
+    from app.api.staff.models import Task, TaskStatus
+
+    order = db.scalars(select(WorkOrder).where(
+        WorkOrder.id == order_id, WorkOrder.property_id == property_id
+    ).with_for_update()).first()
+    if order is None:
+        raise NotFound("Work order not found")
+    if order.status in {WorkOrderStatus.COMPLETED, WorkOrderStatus.CANCELLED}:
+        raise Conflict("That work order is already closed")
+
+    report = None
+    if order.source_issue_id:
+        report = db.scalars(select(IssueReport).where(
+            IssueReport.id == order.source_issue_id,
+            IssueReport.property_id == property_id,
+        ).with_for_update()).first()
+        if report is None or report.status != IssueStatus.SCHEDULED:
+            raise Conflict("The linked report must be approved before completion")
 
     order.status = WorkOrderStatus.COMPLETED
     order.completed_at = utcnow()
     order.actual_cost = actual_cost
     order.notes = notes
+    if order.source_issue_id:
+        report.status = IssueStatus.RESOLVED
+        report.resolved_at = order.completed_at
+        if order.task_id:
+            task = db.scalars(select(Task).where(
+                Task.id == order.task_id, Task.property_id == property_id
+            ).with_for_update()).first()
+            if task and task.status not in {TaskStatus.DONE, TaskStatus.CANCELLED}:
+                task.status = TaskStatus.DONE
+                task.completed_at = order.completed_at
     db.commit()
     db.refresh(order)
 
     # A serviced asset should stop looking risky on the next sweep; tell property
     # so the service clock resets.
-    property_client.post(
-        f"/assets/{order.asset_id}/serviced",
-        property_id=property_id,
-        json={"serviced_on": local_today().isoformat()},
-    )
+    if order.asset_id:
+        property_client.post(
+            f"/assets/{order.asset_id}/serviced",
+            property_id=property_id,
+            json={"serviced_on": local_today().isoformat()},
+        )
     return order
 
 

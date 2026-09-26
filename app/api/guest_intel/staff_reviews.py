@@ -255,17 +255,19 @@ def leaderboard(
 
 
 def reviews_for_staff(
-    db: Session, property_id: UUID, staff_id: UUID, *, limit: int = 50
+    db: Session, property_id: UUID, staff_id: UUID, *, limit: int = 50,
+    department_id: UUID | None = None,
 ) -> list[GuestStaffReview]:
     """The comments behind one person's score, newest first."""
+    query = select(GuestStaffReview).where(
+        GuestStaffReview.property_id == property_id,
+        GuestStaffReview.staff_id == staff_id,
+    )
+    if department_id is not None:
+        query = query.where(GuestStaffReview.department_id == department_id)
     return list(
         db.scalars(
-            select(GuestStaffReview)
-            .where(
-                GuestStaffReview.property_id == property_id,
-                GuestStaffReview.staff_id == staff_id,
-            )
-            .order_by(GuestStaffReview.created_at.desc())
+            query.order_by(GuestStaffReview.created_at.desc())
             .limit(limit)
         )
     )

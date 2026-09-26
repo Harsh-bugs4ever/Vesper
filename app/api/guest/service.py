@@ -463,6 +463,10 @@ def report_issue(
     department = _department(property_id, "maintenance")
     if department:
         department_id = UUID(department["id"])
+    if department_id is None:
+        raise Conflict("No maintenance department is configured")
+    from app.api.staff.reporting import _manager
+    manager_id = _manager(db, property_id, department_id)
 
     existing = _find_duplicate(db, property_id, data, room_number)
     if existing is not None:
@@ -478,6 +482,7 @@ def report_issue(
             room_number=room_number,
             asset_id=data.asset_id,
             department_id=department_id,
+            responsible_manager_id=manager_id,
             reported_by=reported_by,
             reported_by_guest=by_guest,
             summary=data.summary,
@@ -485,6 +490,7 @@ def report_issue(
             category=data.category,
             severity=data.severity,
             photo_url=data.photo_url,
+            evidence=[data.photo_url] if data.photo_url else [],
             status=IssueStatus.MERGED,
             merged_into_id=existing.id,
         )
@@ -499,6 +505,7 @@ def report_issue(
         room_number=room_number,
         asset_id=data.asset_id,
         department_id=department_id,
+        responsible_manager_id=manager_id,
         reported_by=reported_by,
         reported_by_guest=by_guest,
         summary=data.summary,
@@ -506,8 +513,25 @@ def report_issue(
         category=data.category,
         severity=data.severity,
         photo_url=data.photo_url,
+        evidence=[data.photo_url] if data.photo_url else [],
     )
     db.add(issue)
+    db.flush()
+    if issue.room_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderKind
+        order = WorkOrder(
+            property_id=property_id,
+            room_id=issue.room_id,
+            source_issue_id=issue.id,
+            department_id=department_id,
+            title=issue.summary,
+            description=issue.description,
+            kind=WorkOrderKind.CORRECTIVE,
+            priority="high" if issue.severity == "high" else "normal",
+        )
+        db.add(order)
+        db.flush()
+        issue.work_order_id = order.id
     db.commit()
     db.refresh(issue)
 
@@ -524,6 +548,7 @@ def report_issue(
             "asset_id": str(issue.asset_id) if issue.asset_id else None,
             "department_id": str(department_id) if department_id else None,
             "photo_url": issue.photo_url,
+            "work_order_id": str(issue.work_order_id) if issue.work_order_id else None,
             "priority": "urgent" if issue.severity == "high" else "normal",
         },
         property_id=str(property_id),
@@ -577,6 +602,23 @@ def set_issue_status(db: Session, property_id: UUID, issue_id: UUID, new_status:
     issue = db.scalars(query).first()
     if issue is None:
         raise NotFound("Issue not found")
+    allowed = {
+        IssueStatus.REPORTED: {IssueStatus.SCHEDULED},
+        IssueStatus.SCHEDULED: {IssueStatus.RESOLVED},
+    }
+    if new_status not in allowed.get(issue.status, set()):
+        raise Conflict("Invalid issue status transition")
+    if new_status == IssueStatus.SCHEDULED and issue.work_order_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderStatus
+        order = db.get(WorkOrder, issue.work_order_id)
+        if order is None or order.property_id != property_id or order.status != WorkOrderStatus.OPEN:
+            raise Conflict("Linked work order is unavailable for approval")
+        order.status = WorkOrderStatus.SCHEDULED
+    if new_status == IssueStatus.RESOLVED and issue.work_order_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderStatus
+        order = db.get(WorkOrder, issue.work_order_id)
+        if order is None or order.status != WorkOrderStatus.COMPLETED:
+            raise Conflict("Complete the linked work order first")
     issue.status = new_status
     if new_status == IssueStatus.RESOLVED:
         issue.resolved_at = utcnow()

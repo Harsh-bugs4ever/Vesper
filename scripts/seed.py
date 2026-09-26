@@ -294,6 +294,10 @@ def _seed(db) -> dict[str, int]:
             staff_grants |= {"rooms:status_write", "requests:read", "requests:accept"}
         if department in {"fnb", "front_office"}:
             staff_grants |= {"requests:read", "requests:accept"}
+        if department == "front_office":
+            staff_grants |= {"bookings:read", "bookings:write", "guests:read"}
+        if department in {"housekeeping", "maintenance", "fnb", "front_office"}:
+            staff_grants.add("tasks:pool_read")
         if department == "store":
             staff_grants |= {"stock:read"}
         row = ident.User(

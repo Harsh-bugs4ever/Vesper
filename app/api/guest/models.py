@@ -140,6 +140,10 @@ class IssueReport(Base, TimestampMixin):
     room_number: Mapped[str | None] = mapped_column(String(12))
     asset_id: Mapped[UUID | None] = uuid_ref()
     department_id: Mapped[UUID | None] = uuid_ref()
+    reporter_department_id: Mapped[UUID | None] = uuid_ref()
+    responsible_manager_id: Mapped[UUID | None] = uuid_ref()
+    evidence: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    work_order_id: Mapped[UUID | None] = uuid_ref()
     reported_by: Mapped[UUID | None] = uuid_ref()
     reported_by_guest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

@@ -61,7 +61,9 @@ class WorkOrder(Base, TimestampMixin):
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)
-    asset_id: Mapped[UUID] = uuid_ref(nullable=False, index=True)
+    asset_id: Mapped[UUID | None] = uuid_ref(index=True)
+    room_id: Mapped[UUID | None] = uuid_ref()
+    source_issue_id: Mapped[UUID | None] = uuid_ref()
     department_id: Mapped[UUID | None] = uuid_ref()
     # The card that authorised this, when it came from the action queue.
     source_card_id: Mapped[UUID | None] = uuid_ref()
