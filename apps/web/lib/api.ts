@@ -608,6 +608,28 @@ export interface DepartmentOut {
   head_user_id: string | null;
 }
 
+export interface DepartmentOverviewSnapshot {
+  department_id: string;
+  department_name: string;
+  open_requests: number;
+  overdue_requests: number;
+  open_tasks: number;
+  overdue_tasks: number;
+  completed_tasks_in_period: number;
+  attendance_today: number;
+  active_shift_name?: string;
+  staff_needed_next_14d?: number[];
+  avg_predicted_staff_daily?: number;
+  low_stock_items?: number;
+  pending_requisitions?: number;
+  budget_allocated?: number;
+  budget_spent?: number;
+  budget_remaining?: number;
+  currency?: string;
+  team_rating?: number;
+  sla_on_time_pct?: number;
+}
+
 export interface StaffTask {
   id: string;
   title: string;
