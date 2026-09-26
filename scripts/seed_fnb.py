@@ -15,7 +15,7 @@ import sys
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
@@ -58,7 +58,7 @@ MIXED_RATINGS = [
 ]
 
 
-def seed_fnb_data(db) -> dict[str, int]:
+def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
     """Seed F&B service requests, orders, and guest spend visits."""
     import_all_models(str(REPO_ROOT / "app" / "api"))
     import vesper_models.frontdesk as fd
@@ -66,7 +66,7 @@ def seed_fnb_data(db) -> dict[str, int]:
     import vesper_models.identity as ident
     import vesper_models.property as prop
 
-    property_row = db.scalars(select(prop.Property)).first()
+    property_row = db.get(prop.Property, property_id) if property_id else db.scalars(select(prop.Property)).first()
     if not property_row:
         raise SystemExit("No property found. Please run main seed first: python scripts/seed.py")
 

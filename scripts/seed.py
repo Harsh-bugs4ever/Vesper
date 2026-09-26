@@ -8,6 +8,10 @@ Everything here is fabricated. No real guest, booking, employee or revenue figur
 appears in this repository.
 
 Run: python scripts/seed.py [--reset]
+To add future reservations to an existing property, use scripts/seed_reservations.py.
+
+The seed refuses to append a second copy of this resort. --reset remains an explicit
+destructive demo-only operation.
 """
 from __future__ import annotations
 
@@ -17,14 +21,14 @@ import random
 import secrets
 import sys
 from uuid import uuid4
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import inspect, select, text  # noqa: E402
 
 from vesper_common.clock import property_tz, utcnow  # noqa: E402
 from vesper_common.db import SCHEMAS, Base, get_engine, import_all_models, session_scope  # noqa: E402
@@ -144,6 +148,16 @@ KNOWLEDGE = [
     ("Banquet and events", "Four banquet halls seat between 40 and 400 guests. The events team can be reached on extension 5555.", "facilities"),
 ]
 
+RESORT_AMENITIES = [
+    # key, name, description, location, opening hours
+    ("rooftop_pool", "Rooftop pool", "Pool towels are provided; children under 12 need an adult.", "Rooftop", "Daily, 6:00 AM–9:00 PM"),
+    ("quan_spa", "Quan Spa", "Treatments require advance booking on extension 4444.", "Spa level", "Daily, 9:00 AM–9:00 PM"),
+    ("fitness_centre", "Fitness centre", "In-house guests can enter with a room key card.", "Fitness centre", "24 hours"),
+    ("all_day_dining", "All-day dining", "Breakfast, lunch and dinner are served here.", "Restaurant level", "Breakfast 7:00–10:30 AM weekdays, until 11:00 AM weekends; lunch 12:30–3:00 PM; dinner 7:00–11:00 PM"),
+    ("pool_bar", "Pool bar", "Drinks and light refreshments by the pool.", "Pool deck", "Daily, 11:00 AM–8:00 PM"),
+    ("valet_parking", "Valet parking", "Complimentary valet parking for in-house guests.", "Main entrance", "24 hours"),
+]
+
 
 def _demo_reference(index: int) -> str:
     """VS + a zero-padded base-36 counter. Short, readable and collision-free."""
@@ -162,6 +176,15 @@ def main() -> int:
 
     engine = get_engine()
     import_all_models(str(REPO_ROOT / "app" / "api"))
+
+    # Refuse a normal rerun before create_all can change an existing database.
+    if not args.reset and inspect(engine).has_table("properties", schema="property"):
+        import vesper_models.property as prop
+        with session_scope() as existing:
+            if existing.scalar(select(prop.Property.id).where(
+                prop.Property.name == "JW Marriott Mumbai, Juhu"
+            ).limit(1)) is not None:
+                raise SystemExit("Demo resort already exists; use --reset only on a disposable demo database")
 
     if args.reset:
         with engine.begin() as connection:
@@ -269,6 +292,13 @@ def _seed(db) -> dict[str, int]:
     counts["rooms"] = len(rooms)
     counts["departments"] = len(departments)
 
+    for key, name, description, location, hours in RESORT_AMENITIES:
+        db.add(prop.ResortAmenity(
+            property_id=pid, key=key, name=name, description=description,
+            location=location, opening_hours=hours, is_available=True,
+        ))
+    counts["resort_amenities"] = len(RESORT_AMENITIES)
+
     # --- roles and users ----------------------------------------------------------
     from vesper_common.permissions import DEFAULT_ROLE_PERMISSIONS
 
@@ -318,13 +348,22 @@ def _seed(db) -> dict[str, int]:
 
     add_user("owner@vesper.demo", "Rustom Mistry", "gm", None, "EMP0001")
     add_user("gm@vesper.demo", "Anjali Verma", "gm", None, "EMP0002")
-    add_user("fom@vesper.demo", "Nikhil Rao", "manager", "front_office", "EMP0003")
-    add_user("exec@vesper.demo", "Sunita Pillai", "manager", "housekeeping", "EMP0004")
-    add_user("chef@vesper.demo", "Marco Dias", "manager", "fnb", "EMP0005")
-    add_user("chiefeng@vesper.demo", "Prakash Menon", "manager", "maintenance", "EMP0006")
-    add_user("store@vesper.demo", "Hemant Shah", "manager", "store", "EMP0007")
-    add_user("security@vesper.demo", "Balbir Singh", "manager", "security", "EMP0008")
+    front_manager = add_user("fom@vesper.demo", "Nikhil Rao", "manager", "front_office", "EMP0003")
+    housekeeping_manager = add_user("exec@vesper.demo", "Sunita Pillai", "manager", "housekeeping", "EMP0004")
+    fnb_manager = add_user("chef@vesper.demo", "Marco Dias", "manager", "fnb", "EMP0005")
+    add_user("chiefeng@vesper.demo", "Prakash Menon", "staff", "maintenance", "EMP0006")
+    add_user("store@vesper.demo", "Hemant Shah", "staff", "store", "EMP0007")
+    add_user("security@vesper.demo", "Balbir Singh", "staff", "security", "EMP0008")
     add_user("hk1@vesper.demo", "Laxmi Gaikwad", "staff", "housekeeping", "EMP0009")
+    db.flush()
+    departments["front_office"].head_user_id = front_manager.id
+    departments["housekeeping"].head_user_id = housekeeping_manager.id
+    departments["fnb"].head_user_id = fnb_manager.id
+    departments["maintenance"].head_user_id = housekeeping_manager.id
+    db.add(ident.UserAssignment(
+        user=housekeeping_manager, property_id=pid,
+        department_id=departments["maintenance"].id,
+    ))
 
     # ~180 staff across six departments, weighted the way a resort really is.
     headcount = {"housekeeping": 62, "fnb": 54, "front_office": 24, "maintenance": 18, "store": 8, "security": 14}
@@ -341,13 +380,43 @@ def _seed(db) -> dict[str, int]:
     counts["users"] = len(users)
 
     # --- shifts -------------------------------------------------------------------
+    shifts = {}
     for key, name, starts, ends in SHIFTS:
-        db.add(
-            staff.Shift(
-                property_id=pid, key=key, name=name, starts_at=starts, ends_at=ends, grace_minutes=15
-            )
+        shift = staff.Shift(
+            property_id=pid, key=key, name=name, starts_at=starts, ends_at=ends,
+            grace_minutes=15,
         )
+        db.add(shift)
+        shifts[key] = shift
     db.flush()
+
+    # A few actual attendance rows drive the scoped team and self summaries. The
+    # performance API computes its metrics from these records; no score is seeded.
+    attendance_count = 0
+    now = utcnow()
+    local_tz = property_tz()
+    for department in departments.values():
+        sample = [u for u in users if u.role_id == roles["staff"].id
+                  and u.department_id == department.id][:3]
+        for member in sample:
+            for days_ago in range(5, -1, -1):
+                work_day = today - timedelta(days=days_ago)
+                local_start = datetime.combine(work_day, time(7, 0), tzinfo=local_tz)
+                checked_in = (local_start + timedelta(minutes=5)).astimezone(timezone.utc)
+                if checked_in > now:
+                    continue
+                completed_at = checked_in + timedelta(hours=8)
+                checked_out = completed_at if completed_at <= now else None
+                db.add(staff.Attendance(
+                    property_id=pid, user_id=member.id, department_id=department.id,
+                    shift_id=shifts["morning"].id,
+                    work_date=datetime.combine(work_day, time.min),
+                    checked_in_at=checked_in, checked_out_at=checked_out,
+                    method=staff.AttendanceMethod.MANUAL,
+                    worked_minutes=480 if checked_out else 0,
+                ))
+                attendance_count += 1
+    counts["attendance_records"] = attendance_count
 
     # --- menu and its recipes -----------------------------------------------------
     stock_items = {}
@@ -597,13 +666,20 @@ def _seed(db) -> dict[str, int]:
     # --- today: some rooms occupied so the QR demo works out of the box -----------
     in_house = 0
     arriving = [b for b in db.query(fd.Booking).filter(fd.Booking.check_in_date == today).limit(90)]
-    available = [r for r in rooms]
-    random.shuffle(available)
+    available_by_category = {category.id: [] for category in categories.values()}
+    for room in rooms:
+        available_by_category[room.category_id].append(room)
+    for category_rooms in available_by_category.values():
+        random.shuffle(category_rooms)
     for booking in arriving[:80]:
-        room = available.pop()
+        matching_rooms = available_by_category[booking.room_category_id]
+        if not matching_rooms:
+            raise RuntimeError("Not enough rooms in a booked category to seed in-house stays")
+        room = matching_rooms.pop()
         booking.status = fd.BookingStatus.CHECKED_IN
         booking.room_id = room.id
-        room.status = prop.RoomStatus.OCCUPIED
+        # An active stay is the occupancy record. Housekeeping state is independent.
+        room.status = prop.RoomStatus.DIRTY if in_house < 6 else prop.RoomStatus.READY
         room.status_changed_at = utcnow()
         db.add(
             fd.Stay(
@@ -618,11 +694,29 @@ def _seed(db) -> dict[str, int]:
         )
         in_house += 1
     # A handful of dirty rooms so the housekeeping board has work on it.
+    available = [room for category_rooms in available_by_category.values() for room in category_rooms]
     for room in available[:22]:
         room.status = prop.RoomStatus.DIRTY
         room.status_changed_at = utcnow()
     db.flush()
     counts["stays_in_house"] = in_house
+    counts["occupied_needing_cleaning"] = min(in_house, 6)
+
+    dirty_rooms = [room for room in rooms if room.status == prop.RoomStatus.DIRTY]
+    housekeepers = [u for u in users if u.role_id == roles["staff"].id
+                    and u.department_id == departments["housekeeping"].id]
+    for index, room in enumerate(dirty_rooms[:12]):
+        db.add(staff.Task(
+            property_id=pid, department_id=departments["housekeeping"].id,
+            assignee_id=housekeepers[index % len(housekeepers)].id, room_id=room.id,
+            title=f"Clean room {room.number}",
+            description="Housekeeping service requested for this room.",
+            status=staff.TaskStatus.ASSIGNED,
+            priority=staff.TaskPriority.NORMAL,
+            source=staff.TaskSource.MANUAL,
+            due_at=utcnow() + timedelta(hours=2),
+        ))
+    counts["housekeeping_tasks"] = min(len(dirty_rooms), 12)
 
     # --- competitors --------------------------------------------------------------
     competitors = [
@@ -667,7 +761,7 @@ def _seed(db) -> dict[str, int]:
         from seed_fnb import seed_fnb_data
     except ImportError:
         from scripts.seed_fnb import seed_fnb_data
-    fnb_counts = seed_fnb_data(db)
+    fnb_counts = seed_fnb_data(db, property_id=pid)
     counts.update(fnb_counts)
 
     return counts
