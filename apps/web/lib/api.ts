@@ -249,6 +249,7 @@ export interface BackendUser {
   department_id: string | null;
   property_id: string;
   permissions: string[];
+  assignments?: { property_id: string; department_id: string | null }[];
 }
 
 /** `GET /property` — the branch this user belongs to, as the backend knows it. */
@@ -329,7 +330,7 @@ export const property = {
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
-  /** Public summary for the landing page. */
+  /** Public property summary, safe for landing/orientation without staff credentials. */
   publicSummary: (propertyId?: string) =>
     api.get<BackendPropertySummary>(
       "/property/public",
@@ -355,6 +356,7 @@ export const property = {
   departments: () => api.get<DepartmentOut[]>("/property/departments"),
   amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
   public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
+  publicDetail: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
   saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
   uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
   uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
@@ -418,10 +420,6 @@ export const guestProperty = {
   amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
 };
 
-export const amenities = {
-  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
-};
-
 export const rooms = {
   list: (params?: { status?: string; floor?: number; category_id?: string }) =>
     api.get<BackendRoom[]>("/rooms", params),
@@ -429,6 +427,14 @@ export const rooms = {
   get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
   setStatus: (id: string, status: string, note?: string) =>
     api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
+};
+
+export const amenities = {
+  /**
+   * Persisted guest amenity catalogue.
+   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
+   */
+  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
 export interface GuestSession {

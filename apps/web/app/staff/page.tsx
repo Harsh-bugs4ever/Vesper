@@ -28,5 +28,17 @@ export default function StaffPage() {
     );
   }
 
-  return <LiveStaff />;
+  return (
+    <>
+      <div className="px-4 pt-6 sm:px-8">
+        <Link
+          href="/staff/supplies"
+          className="text-sm font-medium text-sage-700 underline"
+        >
+          Request supplies and view my requests
+        </Link>
+      </div>
+      <LiveStaff />
+    </>
+  );
 }

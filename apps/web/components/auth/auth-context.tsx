@@ -13,10 +13,10 @@
  * never from a hardcoded role assumption.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, api, auth as authApi, property as propertyApi, tokens } from "@/lib/api";
+import { ApiError, api, auth as authApi, property as propertyApi, tokens, type BackendUser } from "@/lib/api";
 import { DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
 import {
   type Department,
@@ -62,8 +62,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY_PERMISSIONS = "vesper_role_permissions";
 
+function signature(user: BackendUser): string {
+  return JSON.stringify({
+    id: user.id,
+    role: user.role,
+    property: user.property_id,
+    department: user.department_id,
+    permissions: [...user.permissions].sort(),
+    assignments: [...(user.assignments ?? [])].map((assignment) => `${assignment.property_id}:${assignment.department_id ?? ""}`).sort(),
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const sessionSignature = useRef<string | null>(null);
   const [backendUser, setBackendUser] = useState<User | null>(null);
   const [backendProperty, setBackendProperty] = useState<Property | null>(null);
   const [properties, setProperties] = useState<PropertyOption[]>([]);
@@ -91,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (tokens.access()) {
         try {
           const me = await authApi.me();
+          sessionSignature.current = signature(me);
           const [departments, branch, branches] = await Promise.all([
             loadDepartments(),
             loadProperty(),
@@ -108,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // An expired or invalid token — clear it so the app reaches a clean state.
           tokens.clear();
+          sessionSignature.current = null;
           queryClient.clear();
           if (!cancelled) setSessionExpired(true);
         }
@@ -127,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       queryClient.clear();
       const me = await authApi.login(email, password);
+      sessionSignature.current = signature(me);
       const [departments, branch, branches] = await Promise.all([
         loadDepartments(),
         loadProperty(),
@@ -150,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     void authApi.logout();
+    sessionSignature.current = null;
     queryClient.clear();
     // Clear all protected state immediately. Leaving stale data behind risks showing
     // the next user another person's session data during the loading flash.
@@ -159,6 +175,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionExpired(false);
     setError(null);
   }, [queryClient]);
+
+  // A manager can change department assignments while this tab is open. Recheck on
+  // focus and discard every protected query before showing the new assignment.
+  useEffect(() => {
+    if (!isReady || !backendUser) return;
+    let cancelled = false;
+    const recheck = async () => {
+      try {
+        const me = await authApi.me();
+        const next = signature(me);
+        if (cancelled || next === sessionSignature.current) return;
+        queryClient.clear();
+        const [departments, branch, branches] = await Promise.all([
+          loadDepartments(), loadProperty(), loadProperties(),
+        ]);
+        if (cancelled) return;
+        sessionSignature.current = next;
+        setBackendUser(toUiUser(me, { departments, propertyName: branch?.name }));
+        setBackendProperty(branch);
+        setProperties(branches);
+      } catch (caught) {
+        if (cancelled || !(caught instanceof ApiError) || ![401, 403].includes(caught.status)) return;
+        tokens.clear();
+        queryClient.clear();
+        sessionSignature.current = null;
+        setBackendUser(null);
+        setBackendProperty(null);
+        setProperties([]);
+        setSessionExpired(true);
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void recheck(); };
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isReady, backendUser, queryClient]);
 
   const updateRolePermissions = useCallback((targetRole: UserRole, newPerms: string[]) => {
     setRolePermissions((prev) => {

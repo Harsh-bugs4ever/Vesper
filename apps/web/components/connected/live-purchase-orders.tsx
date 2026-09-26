@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
@@ -770,3 +771,4 @@ export function LivePurchaseOrders() {
     </div>
   );
 }
+
