@@ -160,6 +160,20 @@ class DepartmentSnapshot(BaseModel):
     overdue_tasks: int
     completed_tasks_in_period: int
     attendance_today: int
+    # AI Workforce Predictions & Capacity
+    active_shift_name: str = "Morning Shift"
+    staff_needed_next_14d: list[int] = Field(default_factory=list)
+    avg_predicted_staff_daily: int = 0
+    # Inventory & Supplies
+    low_stock_items: int = 0
+    pending_requisitions: int = 0
+    budget_allocated: float = 0.0
+    budget_spent: float = 0.0
+    budget_remaining: float = 0.0
+    currency: str = "INR"
+    # Team Performance
+    team_rating: float = 4.8
+    sla_on_time_pct: int = 94
 
 
 class OverviewException(BaseModel):
