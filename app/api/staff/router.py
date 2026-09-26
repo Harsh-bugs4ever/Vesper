@@ -278,7 +278,11 @@ def claim(
     elif str(task.assignee_id) != principal.id:
         raise Forbidden("Task belongs to another staff member")
     return _detail(
-        service.claim_task(db, UUID(principal.property_id), task_id, UUID(principal.id))
+        service.claim_task(
+            db, UUID(principal.property_id), task_id, UUID(principal.id),
+            department_ids={UUID(item) for item in principal.department_ids},
+            can_claim_pool=principal.can(Perm.TASKS_POOL_READ),
+        )
     )
 
 
@@ -319,6 +323,8 @@ def set_status(
         actor_id=principal.id,
         note=body.note,
         allow_supervisor=principal.role in {Role.MANAGER, Role.GM},
+        department_ids=None if principal.role == Role.GM else
+            {UUID(item) for item in principal.department_ids},
     )
     return _detail(task)
 

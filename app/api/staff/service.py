@@ -339,15 +339,22 @@ def assign_task(db: Session, property_id: UUID, task_id: UUID, assignee_id: UUID
     return task
 
 
-def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID) -> Task:
+def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID, *,
+               department_ids: set[UUID] | None = None, can_claim_pool: bool = True) -> Task:
     """Staff app 'accept' button. First tap wins; the second gets a clear 409."""
     task = db.scalars(select(Task).where(Task.id == task_id, Task.property_id == property_id).with_for_update()).first()
     if task is None:
         raise NotFound("Task not found")
+    if department_ids is not None and task.department_id not in department_ids:
+        raise Forbidden("Task is outside your department")
     if task.status in {TaskStatus.DONE, TaskStatus.CANCELLED}:
         raise Conflict("That task is already closed")
     if task.assignee_id and task.assignee_id != user_id:
         raise Conflict("Somebody else already took this one")
+    if task.assignee_id is None and not can_claim_pool:
+        raise Forbidden("You cannot claim pool tasks")
+    if task.assignee_id == user_id and task.status == TaskStatus.IN_PROGRESS:
+        return task
     task.assignee_id = user_id
     task.status = TaskStatus.IN_PROGRESS
     task.accepted_at = task.accepted_at or utcnow()
@@ -361,11 +368,17 @@ def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID) -> 
 
 def update_status(
     db: Session, property_id: UUID, task_id: UUID, new_status: str, *, actor_id: str, note: str | None = None,
-    allow_supervisor: bool = False,
+    allow_supervisor: bool = False, department_ids: set[UUID] | None = None,
 ) -> Task:
     task = db.scalars(select(Task).where(Task.id == task_id, Task.property_id == property_id).with_for_update()).first()
     if task is None:
         raise NotFound("Task not found")
+    if department_ids is not None and task.department_id not in department_ids:
+        raise Forbidden("Task is outside your department")
+    if task.status == TaskStatus.DONE and new_status == TaskStatus.DONE and (
+        allow_supervisor or str(task.completed_by) == actor_id
+    ):
+        return task
     if task.status in {TaskStatus.DONE, TaskStatus.CANCELLED}:
         raise Conflict("That task is already closed")
     if not allow_supervisor and str(task.assignee_id) != actor_id:

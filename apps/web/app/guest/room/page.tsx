@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, QrCode, RefreshCw, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  LogOut,
+  Minus,
+  Plus,
+  RefreshCw,
+  ShoppingBag,
+  Sparkles,
+  UtensilsCrossed,
+} from "lucide-react";
 import { api, auth, guestTokens, type GuestSession } from "@/lib/api";
 import { GuestAmenitiesSection } from "@/components/guest/guest-amenities-section";
 import { GuestAiConciergeDrawer } from "@/components/guest/guest-ai-concierge-drawer";
@@ -30,86 +41,10 @@ type Request = {
   total_amount: number;
   due_at: string;
   rating: number | null;
-  items: { menu_item_id: string; quantity: number }[];
+  items: { menu_item_id: string; name?: string; quantity: number; unit_price?: number }[];
 };
 
 const SESSION_KEY = "vesper_guest_room";
-
-const FALLBACK_MENU: Menu = {
-  currency: "INR",
-  categories: {
-    all_day_dining: [
-      {
-        id: "menu-1",
-        name: "Mumbai Club Sandwich",
-        description: "Triple-layer toasted sourdough, smoked chicken, fried egg, aged cheddar, crisp iceberg",
-        price: 650,
-        is_veg: false,
-        is_available: true,
-      },
-      {
-        id: "menu-2",
-        name: "Paneer Tikka Kathi Roll",
-        description: "Clay-oven roasted cottage cheese, bell peppers, mint & pomegranate chutney",
-        price: 520,
-        is_veg: true,
-        is_available: true,
-      },
-      {
-        id: "menu-3",
-        name: "Dal Vesper & Butter Naan",
-        description: "Slow-simmered 24-hour black lentils with churned butter and warm tandoori naan",
-        price: 580,
-        is_veg: true,
-        is_available: true,
-      },
-    ],
-    refreshments: [
-      {
-        id: "menu-4",
-        name: "Fresh Tender Coconut Water",
-        description: "Served chilled in natural shell with tender coconut malai",
-        price: 220,
-        is_veg: true,
-        is_available: true,
-      },
-      {
-        id: "menu-5",
-        name: "Kullad Masala Chai Pot",
-        description: "Slow-brewed Assam CTC with hand-crushed ginger, cardamom and lemongrass",
-        price: 180,
-        is_veg: true,
-        is_available: true,
-      },
-      {
-        id: "menu-6",
-        name: "Cold-Pressed Watermelon Juice",
-        description: "Fresh organic watermelon, Persian mint, Himalayan pink salt, touch of lime",
-        price: 280,
-        is_veg: true,
-        is_available: true,
-      },
-    ],
-    desserts: [
-      {
-        id: "menu-7",
-        name: "Warm Valrhona Chocolate Fondant",
-        description: "Molten dark chocolate core, Madagascar vanilla bean gelato",
-        price: 420,
-        is_veg: true,
-        is_available: true,
-      },
-      {
-        id: "menu-8",
-        name: "Saffron Angoori Jamun",
-        description: "Warm baby dumplings in saffron & rose water syrup with pistachio slivers",
-        price: 320,
-        is_veg: true,
-        is_available: true,
-      },
-    ],
-  },
-};
 
 export default function GuestRoomPage() {
   const [session, setSession] = useState<GuestSession | null>(null);
@@ -119,7 +54,6 @@ export default function GuestRoomPage() {
   const [note, setNote] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [orderNote, setOrderNote] = useState("");
-  const [localRequests, setLocalRequests] = useState<Request[]>([]);
   const client = useQueryClient();
 
   useEffect(() => {
@@ -144,7 +78,7 @@ export default function GuestRoomPage() {
             setSessionError(
               error instanceof Error
                 ? error.message
-                : "This room code could not be opened."
+                : "This room session could not be opened. Stay may have expired or checked out."
             );
           }
         })
@@ -180,7 +114,7 @@ export default function GuestRoomPage() {
     queryKey: key,
     enabled: !!session,
     queryFn: () => api.get<Request[]>("/guest/requests"),
-    refetchInterval: 10_000,
+    refetchInterval: 5_000,
     retry: 1,
   });
 
@@ -190,23 +124,7 @@ export default function GuestRoomPage() {
       note?: string;
       items?: { menu_item_id: string; quantity: number }[];
     }) => {
-      try {
-        return await api.post<Request>("/guest/requests", body);
-      } catch {
-        // Fallback simulated request record so offline demo works smoothly
-        const newReq: Request = {
-          id: `req-${Date.now()}`,
-          kind: body.kind,
-          status: "raised",
-          note: body.note || null,
-          total_amount: (body.items || []).reduce((sum, item) => sum + item.quantity * 250, 0),
-          due_at: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
-          rating: null,
-          items: body.items || [],
-        };
-        setLocalRequests((prev) => [newReq, ...prev]);
-        return newReq;
-      }
+      return await api.post<Request>("/guest/requests", body);
     },
     onSuccess: () => {
       client.invalidateQueries({ queryKey: key });
@@ -218,14 +136,7 @@ export default function GuestRoomPage() {
 
   const rate = useMutation({
     mutationFn: async ({ id, rating }: { id: string; rating: number }) => {
-      try {
-        return await api.post<Request>(`/guest/requests/${id}/rating`, { rating });
-      } catch {
-        setLocalRequests((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, rating } : r))
-        );
-        return { id, rating } as unknown as Request;
-      }
+      return await api.post<Request>(`/guest/requests/${id}/rating`, { rating });
     },
     onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
@@ -236,29 +147,27 @@ export default function GuestRoomPage() {
     setSession(null);
   };
 
-  const activeMenu =
-    menu.data && Object.keys(menu.data.categories || {}).length > 0
-      ? menu.data
-      : FALLBACK_MENU;
+  const isSessionTerminated =
+    (requests.error &&
+      (requests.error.message.includes("403") ||
+        requests.error.message.toLowerCase().includes("checked out") ||
+        requests.error.message.toLowerCase().includes("ended"))) ||
+    (menu.error &&
+      (menu.error.message.includes("403") ||
+        menu.error.message.toLowerCase().includes("checked out") ||
+        menu.error.message.toLowerCase().includes("ended")));
 
-  const items = Object.values(activeMenu.categories ?? {}).flat();
+  const menuCategories = menu.data?.categories ?? {};
+  const allMenuItems = Object.values(menuCategories).flat();
+
   const cartItems = Object.entries(cart)
     .filter(([, quantity]) => quantity > 0)
     .map(([id, quantity]) => ({ menu_item_id: id, quantity }));
-  const total = cartItems.reduce(
-    (sum, line) =>
-      sum +
-      Number(items.find((item) => item.id === line.menu_item_id)?.price ?? 0) *
-        line.quantity,
-    0
-  );
 
-  const displayRequests = [
-    ...(requests.data ?? []),
-    ...localRequests.filter(
-      (lr) => !(requests.data ?? []).some((r) => r.id === lr.id)
-    ),
-  ];
+  const cartTotal = cartItems.reduce((sum, line) => {
+    const item = allMenuItems.find((i) => i.id === line.menu_item_id);
+    return sum + Number(item?.price ?? 0) * line.quantity;
+  }, 0);
 
   if (opening) {
     return (
@@ -268,7 +177,7 @@ export default function GuestRoomPage() {
       >
         <div className="flex flex-col items-center gap-3">
           <RefreshCw className="h-6 w-6 animate-spin text-sage-700" />
-          <p className="text-sm font-medium">Opening your guest room portal…</p>
+          <p className="text-sm font-medium">Connecting to your verified room session…</p>
         </div>
       </main>
     );
@@ -305,7 +214,7 @@ export default function GuestRoomPage() {
                 {session.guest_name
                   ? `Good to have you here, ${session.guest_name}. `
                   : ""}
-                What can we help with today?
+                Your verified stay is active. What can we assist you with today?
               </p>
             </div>
 
@@ -319,6 +228,29 @@ export default function GuestRoomPage() {
             </button>
           </div>
         </header>
+
+        {/* Stay Ended or Checked Out Alert */}
+        {isSessionTerminated && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800"
+          >
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+            <div className="text-xs">
+              <p className="font-semibold text-sm">Stay Checked Out or Session Expired</p>
+              <p className="mt-1 text-rose-700">
+                This room stay has been checked out by the front desk. In-room services and requests are only available during an active stay.
+              </p>
+              <button
+                type="button"
+                onClick={handleLeaveSession}
+                className="mt-2 font-medium underline hover:text-rose-950"
+              >
+                Return to QR scanner
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Request a Service Section */}
         <section
@@ -334,25 +266,26 @@ export default function GuestRoomPage() {
             className="mt-5 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
+              if (create.isPending) return;
               create.mutate({ kind, note: note.trim() || undefined });
             }}
           >
             <label className="block text-sm font-medium text-sage-800">
-              Service
+              Service Category
               <select
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
                 className="mt-1.5 block w-full rounded-xl border border-sand-300 bg-white px-3.5 py-2.5 text-sm text-sage-950 shadow-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
               >
-                <option value="housekeeping">Housekeeping · Fresh Linens & Cleaning</option>
-                <option value="amenities">Amenities · Extra Towels & Toiletries</option>
-                <option value="maintenance">Maintenance · AC, Lighting or Plumbing</option>
-                <option value="other">Something else · Front Desk Assistance</option>
+                <option value="housekeeping">Housekeeping · Fresh Linens & Room Refresh</option>
+                <option value="amenities">Amenities · Extra Towels & Luxury Toiletries</option>
+                <option value="maintenance">Maintenance · AC, Lighting, or Plumbing</option>
+                <option value="other">Front Desk · Luggage, Concierge, or Inquiries</option>
               </select>
             </label>
 
             <label className="block text-sm font-medium text-sage-800">
-              Details
+              Instructions or Details
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
@@ -365,12 +298,23 @@ export default function GuestRoomPage() {
 
             <button
               type="submit"
-              disabled={create.isPending}
+              disabled={create.isPending || !!isSessionTerminated}
               className="rounded-xl bg-sage-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-sage-900 disabled:opacity-50"
             >
-              {create.isPending ? "Sending…" : "Send request"}
+              {create.isPending ? "Submitting request…" : "Send request"}
             </button>
           </form>
+
+          {create.isError && (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700"
+            >
+              {create.error instanceof Error
+                ? create.error.message
+                : "Could not submit your request."}
+            </p>
+          )}
         </section>
 
         {/* Room Service Menu Section */}
@@ -379,132 +323,170 @@ export default function GuestRoomPage() {
           aria-labelledby="menu-heading"
         >
           <div className="flex items-center justify-between">
-            <h2 id="menu-heading" className="font-serif text-2xl text-sage-950">
-              Room service
-            </h2>
-            <span className="text-xs uppercase tracking-wider text-sand-500">
-              24-Hour Dining
+            <div>
+              <h2 id="menu-heading" className="font-serif text-2xl text-sage-950">
+                In-room dining
+              </h2>
+              <p className="text-xs text-sand-600">Freshly prepared and delivered to your door</p>
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-sage-800 bg-sand-100 px-2.5 py-1 rounded-full">
+              Kitchen Live
             </span>
           </div>
 
-          <div className="mt-6 space-y-6">
-            {Object.entries(activeMenu.categories).map(([category, categoryItems]) => (
-              <div key={category} className="space-y-3">
-                <h3 className="border-b border-sand-200 pb-1.5 text-xs font-semibold uppercase tracking-wider text-sage-800">
-                  {category.replaceAll("_", " ")}
-                </h3>
-                <div className="divide-y divide-sand-100">
-                  {categoryItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-4 py-3.5"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-sage-950">
-                          {item.name}{" "}
-                          {item.is_veg && (
-                            <span className="ml-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
-                              Veg
-                            </span>
-                          )}
-                        </p>
-                        {item.description && (
-                          <p className="mt-1 max-w-md text-xs text-sand-600">
-                            {item.description}
-                          </p>
-                        )}
-                        <p className="mt-1 font-mono text-xs font-semibold text-sage-900">
-                          ₹{Number(item.price).toLocaleString("en-IN")}
-                        </p>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label={`Remove one ${item.name}`}
-                          disabled={!cart[item.id]}
-                          onClick={() =>
-                            setCart((value) => ({
-                              ...value,
-                              [item.id]: Math.max(0, (value[item.id] ?? 0) - 1),
-                            }))
-                          }
-                          className="h-8 w-8 rounded-lg border border-sand-300 bg-sand-50 text-sm font-semibold transition hover:bg-sand-100 disabled:opacity-40"
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center text-sm font-semibold tabular-nums text-sage-950">
-                          {cart[item.id] ?? 0}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Add one ${item.name}`}
-                          disabled={!item.is_available || (cart[item.id] ?? 0) >= 20}
-                          onClick={() =>
-                            setCart((value) => ({
-                              ...value,
-                              [item.id]: (value[item.id] ?? 0) + 1,
-                            }))
-                          }
-                          className="h-8 w-8 rounded-lg border border-sand-300 bg-sand-50 text-sm font-semibold transition hover:bg-sand-100 disabled:opacity-40"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 border-t border-sand-200 pt-5">
-            <label className="block text-sm font-medium text-sage-800">
-              Kitchen or Dietary Notes
-              <input
-                value={orderNote}
-                onChange={(event) => setOrderNote(event.target.value)}
-                maxLength={500}
-                placeholder="Special instructions (e.g. less spice, cutlery for 2)..."
-                className="mt-1.5 block w-full rounded-xl border border-sand-300 px-3.5 py-2 text-sm shadow-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
-              />
-            </label>
-
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-base font-medium text-sage-950">
-                Subtotal:{" "}
-                <strong className="font-serif text-lg font-bold">
-                  ₹{total.toLocaleString("en-IN")}
-                </strong>
+          {menu.isLoading ? (
+            <div className="mt-8 flex flex-col items-center justify-center gap-2 py-8 text-sand-500">
+              <RefreshCw className="h-6 w-6 animate-spin text-sage-700" />
+              <p className="text-xs font-medium">Loading live kitchen menu & availability…</p>
+            </div>
+          ) : menu.isError ? (
+            <div className="mt-6 rounded-2xl bg-rose-50 p-4 text-center text-xs text-rose-700">
+              <UtensilsCrossed className="mx-auto mb-1 h-5 w-5" />
+              <p className="font-semibold">Unable to load dining menu</p>
+              <p className="mt-1">
+                {menu.error instanceof Error
+                  ? menu.error.message
+                  : "Please contact room service via Front Desk."}
               </p>
               <button
                 type="button"
-                disabled={cartItems.length === 0 || create.isPending}
-                onClick={() =>
-                  create.mutate({
-                    kind: "room_service",
-                    note: orderNote.trim() || undefined,
-                    items: cartItems,
-                  })
-                }
-                className="rounded-xl bg-sage-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-sage-900 disabled:opacity-50"
+                onClick={() => menu.refetch()}
+                className="mt-2 font-medium underline hover:text-rose-900"
               >
-                {create.isPending ? "Ordering…" : "Place order"}
+                Retry Loading Menu
               </button>
             </div>
-          </div>
-        </section>
+          ) : Object.keys(menuCategories).length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-sand-200 bg-sand-50/50 p-6 text-center text-xs text-sand-600">
+              <UtensilsCrossed className="mx-auto mb-1.5 h-6 w-6 text-sand-400" />
+              <p className="font-medium text-sage-900">No menu items currently available</p>
+              <p className="mt-1">The kitchen is currently updating today&apos;s culinary offerings.</p>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-6">
+              {Object.entries(menuCategories).map(([category, items]) => (
+                <div key={category} className="space-y-3">
+                  <h3 className="border-b border-sand-200 pb-1.5 text-xs font-semibold uppercase tracking-wider text-sage-800">
+                    {category.replaceAll("_", " ")}
+                  </h3>
+                  <div className="divide-y divide-sand-100">
+                    {items.map((item) => {
+                      const isSoldOut = !item.is_available;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-4 py-3.5"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <p
+                                className={cn(
+                                  "text-sm font-medium",
+                                  isSoldOut ? "text-sand-500 line-through" : "text-sage-950"
+                                )}
+                              >
+                                {item.name}
+                              </p>
+                              {item.is_veg && (
+                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 border border-emerald-200">
+                                  Veg
+                                </span>
+                              )}
+                              {isSoldOut && (
+                                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 border border-rose-200">
+                                  Sold Out
+                                </span>
+                              )}
+                            </div>
+                            {item.description && (
+                              <p className="max-w-md text-xs text-sand-600">
+                                {item.description}
+                              </p>
+                            )}
+                            <p className="font-mono text-xs font-semibold text-sage-900">
+                              ₹{Number(item.price).toLocaleString("en-IN")}
+                            </p>
+                          </div>
 
-        {create.isError && (
-          <p
-            role="alert"
-            className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-700"
-          >
-            {create.error instanceof Error
-              ? create.error.message
-              : "Could not send your request."}
-          </p>
-        )}
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              aria-label={`Remove one ${item.name}`}
+                              disabled={!cart[item.id] || isSoldOut}
+                              onClick={() =>
+                                setCart((value) => ({
+                                  ...value,
+                                  [item.id]: Math.max(0, (value[item.id] ?? 0) - 1),
+                                }))
+                              }
+                              className="h-8 w-8 rounded-lg border border-sand-300 bg-sand-50 text-sm font-semibold transition hover:bg-sand-100 disabled:opacity-40"
+                            >
+                              −
+                            </button>
+                            <span className="w-6 text-center text-sm font-semibold tabular-nums text-sage-950">
+                              {cart[item.id] ?? 0}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Add one ${item.name}`}
+                              disabled={isSoldOut || (cart[item.id] ?? 0) >= 20}
+                              onClick={() =>
+                                setCart((value) => ({
+                                  ...value,
+                                  [item.id]: (value[item.id] ?? 0) + 1,
+                                }))
+                              }
+                              className="h-8 w-8 rounded-lg border border-sand-300 bg-sand-50 text-sm font-semibold transition hover:bg-sand-100 disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div className="mt-6 border-t border-sand-200 pt-5">
+                <label className="block text-sm font-medium text-sage-800">
+                  Kitchen Notes & Dietary Preferences
+                  <input
+                    value={orderNote}
+                    onChange={(event) => setOrderNote(event.target.value)}
+                    maxLength={500}
+                    placeholder="Dietary requests (e.g. less spice, extra napkins, cutlery for 2)..."
+                    className="mt-1.5 block w-full rounded-xl border border-sand-300 px-3.5 py-2 text-sm shadow-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
+                  />
+                </label>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-base font-medium text-sage-950">
+                    Subtotal:{" "}
+                    <strong className="font-serif text-lg font-bold">
+                      ₹{cartTotal.toLocaleString("en-IN")}
+                    </strong>
+                  </p>
+                  <button
+                    type="button"
+                    disabled={cartItems.length === 0 || create.isPending || !!isSessionTerminated}
+                    onClick={() => {
+                      if (create.isPending) return;
+                      create.mutate({
+                        kind: "room_service",
+                        note: orderNote.trim() || undefined,
+                        items: cartItems,
+                      });
+                    }}
+                    className="rounded-xl bg-sage-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-sage-900 disabled:opacity-50"
+                  >
+                    {create.isPending ? "Submitting order…" : "Place order"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Requests Tracker Section */}
         <section
@@ -512,9 +494,12 @@ export default function GuestRoomPage() {
           aria-labelledby="requests-heading"
         >
           <div className="flex items-center justify-between">
-            <h2 id="requests-heading" className="font-serif text-2xl text-sage-950">
-              Your requests
-            </h2>
+            <div>
+              <h2 id="requests-heading" className="font-serif text-2xl text-sage-950">
+                Your requests & orders
+              </h2>
+              <p className="text-xs text-sand-500">Live backend sync every 5s</p>
+            </div>
             <button
               type="button"
               onClick={() => requests.refetch()}
@@ -525,36 +510,83 @@ export default function GuestRoomPage() {
             </button>
           </div>
 
-          {displayRequests.length > 0 ? (
+          {requests.isLoading ? (
+            <div className="mt-4 flex items-center justify-center gap-2 py-6 text-xs text-sand-500">
+              <RefreshCw className="h-4 w-4 animate-spin text-sage-700" />
+              <span>Loading orders…</span>
+            </div>
+          ) : (requests.data && requests.data.length > 0) ? (
             <ul className="mt-5 divide-y divide-sand-200">
-              {displayRequests.map((request) => (
-                <li key={request.id} className="py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold capitalize text-sage-950">
-                      {request.kind.replaceAll("_", " ")}
-                    </p>
-                    <span className="rounded-full bg-sand-100 px-2.5 py-0.5 text-xs font-medium capitalize text-sage-800">
-                      {request.status.replaceAll("_", " ")}
-                    </span>
-                  </div>
-                  {request.note && (
-                    <p className="mt-1 text-xs text-sand-700">{request.note}</p>
-                  )}
-                  <p className="mt-1 text-xs text-sand-500">
-                    Due{" "}
-                    {new Date(request.due_at).toLocaleTimeString("en-IN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {Number(request.total_amount) > 0
-                      ? ` · ₹${Number(request.total_amount).toLocaleString("en-IN")}`
-                      : ""}
-                  </p>
+              {requests.data.map((request) => {
+                const statusColor =
+                  request.status === "delivered"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : request.status === "accepted" || request.status === "in_progress"
+                    ? "bg-blue-50 text-blue-800 border-blue-200"
+                    : request.status === "cancelled"
+                    ? "bg-sand-100 text-sand-600 border-sand-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200";
 
-                  {(request.status === "delivered" || request.status === "done") &&
-                    request.rating == null && (
+                const statusLabel =
+                  request.status === "delivered"
+                    ? "Delivered & Complete"
+                    : request.status === "accepted"
+                    ? "Accepted by Staff"
+                    : request.status === "in_progress"
+                    ? "In Progress"
+                    : request.status === "cancelled"
+                    ? "Cancelled"
+                    : "Received · In Queue";
+
+                return (
+                  <li key={request.id} className="py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold capitalize text-sage-950">
+                          {request.kind.replaceAll("_", " ")}
+                        </p>
+                        <span className="text-[10px] font-mono text-sand-500">
+                          #{request.id.slice(0, 8)}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-medium border",
+                          statusColor
+                        )}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    {request.items && request.items.length > 0 && (
+                      <p className="mt-1 text-xs font-medium text-sage-800">
+                        {request.items
+                          .map((i) => `${i.name || "Item"} ×${i.quantity}`)
+                          .join(", ")}
+                      </p>
+                    )}
+
+                    {request.note && (
+                      <p className="mt-1 text-xs text-sand-700">{request.note}</p>
+                    )}
+
+                    <div className="mt-1 flex items-center gap-3 text-xs text-sand-500">
+                      <span>
+                        Due{" "}
+                        {new Date(request.due_at).toLocaleTimeString("en-IN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {Number(request.total_amount) > 0 && (
+                        <span>· ₹{Number(request.total_amount).toLocaleString("en-IN")}</span>
+                      )}
+                    </div>
+
+                    {request.status === "delivered" && request.rating == null && (
                       <div className="mt-3 flex items-center gap-2">
-                        <span className="text-xs text-sand-600">Rate service:</span>
+                        <span className="text-xs font-medium text-sand-700">Rate service:</span>
                         <div className="flex gap-1.5" role="group" aria-label="Rate service">
                           {[1, 2, 3, 4, 5].map((rating) => (
                             <button
@@ -571,23 +603,24 @@ export default function GuestRoomPage() {
                       </div>
                     )}
 
-                  {request.rating != null && (
-                    <p className="mt-2 text-xs font-medium text-amber-600">
-                      Your rating: {request.rating}/5 ★
-                    </p>
-                  )}
-                </li>
-              ))}
+                    {request.rating != null && (
+                      <p className="mt-2 text-xs font-medium text-amber-600">
+                        Your rating: {request.rating}/5 ★
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <p className="mt-4 text-sm text-sand-600">No requests yet.</p>
+            <p className="mt-4 text-sm text-sand-600">No requests placed during this stay yet.</p>
           )}
 
           {rate.isError && (
-            <p role="alert" className="mt-3 text-xs text-rose-700">
+            <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
               {rate.error instanceof Error
                 ? rate.error.message
-                : "Could not save rating."}
+                : "Could not submit rating."}
             </p>
           )}
         </section>

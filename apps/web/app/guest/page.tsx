@@ -362,11 +362,11 @@ export default function GuestPage() {
           });
         });
     } else {
-      setOrderStage("success");
+      setOrderStage("menu");
       showToast({
         title: "Guest Session Required",
         description: "Please scan your nightstand QR code to transmit orders to the kitchen.",
-        type: "default",
+        type: "warning",
       });
     }
   };
