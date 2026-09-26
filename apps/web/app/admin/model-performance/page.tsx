@@ -1,331 +1,224 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  BedDouble,
-  CalendarRange,
+  BrainCircuit,
   CheckCircle2,
-  CircleAlert,
-  Crosshair,
+  Clock,
+  Gauge,
   LineChart as LineChartIcon,
   Percent,
   RefreshCw,
-  Star,
+  ShieldAlert,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 
-import { MiniStat } from "@/components/ui/mini-stat";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { PeriodSelect } from "@/components/ui/period-select";
+import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { axisProps, chartColors, gridProps, tooltipProps } from "@/lib/chart-theme";
-import {
-  ACCURACY_TOLERANCE,
-  accuracy,
-  engines,
-  keyMetrics,
-  lastUpdated,
-  outcomes,
-} from "@/lib/demo/model-performance";
+import { useAuth } from "@/components/auth/auth-context";
+import { learningApi, revenueApi, type LearningEngineReport } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const RANGES = ["1 Nov 2026 – 30 Nov 2026", "1 Oct 2026 – 31 Oct 2026", "Last 90 days"] as const;
-const OUTCOME_WINDOWS = ["Last 10 Days", "Last 30 Days", "Last 90 Days"] as const;
-
-/** A bar for a percentage, used for both confidence and acceptance. */
-function Meter({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs text-sand-600">{label}</span>
-        <span className="text-sm font-semibold tabular-nums text-sand-950">{value}%</span>
-      </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-sand-100">
-        <div
-          className={cn(
-            "h-full rounded-full",
-            value >= 80 ? "bg-sage-600" : value >= 65 ? "bg-gold-500" : "bg-rose-400"
-          )}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function ModelPerformancePage() {
-  const [range, setRange] = useState<string>(RANGES[0]);
-  const [window, setWindow] = useState<string>(OUTCOME_WINDOWS[0]);
+  const { user } = useAuth();
+  const isGm = user?.role === "general_manager";
 
-  const withinTarget = keyMetrics.meanAbsoluteError <= keyMetrics.maeTarget;
+  // 1. Fetch live engine learning statistics
+  const {
+    data: engineReports = [],
+    isLoading: learningLoading,
+    isError: learningError,
+    refetch: refetchLearning,
+  } = useQuery({
+    queryKey: ["admin-model-perf", user?.propertyId],
+    enabled: isGm,
+    queryFn: () => learningApi.list(),
+  });
+
+  // 2. Fetch live revenue forecast to inspect model name & confidence
+  const { data: forecastData = [], isLoading: forecastLoading } = useQuery({
+    queryKey: ["admin-forecast-meta", user?.propertyId],
+    enabled: isGm,
+    queryFn: () => revenueApi.forecast(30),
+  });
+
+  const activeForecast = forecastData[0];
+
+  if (!isGm) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="AI Model Performance"
+          description="Verification metrics, forecast confidence, and Bayesian drift monitoring."
+        />
+        <div className="rounded-3xl border border-sand-200 bg-white p-12 text-center shadow-xs">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <h2 className="mt-4 font-serif text-2xl font-bold text-sand-950">
+            Executive Access Required
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-sand-600">
+            Detailed statistical performance indicators and model calibration metrics are restricted strictly to General Management.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        title="Model Performance"
-        description="Track how our models perform and drive better decisions."
+        title="AI Model Performance & Calibration"
+        description="Factual accuracy tracking from backend decision scoring and Prophet/XGBoost revenue modeling."
         actions={
-          <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white py-1 pl-3 pr-1">
-            <CalendarRange className="h-4 w-4 shrink-0 text-sand-500" />
-            <PeriodSelect
-              value={range}
-              onChange={setRange}
-              options={RANGES}
-              className="[&>select]:border-0 [&>select]:bg-transparent"
-            />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => refetchLearning()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-200 bg-white px-3.5 py-2 text-xs font-semibold text-sand-700 shadow-xs hover:bg-sand-50"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", learningLoading && "animate-spin")} />
+              <span>Refresh Metrics</span>
+            </button>
           </div>
         }
       />
 
-      <div className="flex flex-wrap items-center justify-end gap-4 text-xs text-sand-500">
-        <span>Models are retrained weekly with latest data.</span>
-        <span className="flex items-center gap-2 border-l border-sand-200 pl-4">
-          <RefreshCw className="h-3.5 w-3.5 text-sand-400" />
-          <span>
-            <span className="block text-sand-700">Last updated</span>
-            <span className="block">{lastUpdated}</span>
-          </span>
-        </span>
+      {/* Model Overview Summary Tiles */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-sand-200 bg-white p-5 shadow-xs">
+          <span className="text-xs text-sand-500 font-medium">Revenue Forecast Model</span>
+          <p className="mt-1 font-serif text-xl font-bold text-sand-950">
+            {forecastLoading ? "…" : activeForecast?.model_name ?? "Prophet + XGBoost"}
+          </p>
+          <p className="mt-1 text-xs text-sand-500">
+            Horizon: 30 days · Confidence:{" "}
+            <span className="font-mono font-semibold text-sage-800">
+              {activeForecast ? `${Math.round(activeForecast.confidence * 100)}%` : "—"}
+            </span>
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-sand-200 bg-white p-5 shadow-xs">
+          <span className="text-xs text-sand-500 font-medium">Monitored Decision Engines</span>
+          <p className="mt-1 font-mono text-2xl font-bold text-sage-800">
+            {learningLoading ? "…" : engineReports.length}
+          </p>
+          <p className="mt-1 text-xs text-sand-500">Active autonomous recommenders</p>
+        </div>
+
+        <div className="rounded-2xl border border-sand-200 bg-white p-5 shadow-xs">
+          <span className="text-xs text-sand-500 font-medium">Average Engine Accuracy</span>
+          <p className="mt-1 font-mono text-2xl font-bold text-emerald-700">
+            {learningLoading
+              ? "…"
+              : engineReports.length > 0
+              ? `${Math.round(
+                  engineReports.reduce((s, r) => s + r.accuracy_pct, 0) / engineReports.length
+                )}%`
+              : "—"}
+          </p>
+          <p className="mt-1 text-xs text-sand-500">Verified by post-execution outcome scoring</p>
+        </div>
       </div>
 
-      {/* Engines */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {engines.map((engine) => (
-          <Panel key={engine.id} className="flex flex-col">
-            <PanelBody className="flex flex-1 flex-col gap-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sage-50 text-sage-700">
-                  <LineChartIcon className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-serif text-base font-semibold leading-tight text-sand-950">
-                    {engine.name}
-                  </p>
-                  <p className="mt-0.5 text-xs text-sand-600">{engine.description}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Meter label="Confidence" value={engine.confidence} />
-                <Meter label="Acceptance Rate" value={engine.acceptanceRate} />
-              </div>
-
-              <button className="mt-auto flex items-center justify-end gap-1 text-xs font-medium text-sage-700 transition-colors hover:text-sage-900">
-                View Details
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </PanelBody>
-          </Panel>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
-        <Panel>
-          <PanelHeader
-            title="Occupancy Prediction vs Actual"
-            description={`Last 30 days (${range})`}
-            action={
-              <div className="flex items-center gap-4 pt-1 text-xs text-sand-600">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-forest-600" />
-                  Predicted Occupancy
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-gold-500" />
-                  Actual Occupancy
-                </span>
-              </div>
-            }
-          />
-          <PanelBody className="pt-4">
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={accuracy} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="date" {...axisProps} interval="preserveStartEnd" minTickGap={28} />
-                <YAxis
-                  {...axisProps}
-                  domain={[0, 100]}
-                  ticks={[0, 20, 40, 60, 80, 100]}
-                  width={44}
-                  tickFormatter={(value: number) => `${value}`}
-                />
-                <Tooltip
-                  {...tooltipProps}
-                  formatter={(value: unknown, name: unknown) => [
-                    `${value as number}%`,
-                    name === "predicted" ? "Predicted" : "Actual",
-                  ]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="predicted"
-                  stroke={chartColors.forest}
-                  strokeWidth={2}
-                  dot={{ r: 2.5, fill: chartColors.forest, strokeWidth: 0 }}
-                  activeDot={{ r: 5 }}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="actual"
-                  stroke={chartColors.gold}
-                  strokeWidth={2}
-                  dot={{ r: 2.5, fill: chartColors.gold, strokeWidth: 0 }}
-                  activeDot={{ r: 5 }}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </PanelBody>
-        </Panel>
-
-        <Panel>
-          <PanelHeader title="Key Metrics (30 Days)" />
-          <PanelBody className="space-y-3 pt-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <MiniStat
-                label="Avg. Occupancy (Actual)"
-                value={`${keyMetrics.avgActual}%`}
-                tone="sage"
-                icon={BedDouble}
-              />
-              <MiniStat
-                label="Avg. Occupancy (Predicted)"
-                value={`${keyMetrics.avgPredicted}%`}
-                tone="gold"
-                icon={LineChartIcon}
-              />
-              <MiniStat
-                label="Mean Absolute Error (MAE)"
-                value={`${keyMetrics.meanAbsoluteError}%`}
-                tone="sand"
-                icon={Percent}
-              />
-              <MiniStat
-                label="R² Score"
-                value={keyMetrics.rSquared}
-                tone="sage"
-                icon={Crosshair}
-              />
-            </div>
-
-            <div
-              className={cn(
-                "flex items-start gap-3 rounded-xl border p-4",
-                withinTarget
-                  ? "border-gold-200 bg-gold-50/50"
-                  : "border-rose-200 bg-rose-50/50"
-              )}
-            >
-              {withinTarget ? (
-                <Star className="mt-0.5 h-5 w-5 shrink-0 fill-gold-400 text-gold-500" />
-              ) : (
-                <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
-              )}
-              <div>
-                <p className="text-sm font-medium text-sand-950">
-                  {withinTarget
-                    ? "Model accuracy is within target range."
-                    : "Model accuracy is outside the target range."}
-                </p>
-                <p className="mt-0.5 text-xs text-sand-600">
-                  {withinTarget
-                    ? "Predictions are aligning well with actual demand."
-                    : `MAE of ${keyMetrics.meanAbsoluteError}% exceeds the ${keyMetrics.maeTarget}% target. Treat rate suggestions with more caution until it recovers.`}
-                </p>
-              </div>
-            </div>
-          </PanelBody>
-        </Panel>
-      </div>
-
+      {/* Engine Metrics Table */}
       <Panel>
         <PanelHeader
-          title="Recent Prediction Outcomes"
-          description={window}
-          action={<PeriodSelect value={window} onChange={setWindow} options={OUTCOME_WINDOWS} />}
+          title="Engine Accuracy & Acceptance Telemetry"
+          description="Live metrics computed directly by the learning service."
         />
-        <PanelBody className="pt-4">
-          <Table>
-            <THead>
-              <tr>
-                <TH>Date</TH>
-                <TH align="right">Predicted Occupancy</TH>
-                <TH align="right">Actual Occupancy</TH>
-                <TH align="right">Difference</TH>
-                <TH align="right">Predicted Rev (₹)</TH>
-                <TH align="right">Actual Rev (₹)</TH>
-                <TH align="right">Outcome</TH>
-              </tr>
-            </THead>
-            <TBody>
-              {outcomes.map((row) => {
-                const difference = row.actualOccupancy - row.predictedOccupancy;
-                const accurate = Math.abs(difference) <= ACCURACY_TOLERANCE;
+        <PanelBody className="p-0">
+          {learningLoading ? (
+            <p role="status" className="p-8 text-center text-sm text-sand-500">
+              Loading model performance telemetry…
+            </p>
+          ) : learningError ? (
+            <div className="p-8 text-center">
+              <p role="alert" className="text-sm text-rose-700">
+                Failed to load engine performance records.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchLearning()}
+                className="mt-3 text-xs"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : engineReports.length === 0 ? (
+            <p className="p-8 text-center text-sm text-sand-500">
+              No engine telemetry records available for this property yet.
+            </p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Engine</TH>
+                  <TH className="text-center">Recommendations</TH>
+                  <TH className="text-center">Approved</TH>
+                  <TH className="text-center">Dismissed</TH>
+                  <TH className="text-center">Acceptance Rate</TH>
+                  <TH className="text-center">Accuracy</TH>
+                  <TH className="text-center">Mean Confidence</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {engineReports.map((report) => {
+                  const acceptancePct =
+                    report.cards_created > 0
+                      ? Math.round((report.approved / report.cards_created) * 100)
+                      : 0;
 
-                return (
-                  <TR key={row.date}>
-                    <TD className="text-sand-700">{row.date}</TD>
-                    <TD align="right" className="text-sand-800">
-                      {row.predictedOccupancy}%
-                    </TD>
-                    <TD align="right" className="text-sand-800">
-                      {row.actualOccupancy}%
-                    </TD>
-                    <TD
-                      align="right"
-                      className={cn(
-                        "font-medium",
-                        difference > 0 ? "text-emerald-700" : difference < 0 ? "text-rose-600" : "text-sand-600"
-                      )}
-                    >
-                      {difference > 0 ? "+" : ""}
-                      {difference}%
-                    </TD>
-                    <TD align="right" className="text-sand-700">
-                      {row.predictedRevenue.toLocaleString("en-IN")}
-                    </TD>
-                    <TD align="right" className="text-sand-700">
-                      {row.actualRevenue.toLocaleString("en-IN")}
-                    </TD>
-                    <TD align="right">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                          accurate
-                            ? "border-sage-200 bg-sage-50 text-sage-800"
-                            : "border-gold-200 bg-gold-50 text-gold-800"
-                        )}
-                      >
-                        {accurate ? (
-                          <CheckCircle2 className="h-3 w-3" />
-                        ) : (
-                          <CircleAlert className="h-3 w-3" />
-                        )}
-                        {accurate ? "Accurate" : "Slight variance"}
-                      </span>
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
-
-          <p className="mt-4 text-xs text-sand-500">
-            &ldquo;Accurate&rdquo; means the prediction landed within {ACCURACY_TOLERANCE} percentage
-            points of what actually happened. The threshold is stated rather than implied, because
-            a label that grades its own homework is worth nothing.
-          </p>
+                  return (
+                    <TR key={report.engine}>
+                      <TD className="font-semibold text-sand-950">
+                        {report.display_name ?? report.engine.replaceAll("_", " ").toUpperCase()}
+                      </TD>
+                      <TD className="text-center font-mono text-xs tabular-nums">
+                        {report.cards_created}
+                      </TD>
+                      <TD className="text-center font-mono text-xs tabular-nums text-emerald-800">
+                        {report.approved}
+                      </TD>
+                      <TD className="text-center font-mono text-xs tabular-nums text-sand-500">
+                        {report.dismissed}
+                      </TD>
+                      <TD className="text-center font-mono text-xs font-semibold tabular-nums">
+                        {acceptancePct}%
+                      </TD>
+                      <TD className="text-center font-mono text-xs font-semibold tabular-nums text-sage-950">
+                        {Math.round(report.accuracy_pct)}%
+                      </TD>
+                      <TD className="text-center font-mono text-xs tabular-nums">
+                        {Math.round(report.average_confidence * 100)}%
+                      </TD>
+                      <TD>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize",
+                            report.status === "ready"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-amber-200 bg-amber-50 text-amber-800"
+                          )}
+                        >
+                          {report.status}
+                        </span>
+                      </TD>
+                    </TR>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
         </PanelBody>
       </Panel>
     </div>

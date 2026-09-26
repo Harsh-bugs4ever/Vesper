@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   AlertTriangle,
@@ -12,8 +13,11 @@ import {
   ChevronRight,
   Download,
   IndianRupee,
+  Loader2,
   MoreHorizontal,
+  Package,
   PackageSearch,
+  Plus,
   Search,
   ShoppingCart,
   TrendingDown,
@@ -25,104 +29,171 @@ import { FilterChips } from "@/components/ui/filter-chips";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { PeriodSelect } from "@/components/ui/period-select";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { formatLakh } from "@/lib/chart-theme";
-import {
-  STOCK_CATEGORIES,
-  SUPPLIER_FILTERS,
-  categoryTint,
-  stock as seedStock,
-  stockStatus,
-  stockStatusMeta,
-  type StockCategory,
-  type StockItem,
-  type StockStatus,
-} from "@/lib/demo/inventory";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AdminDepartmentRequisitions } from "@/components/connected/admin-department-requisitions";
 import { AdminDepartmentBudgets } from "@/components/connected/admin-department-budgets";
 
-type CategoryFilter = StockCategory | "all";
-const STATUS_OPTIONS = ["All Statuses", "In Stock", "Low Stock", "Expiring Soon", "Out of Stock"];
-const ITEMS_PER_PAGE = 10;
+export interface BackendStockItem {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+  unit_cost: number;
+  on_hand: number;
+  minimum: number;
+  expires_on: string | null;
+  department_id: string;
+  supplier?: string | null;
+  is_low: boolean;
+  days_to_expiry?: number | null;
+}
 
-type SortField = "name" | "category" | "onHand" | "minimum" | "expiresOn" | "status" | "lastUpdated";
+export interface InventorySummaryData {
+  total_items: number;
+  low_stock_items: number;
+  expiring_items: number;
+  total_valuation?: number;
+}
+
+const ITEMS_PER_PAGE = 10;
+type SortField = "name" | "category" | "on_hand" | "minimum" | "expires_on" | "is_low";
 type SortDirection = "asc" | "desc";
 
 export default function InventoryPage() {
-  const { showToast, showUndoToast } = useToast();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [stock, setStock] = useState<StockItem[]>(seedStock);
-  const [category, setCategory] = useState<CategoryFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
-  const [supplierFilter, setSupplierFilter] = useState<string>(SUPPLIER_FILTERS[0]);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("status");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortField, setSortField] = useState<SortField>("is_low");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-  const [movement, setMovement] = useState<{ item: StockItem; direction: "in" | "out" } | null>(null);
+  // Movement drawer state
+  const [movement, setMovement] = useState<{
+    item: BackendStockItem;
+    direction: "in" | "out";
+  } | null>(null);
   const [quantity, setQuantity] = useState("");
   const [activeTab, setActiveTab] = useState<"stock" | "requisitions" | "budgets">("stock");
+  const [movementNote, setMovementNote] = useState("");
 
-  // One "today" for the whole render, so every expiry is judged against the same instant.
-  const today = useMemo(() => new Date(), []);
+  // 1. Fetch live inventory summary
+  const { data: summary, isLoading: sumLoading } = useQuery<InventorySummaryData>({
+    queryKey: ["inventory-summary"],
+    queryFn: () => api.get<InventorySummaryData>("/inventory/summary"),
+    refetchInterval: 30_000,
+  });
 
-  const withStatus = useMemo(
-    () => stock.map((item) => ({ item, status: stockStatus(item, today) })),
-    [stock, today]
-  );
+  // 2. Fetch live inventory items
+  const {
+    data: items = [],
+    isLoading: itemsLoading,
+    isError: itemsError,
+    refetch: refetchItems,
+  } = useQuery<BackendStockItem[]>({
+    queryKey: [
+      "inventory-items",
+      categoryFilter,
+      statusFilter === "low",
+      statusFilter === "expiring",
+    ],
+    queryFn: () =>
+      api.get<BackendStockItem[]>("/inventory/items", {
+        category: categoryFilter !== "all" ? categoryFilter : undefined,
+        low_only: statusFilter === "low" ? true : undefined,
+        expiring_only: statusFilter === "expiring" ? true : undefined,
+      }),
+    refetchInterval: 30_000,
+  });
 
-  const needsAttention = withStatus.filter(
-    (row) => row.status === "low" || row.status === "out"
-  ).length;
-  const expiring = withStatus.filter((row) => row.status === "expiring").length;
-  const stockValue = stock.reduce((sum, item) => sum + item.onHand * item.unitCost, 0);
+  // Movement mutation
+  const movementMutation = useMutation({
+    mutationFn: async (payload: {
+      itemId: string;
+      quantity: number;
+      reason: string;
+      note?: string;
+    }) => {
+      return api.post(`/inventory/items/${payload.itemId}/movements`, {
+        quantity: payload.quantity,
+        reason: payload.reason,
+        note: payload.note,
+      });
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory-items"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      setMovement(null);
+      setQuantity("");
+      setMovementNote("");
+      showToast({
+        title: "Stock Movement Recorded",
+        description: `Successfully ${vars.quantity > 0 ? "received" : "issued"} ${Math.abs(vars.quantity)} units on server.`,
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Movement Failed",
+        description: err.message ?? "The inventory service rejected this update.",
+        type: "error",
+      });
+    },
+  });
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.category) set.add(i.category);
+    });
+    return Array.from(set);
+  }, [items]);
 
   const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return withStatus.filter(({ item, status }) => {
-      if (category !== "all" && item.category !== category) return false;
-      if (supplierFilter !== "All Suppliers" && item.supplier !== supplierFilter) return false;
-      if (statusFilter !== "All Statuses" && stockStatusMeta[status].label !== statusFilter)
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter((item) => {
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (statusFilter === "low" && !item.is_low) return false;
+      if (statusFilter === "expiring" && (item.days_to_expiry === null || item.days_to_expiry === undefined || item.days_to_expiry > 7)) {
         return false;
+      }
       if (
-        query &&
-        !item.name.toLowerCase().includes(query) &&
-        !item.sku.toLowerCase().includes(query) &&
-        !item.supplier.toLowerCase().includes(query)
+        q &&
+        !item.name.toLowerCase().includes(q) &&
+        !item.sku.toLowerCase().includes(q)
       ) {
         return false;
       }
       return true;
     });
-  }, [withStatus, category, supplierFilter, statusFilter, searchQuery]);
+  }, [items, categoryFilter, statusFilter, searchQuery]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      let comparison = 0;
-      if (sortField === "status") {
-        const rank: Record<StockStatus, number> = { out: 0, low: 1, expiring: 2, ok: 3 };
-        comparison = rank[a.status] - rank[b.status];
+      let cmp = 0;
+      if (sortField === "is_low") {
+        cmp = (a.is_low ? 1 : 0) - (b.is_low ? 1 : 0);
       } else if (sortField === "name") {
-        comparison = a.item.name.localeCompare(b.item.name);
+        cmp = a.name.localeCompare(b.name);
       } else if (sortField === "category") {
-        comparison = a.item.category.localeCompare(b.item.category);
-      } else if (sortField === "onHand") {
-        comparison = a.item.onHand - b.item.onHand;
+        cmp = a.category.localeCompare(b.category);
+      } else if (sortField === "on_hand") {
+        cmp = a.on_hand - b.on_hand;
       } else if (sortField === "minimum") {
-        comparison = a.item.minimum - b.item.minimum;
-      } else if (sortField === "expiresOn") {
-        const dateA = a.item.expiresOn ? new Date(a.item.expiresOn).getTime() : Infinity;
-        const dateB = b.item.expiresOn ? new Date(b.item.expiresOn).getTime() : Infinity;
-        comparison = dateA - dateB;
-      } else if (sortField === "lastUpdated") {
-        comparison = a.item.lastUpdated.localeCompare(b.item.lastUpdated);
+        cmp = a.minimum - b.minimum;
+      } else if (sortField === "expires_on") {
+        const da = a.expires_on ? new Date(a.expires_on).getTime() : Infinity;
+        const db = b.expires_on ? new Date(b.expires_on).getTime() : Infinity;
+        cmp = da - db;
       }
-      return sortDirection === "asc" ? comparison : -comparison;
+      return sortDirection === "asc" ? cmp : -cmp;
     });
   }, [filtered, sortField, sortDirection]);
 
@@ -143,114 +214,35 @@ export default function InventoryPage() {
 
   const applyMovement = () => {
     if (!movement) return;
-
-    const amount = Number(quantity);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
       showToast({
-        title: "Enter a quantity",
-        description: "The movement needs a positive number of units.",
+        title: "Invalid Quantity",
+        description: "Please enter a positive numeric quantity.",
         type: "warning",
       });
       return;
     }
 
-    const { item, direction } = movement;
-    const delta = direction === "in" ? amount : -amount;
-    const before = item.onHand;
-
-    setStock((current) =>
-      current.map((row) =>
-        row.sku === item.sku ? { ...row, onHand: Math.max(0, row.onHand + delta) } : row
-      )
-    );
-    setMovement(null);
-    setQuantity("");
-
-    showUndoToast(
-      `${item.name} · ${direction === "in" ? "received" : "issued"} ${amount} ${item.unit}`,
-      `On hand ${before} → ${Math.max(0, before + delta)} ${item.unit}.`,
-      () =>
-        setStock((current) =>
-          current.map((row) => (row.sku === item.sku ? { ...row, onHand: before } : row))
-        ),
-      10
-    );
-  };
-
-  // Day 5 End-of-Day scenario: "A room service order lowers stock; low stock alert triggers"
-  const simulateRoomServiceOrder = () => {
-    const targetSkus = ["FNB-003", "FNB-005", "TOI-002"]; // Chicken, Coffee, Soap
-    const previousStock = [...stock];
-
-    setStock((current) =>
-      current.map((item) => {
-        if (item.sku === "FNB-003") return { ...item, onHand: Math.max(0, item.onHand - 3) }; // drops to 5 (min 15 -> low)
-        if (item.sku === "FNB-005") return { ...item, onHand: Math.max(0, item.onHand - 2) }; // drops to 2 (min 5 -> low)
-        if (item.sku === "TOI-002") return { ...item, onHand: Math.max(0, item.onHand - 10) }; // drops to 25 (min 60 -> low)
-        return item;
-      })
-    );
-
-    showUndoToast(
-      "Room Service Order #RS-402 Executed",
-      "Deducted 3kg Chicken, 2kg Coffee Beans, 10 soaps. F&B inventory dropped below minimum threshold.",
-      () => setStock(previousStock),
-      10
-    );
-
-    showToast({
-      title: "Low Stock Alert",
-      description: "Organic Coffee Beans and Chicken Breast are now critically below minimum levels!",
-      type: "warning",
+    const delta = movement.direction === "in" ? qty : -qty;
+    movementMutation.mutate({
+      itemId: movement.item.id,
+      quantity: delta,
+      reason: movement.direction === "in" ? "delivered" : "issued",
+      note: movementNote || undefined,
     });
   };
+
+  const totalValue = items.reduce(
+    (sum, item) => sum + item.on_hand * (item.unit_cost || 0),
+    0
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Rooms & Inventory"
-        description="Store room levels for food, linen, beds, toiletries, and parts."
-        meta={format(today, "EEE, d MMM yyyy")}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={simulateRoomServiceOrder}
-              className="border-gold-300 bg-gold-50/40 text-gold-900 hover:bg-gold-100"
-            >
-              <ShoppingCart className="h-3.5 w-3.5 text-gold-700" />
-              Simulate Room Service Order
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                showToast({
-                  title: "Purchase list drafted",
-                  description: `${needsAttention} items below minimum added to a draft order.`,
-                  type: "success",
-                })
-              }
-            >
-              Draft purchase order
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                showToast({
-                  title: "Inventory exported",
-                  description: `${stock.length} items exported to CSV.`,
-                  type: "default",
-                })
-              }
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export
-            </Button>
-          </div>
-        }
+        title="Inventory & Stock Controls"
+        description="Real-time stock valuation, par levels, safety thresholds, and warehouse movements."
       />
 
       {/* Operations Navigation Tabs */}
@@ -275,413 +267,317 @@ export default function InventoryPage() {
 
       {activeTab === "stock" && (
         <>
-          {/* 4 Value-First Stat Tiles */}
+          {/* KPI Tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          variant="value-first"
-          label="Total Tracked Items"
-          value={stock.length}
-          change="5 categories"
-          intent="neutral"
-          comparison="across store rooms"
-          tone="sage"
-          icon={PackageSearch}
-        />
-        <StatTile
-          variant="value-first"
-          label="Low in Stock"
-          value={needsAttention}
-          change="+2"
-          intent="bad"
-          comparison="below minimum safety level"
-          tone="rose"
-          icon={TrendingDown}
-          trend={[1, 2, 2, 3, 2, 3, needsAttention]}
-        />
-        <StatTile
-          variant="value-first"
-          label="Expiring Soon"
-          value={expiring}
-          change="use first"
-          intent="neutral"
-          comparison="within 30-day window"
+          label="Tracked Catalog SKUs"
+          value={summary?.total_items !== undefined ? summary.total_items.toString() : "—"}
+          change={`${items.length} loaded`}
+          comparison="Central warehouse items"
           tone="sand"
+          icon={Package}
+        />
+        <StatTile
+          label="Below Par / Low Stock"
+          value={summary?.low_stock_items !== undefined ? summary.low_stock_items.toString() : "—"}
+          change={
+            summary?.low_stock_items ? "Reorders required" : "All levels satisfied"
+          }
+          comparison="Below safety threshold"
+          tone={summary?.low_stock_items ? "rose" : "forest"}
+          icon={AlertTriangle}
+        />
+        <StatTile
+          label="Expiring Within 7 Days"
+          value={summary?.expiring_items !== undefined ? summary.expiring_items.toString() : "—"}
+          change={summary?.expiring_items ? "Sweep required" : "Zero batch warnings"}
+          comparison="Shelf life monitor"
+          tone={summary?.expiring_items ? "amber" : "sage"}
           icon={CalendarX2}
         />
         <StatTile
-          variant="value-first"
-          label="Total Stock Value"
-          value={formatLakh(stockValue)}
-          change="-4%"
-          direction="down"
-          intent="neutral"
-          comparison="vs. last week"
-          tone="forest"
+          label="Catalog Valuation"
+          value={
+            summary?.total_valuation !== undefined
+              ? `₹${Math.round(summary.total_valuation).toLocaleString("en-IN")}`
+              : totalValue > 0
+              ? `₹${Math.round(totalValue).toLocaleString("en-IN")}`
+              : "—"
+          }
+          change="Cost basis"
+          comparison="Current warehouse value"
+          tone="emerald"
           icon={IndianRupee}
-          trend={[3.6, 3.7, 3.5, 3.4, 3.5, 3.3, 3.2]}
         />
       </div>
 
+      {/* Main Stock Table Panel */}
       <Panel>
         <PanelHeader
-          title="Stock Levels"
-          description="Live inventory with low stock and expiry tracking across all departments."
-        />
-        <PanelBody className="space-y-4 pt-4">
-          {/* Category Filter Chips */}
-          <FilterChips
-            options={[
-              { value: "all" as const, label: "All categories", count: stock.length },
-              ...STOCK_CATEGORIES.map((cat) => ({
-                value: cat,
-                label: cat,
-                count: stock.filter((row) => row.category === cat).length,
-              })),
-            ]}
-            value={category}
-            onChange={(value) => {
-              setCategory(value as CategoryFilter);
-              setCurrentPage(1);
-            }}
-          />
+          title="Warehouse Stock Items"
+          description="Live stock ledger synchronized with backend /inventory/items."
+          action={
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-sand-400" />
+                <input
+                  type="text"
+                  placeholder="Search SKU or item…"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded-lg border border-sand-200 bg-white py-1.5 pl-8 pr-3 text-xs text-sand-900 placeholder:text-sand-400"
+                />
+              </div>
 
-          {/* Search and Dropdown Filter Bar */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-[240px] flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
-              <input
-                type="text"
-                placeholder="Search items, SKU, or supplier..."
-                value={searchQuery}
+              <select
+                value={categoryFilter}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
+                  setCategoryFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-xl border border-sand-200 bg-white py-2 pl-9 pr-4 text-sm text-sand-900 placeholder:text-sand-400 focus:border-sage-500 focus:outline-none focus:ring-1 focus:ring-sage-500"
-              />
+                className="rounded-lg border border-sand-200 bg-white px-2.5 py-1.5 text-xs text-sand-800"
+              >
+                <option value="all">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="rounded-lg border border-sand-200 bg-white px-2.5 py-1.5 text-xs text-sand-800"
+              >
+                <option value="all">All Statuses</option>
+                <option value="low">Low Stock Only</option>
+                <option value="expiring">Expiring Soon</option>
+              </select>
             </div>
+          }
+        />
 
-            <PeriodSelect
-              value={statusFilter}
-              onChange={(val) => {
-                setStatusFilter(val);
-                setCurrentPage(1);
-              }}
-              options={STATUS_OPTIONS}
-            />
-
-            <PeriodSelect
-              value={supplierFilter}
-              onChange={(val) => {
-                setSupplierFilter(val);
-                setCurrentPage(1);
-              }}
-              options={SUPPLIER_FILTERS as unknown as string[]}
-            />
-          </div>
-
-          {/* Table */}
-          <Table>
-            <THead>
-              <tr>
-                <TH>
-                  <button
-                    onClick={() => handleSort("name")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    Item & SKU
-                    {sortField === "name" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH>
-                  <button
-                    onClick={() => handleSort("category")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    Category
-                    {sortField === "category" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH align="right">
-                  <button
-                    onClick={() => handleSort("onHand")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    On Hand
-                    {sortField === "onHand" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH align="right">
-                  <button
-                    onClick={() => handleSort("minimum")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    Min Level
-                    {sortField === "minimum" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH align="right">
-                  <button
-                    onClick={() => handleSort("expiresOn")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    Expiry
-                    {sortField === "expiresOn" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH align="right">
-                  <button
-                    onClick={() => handleSort("status")}
-                    className="inline-flex items-center gap-1 font-medium hover:text-sand-900"
-                  >
-                    Status
-                    {sortField === "status" ? (
-                      sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-sand-400" />
-                    )}
-                  </button>
-                </TH>
-                <TH align="right">Stock Movement</TH>
-              </tr>
-            </THead>
-            <TBody>
-              {paginated.length === 0 ? (
-                <TR>
-                  <TD colSpan={7} className="py-12 text-center text-sm text-sand-500">
-                    No items found matching your filters.
-                  </TD>
-                </TR>
-              ) : (
-                paginated.map(({ item, status }) => {
-                  const Icon = item.icon;
-                  const isLow = status === "low" || status === "out";
-
-                  return (
-                    <TR key={item.sku}>
-                      <TD>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sand-200/60",
-                              categoryTint[item.category]
-                            )}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </span>
-                          <div>
-                            <span className="block font-medium text-sand-900">{item.name}</span>
-                            <span className="block text-xs text-sand-500">
-                              {item.sku} · {item.supplier}
-                            </span>
-                          </div>
-                        </div>
-                      </TD>
-                      <TD className="text-sand-600">{item.category}</TD>
-                      <TD align="right">
-                        <span
-                          className={cn(
-                            "font-semibold tabular-nums",
-                            isLow ? "text-rose-600" : "text-sand-900"
-                          )}
-                        >
-                          {item.onHand} {item.unit}
-                        </span>
-                        {isLow && (
-                          <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-rose-500" />
-                        )}
-                      </TD>
-                      <TD align="right" className="text-sand-600 tabular-nums">
+        <PanelBody className="pt-4">
+          {itemsLoading ? (
+            <p role="status" className="py-12 text-center text-sm text-sand-500">
+              Loading inventory catalog…
+            </p>
+          ) : itemsError ? (
+            <div className="py-12 text-center text-sm text-rose-600">
+              <p className="font-semibold">Failed to load inventory</p>
+              <button
+                type="button"
+                onClick={() => refetchItems()}
+                className="mt-2 text-xs underline"
+              >
+                Retry Request
+              </button>
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="py-16 text-center text-sm text-sand-500">
+              <PackageSearch className="mx-auto h-8 w-8 text-sand-300" />
+              <p className="mt-2 font-semibold text-sand-800">No Matching Stock Items</p>
+              <p className="text-xs text-sand-400 mt-1">
+                No inventory entries match your filter or search criteria.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-sand-200 text-sand-500">
+                    <th
+                      onClick={() => handleSort("name")}
+                      className="cursor-pointer pb-2 font-medium hover:text-sand-900"
+                    >
+                      Item & SKU
+                    </th>
+                    <th
+                      onClick={() => handleSort("category")}
+                      className="cursor-pointer pb-2 font-medium hover:text-sand-900"
+                    >
+                      Category
+                    </th>
+                    <th
+                      onClick={() => handleSort("on_hand")}
+                      className="cursor-pointer pb-2 text-right font-medium hover:text-sand-900"
+                    >
+                      On Hand
+                    </th>
+                    <th
+                      onClick={() => handleSort("minimum")}
+                      className="cursor-pointer pb-2 text-right font-medium hover:text-sand-900"
+                    >
+                      Par / Min
+                    </th>
+                    <th className="pb-2 text-right font-medium">Unit Cost</th>
+                    <th
+                      onClick={() => handleSort("expires_on")}
+                      className="cursor-pointer pb-2 font-medium hover:text-sand-900"
+                    >
+                      Expiry
+                    </th>
+                    <th
+                      onClick={() => handleSort("is_low")}
+                      className="cursor-pointer pb-2 font-medium hover:text-sand-900"
+                    >
+                      Status
+                    </th>
+                    <th className="pb-2 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand-100">
+                  {paginated.map((item) => (
+                    <tr key={item.id} className="hover:bg-sand-50/50">
+                      <td className="py-3">
+                        <p className="font-semibold text-sand-900">{item.name}</p>
+                        <p className="font-mono text-[10px] text-sand-500">{item.sku}</p>
+                      </td>
+                      <td className="py-3 capitalize text-sand-700">{item.category}</td>
+                      <td className="py-3 text-right font-semibold text-sand-950">
+                        {item.on_hand} <span className="font-normal text-sand-500">{item.unit}</span>
+                      </td>
+                      <td className="py-3 text-right text-sand-600">
                         {item.minimum} {item.unit}
-                      </TD>
-                      <TD align="right" className="text-sand-600">
-                        {item.expiresOn ? (
-                          <span
-                            className={cn(
-                              "tabular-nums",
-                              status === "expiring" && "font-medium text-sand-800"
-                            )}
-                          >
-                            {format(new Date(item.expiresOn), "d MMM yyyy")}
+                      </td>
+                      <td className="py-3 text-right text-sand-800">
+                        ₹{item.unit_cost.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3 text-sand-600">
+                        {item.expires_on ? item.expires_on : "—"}
+                        {item.days_to_expiry !== null && item.days_to_expiry !== undefined && item.days_to_expiry <= 7 && (
+                          <span className="ml-1.5 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                            {item.days_to_expiry}d
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        {item.is_low ? (
+                          <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
+                            Low Stock
                           </span>
                         ) : (
-                          "—"
+                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                            In Stock
+                          </span>
                         )}
-                      </TD>
-                      <TD align="right">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                            stockStatusMeta[status].chip
-                          )}
-                        >
-                          {stockStatusMeta[status].label}
-                        </span>
-                      </TD>
-                      <TD align="right">
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setMovement({ item, direction: "in" });
-                              setQuantity("");
-                            }}
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setMovement({ item, direction: "in" })}
+                            className="rounded border border-sand-200 bg-white px-2 py-1 text-[11px] font-medium text-sand-700 hover:bg-sand-50"
                           >
-                            In
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setMovement({ item, direction: "out" });
-                              setQuantity("");
-                            }}
+                            Receive (+)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMovement({ item, direction: "out" })}
+                            className="rounded border border-sand-200 bg-white px-2 py-1 text-[11px] font-medium text-sand-700 hover:bg-sand-50"
                           >
-                            Out
-                          </Button>
+                            Issue (-)
+                          </button>
                         </div>
-                      </TD>
-                    </TR>
-                  );
-                })
-              )}
-            </TBody>
-          </Table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-          {/* Pagination Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-200/80 pt-4 text-xs text-sand-600">
-            <span>
-              Showing {sorted.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1}–
-              {Math.min(currentPage * ITEMS_PER_PAGE, sorted.length)} of {sorted.length} items
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-sand-200 bg-white p-1.5 text-sand-600 transition-colors hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={cn(
-                    "h-7 w-7 rounded-lg text-xs font-medium transition-colors",
-                    page === currentPage
-                      ? "bg-sage-600 text-white"
-                      : "border border-sand-200 bg-white text-sand-700 hover:bg-sand-50"
-                  )}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="rounded-lg border border-sand-200 bg-white p-1.5 text-sand-600 transition-colors hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Next page"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              {/* Pagination bar */}
+              <div className="flex items-center justify-between border-t border-sand-200 pt-3 text-xs text-sand-600">
+                <span>
+                  Showing {paginated.length} of {sorted.length} items
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    className="rounded border border-sand-200 bg-white p-1 text-sand-600 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="rounded border border-sand-200 bg-white p-1 text-sand-600 disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </PanelBody>
       </Panel>
 
-      {/* Stock In / Out Modal Drawer */}
+      {/* Record Movement Drawer */}
       <Drawer
-        open={movement !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setMovement(null);
-            setQuantity("");
-          }
-        }}
-        title={movement ? (movement.direction === "in" ? "Receive stock" : "Issue stock") : ""}
-        description={movement ? `${movement.item.name} · SKU: ${movement.item.sku}` : undefined}
-        footer={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setMovement(null)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={applyMovement}>
-              {movement?.direction === "in" ? "Add to stock" : "Issue from stock"}
-            </Button>
-          </>
+        open={Boolean(movement)}
+        onClose={() => setMovement(null)}
+        title={movement?.direction === "in" ? "Receive Stock" : "Issue Stock"}
+        description={
+          movement
+            ? `${movement.item.name} (${movement.item.sku}) · Current on hand: ${movement.item.on_hand} ${movement.item.unit}`
+            : ""
         }
       >
-        {movement && (
-          <div className="space-y-5">
-            <dl className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-4">
-                <dt className="text-sand-600">Currently on hand</dt>
-                <dd className="font-medium tabular-nums text-sand-900">
-                  {movement.item.onHand} {movement.item.unit}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <dt className="text-sand-600">Minimum level</dt>
-                <dd className="font-medium tabular-nums text-sand-900">
-                  {movement.item.minimum} {movement.item.unit}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <dt className="text-sand-600">Unit cost</dt>
-                <dd className="font-medium tabular-nums text-sand-900">
-                  ₹{movement.item.unitCost.toLocaleString("en-IN")}
-                </dd>
-              </div>
-            </dl>
-
-            <div>
-              <label
-                htmlFor="stock-quantity"
-                className="mb-1.5 block text-sm font-medium text-sand-800"
-              >
-                Quantity ({movement.item.unit})
-              </label>
-              <Input
-                id="stock-quantity"
-                type="number"
-                min={1}
-                inputMode="numeric"
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-                placeholder="0"
-              />
-            </div>
-
-            <p className="rounded-xl bg-sand-50 p-4 text-xs text-sand-600">
-              Last movement — {movement.item.lastUpdated}
-            </p>
+        <div className="space-y-4 py-4">
+          <div>
+            <label className="block text-xs font-semibold text-sand-900">
+              Quantity to {movement?.direction === "in" ? "Receive" : "Issue"} ({movement?.item.unit})
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="e.g. 10"
+              className="mt-1 w-full rounded-xl border border-sand-300 bg-white p-2.5 text-sm text-sand-900"
+            />
           </div>
-        )}
+
+          <div>
+            <label className="block text-xs font-semibold text-sand-900">
+              Audit Note / PO Reference (Optional)
+            </label>
+            <input
+              type="text"
+              value={movementNote}
+              onChange={(e) => setMovementNote(e.target.value)}
+              placeholder="e.g. PO-8921 delivery verified"
+              className="mt-1 w-full rounded-xl border border-sand-300 bg-white p-2.5 text-sm text-sand-900"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4 border-t border-sand-200">
+            <Button variant="outline" size="sm" onClick={() => setMovement(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={movementMutation.isPending || !quantity}
+              onClick={applyMovement}
+            >
+              {movementMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Save Movement to Backend"
+              )}
+            </Button>
+          </div>
+        </div>
       </Drawer>
         </>
       )}

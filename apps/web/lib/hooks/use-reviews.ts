@@ -6,38 +6,18 @@ import { guestRatingApi, guestReviewApi, type RateableStaffResponse } from "@/li
 import { ApiError, guestTokens, tokens } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-context";
 
-/**
- * The two review directions, from the guest's phone and from the staff portal.
- *
- * Both fall back to fixtures when there is no session, for the same reason the board
- * does: the demo has to run without a backend. Unlike the board, the write paths do
- * *not* fake success — a rating that silently goes nowhere is worse than one that says
- * it could not be sent, so mutations surface their error and the caller decides.
- */
-
-/** Staff the guest may rate, when the demo has no room token. */
-const DEMO_RATEABLE: RateableStaffResponse[] = [
-  { id: "s1", name: "Ramesh Patil", role: "Housekeeping", department_id: null, already_rated: false },
-  { id: "s6", name: "Neha Kulkarni", role: "Room Service", department_id: null, already_rated: false },
-  { id: "s8", name: "Priya Nair", role: "Front Desk", department_id: null, already_rated: false },
-];
-
 export function useRateableStaff() {
   const guestToken = guestTokens.access();
   const query = useQuery({
     queryKey: ["rateable-staff", guestToken],
     enabled: guestToken !== null,
     queryFn: guestRatingApi.rateable,
-    // A guest without a valid room token is the normal case in a demo, not an error
-    // worth retrying three times.
     retry: false,
   });
 
-  const isDemo = guestToken === null;
   return {
-    staff: isDemo ? DEMO_RATEABLE : query.data ?? [],
-    isDemo,
-    isLoading: query.isLoading && !isDemo,
+    staff: query.data ?? [],
+    isLoading: query.isLoading,
     error: query.error,
   };
 }
@@ -48,10 +28,10 @@ export function useRateStaff() {
   return useMutation({
     mutationFn: async (input: { staffId: string; rating: number; comment?: string }) => {
       if (guestTokens.access() === null) {
-        // No room token: the demo path. Pause briefly so the pending state is visible,
-        // then resolve — but say so, so the UI can avoid claiming it reached anyone.
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        return { delivered: false as const };
+        throw new ApiError(401, {
+          error: "unauthorized",
+          message: "A valid guest room session token is required to submit a staff rating.",
+        });
       }
       await guestRatingApi.submit({
         staff_id: input.staffId,
@@ -78,7 +58,6 @@ export function useDepartingStays() {
 
   return {
     stays: query.data ?? [],
-    isDemo: !isConnected,
     isLoading: query.isLoading && isConnected,
     error: query.error,
   };
@@ -90,8 +69,10 @@ export function useReviewGuest() {
   return useMutation({
     mutationFn: async (input: { stayId: string; rating: number; comment?: string }) => {
       if (tokens.access() === null) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        return { delivered: false as const };
+        throw new ApiError(401, {
+          error: "unauthorized",
+          message: "An active staff session is required to submit a guest review.",
+        });
       }
       await guestReviewApi.submit(input.stayId, {
         rating: input.rating,

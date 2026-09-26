@@ -858,4 +858,335 @@ export const inventory = {
     }>("/inventory/summary"),
 };
 
+// --- Phase 6: Overview, Attendance, Performance, Spatial & Analytics ---
+
+export interface ActionDriver {
+  name: string;
+  value: string | number;
+  direction?: "up" | "down" | "neutral";
+  impact?: string;
+}
+
+export interface ActionCardDetail {
+  id: string;
+  kind: string;
+  engine: string;
+  urgency: "urgent" | "high" | "medium" | "low" | string;
+  status: "pending" | "approved" | "executed" | "dismissed" | "snoozed" | string;
+  headline: string;
+  rationale: string;
+  confidence: number;
+  department_id: string | null;
+  drivers?: ActionDriver[];
+  adjustments?: Record<string, unknown>;
+  can_undo?: boolean;
+  undo_seconds_left?: number;
+  created_at: string;
+  expires_at?: string | null;
+}
+
+export interface ActionStats {
+  pending: number;
+  approved: number;
+  dismissed: number;
+  total: number;
+}
+
+export interface DashboardData {
+  occupancy: {
+    total_rooms: number;
+    occupied_rooms: number;
+    occupancy_rate: number;
+    as_of: string;
+  } | null;
+  rooms: {
+    total: number;
+    ready: number;
+    occupied: number;
+    dirty: number;
+    cleaning?: number;
+    out_of_order?: number;
+  } | null;
+  front_desk: {
+    arrivals: number;
+    departures: number;
+    in_house: number;
+  } | null;
+  requests: {
+    open: number;
+    overdue: number;
+    awaiting_accept: number;
+  } | null;
+  tasks: {
+    overdue: number;
+  } | null;
+  stock: {
+    total_items: number;
+    low_stock_items: number;
+    expiring_items: number;
+  } | null;
+  assets: {
+    total?: number;
+    active_alerts?: number;
+    high_criticality_offline?: number;
+  } | null;
+  sentiment: {
+    average_score?: number;
+    average_sentiment?: number;
+    samples?: number;
+    total_reviews?: number;
+    positive_pct?: number;
+  } | null;
+  at_risk_guests: {
+    count: number;
+  } | null;
+  forecast: {
+    nights: Array<{
+      stay_date: string;
+      predicted_occupancy: number;
+      lower_bound: number;
+      upper_bound: number;
+    }>;
+    model: string;
+    confidence: number;
+  } | null;
+  outbox: OutboxSummary | null;
+  action_queue: ActionStats;
+  engines: {
+    ready: string[];
+    warming: string[];
+    cold: string[];
+  };
+  live_feed: Array<{
+    type: string;
+    payload: Record<string, unknown>;
+    occurred_at: string;
+    id: string;
+  }>;
+  unavailable: string[];
+  generated_at: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  user_id: string;
+  work_date: string;
+  checked_in_at: string;
+  checked_out_at: string | null;
+  worked_minutes: number;
+  is_late: boolean;
+  notes?: string | null;
+}
+
+export interface AttendanceTeamSummary {
+  work_date: string;
+  expected: number;
+  present: number;
+  late: number;
+  absent: number;
+  still_on_shift?: number;
+  records: AttendanceRecord[];
+}
+
+export interface ShiftData {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  department_id?: string | null;
+}
+
+export interface LearningEngineReport {
+  engine: string;
+  display_name?: string;
+  cards_created: number;
+  approved: number;
+  dismissed: number;
+  accuracy_pct: number;
+  average_confidence: number;
+  status: "ready" | "warming" | "cold" | string;
+}
+
+export interface ReadinessData {
+  ready: string[];
+  warming: string[];
+  cold: string[];
+}
+
+export interface SimulateRequest {
+  rate_change_pct: number;
+  staffing_change_pct: number;
+  promo_discount_pct: number;
+  days: number;
+}
+
+export interface SimulateResult {
+  projected_revenue: number;
+  baseline_revenue: number;
+  projected_occupancy: number;
+  baseline_occupancy: number;
+  projected_margin_pct?: number;
+  revenue_delta: number;
+  occupancy_delta_pct: number;
+  assumptions: Record<string, unknown>;
+}
+
+export interface StaffingRow {
+  department_id: string;
+  department_name?: string;
+  shift_name: string;
+  work_date: string;
+  required: number;
+  scheduled: number;
+  gap: number;
+}
+
+export interface LeaveOut {
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  leave_type: string;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected" | string;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  created_at: string;
+}
+
+export interface RosterOut {
+  id: string;
+  week_start: string;
+  department_id: string | null;
+  status: "draft" | "published" | "archived" | string;
+  total_shifts: number;
+  total_hours: number;
+  created_at: string;
+}
+
+export interface RosterEntryOut {
+  id: string;
+  roster_id: string;
+  user_id: string;
+  shift_id: string;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface RosterDetail extends RosterOut {
+  entries: RosterEntryOut[];
+}
+
+export interface StaffReportOut {
+  id: string;
+  property_id: string;
+  reported_by: string;
+  reporter_department_id: string | null;
+  department_id: string;
+  shift_date: string;
+  shift_type: string;
+  summary: string;
+  highlights: string[];
+  issues_encountered: string[];
+  handover_notes: string | null;
+  status: "draft" | "submitted" | "approved" | string;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+export const dashboardApi = {
+  get: (liveFeed: number = 15) =>
+    api.get<DashboardData>("/dashboard", { live_feed: liveFeed }),
+};
+
+export const actionCardsApi = {
+  list: (params?: { kind?: string; engine?: string; include_decided?: boolean; limit?: number }) =>
+    api.get<ActionCardDetail[]>("/cards", params),
+  approve: (cardId: string, adjustments?: Record<string, unknown>) =>
+    api.post<ActionCardDetail>(`/cards/${cardId}/approve`, { adjustments }),
+  dismiss: (cardId: string, reason: string, note?: string) =>
+    api.post<ActionCardDetail>(`/cards/${cardId}/dismiss`, { reason, note }),
+  claim: (cardId: string) => api.post<ActionCardDetail>(`/cards/${cardId}/claim`),
+  snooze: (cardId: string, minutes: number) =>
+    api.post<ActionCardDetail>(`/cards/${cardId}/snooze`, { minutes }),
+  undo: (cardId: string) => api.post<ActionCardDetail>(`/cards/${cardId}/undo`),
+  stats: () => api.get<ActionStats>("/cards/stats"),
+};
+
+export const learningApi = {
+  list: () => api.get<LearningEngineReport[]>("/learning"),
+  readiness: () => api.get<ReadinessData>("/learning/readiness"),
+};
+
+export const attendanceApi = {
+  me: (days: number = 14) => api.get<AttendanceRecord[]>("/attendance/me", { days }),
+  team: (params?: { department_id?: string; work_date?: string }) =>
+    api.get<AttendanceTeamSummary>("/attendance/team", params),
+  shifts: () => api.get<ShiftData[]>("/attendance/shifts"),
+  checkIn: (body: { shift_id?: string; note?: string; location?: string }) =>
+    api.post<AttendanceRecord>("/attendance/check-in", body),
+  checkOut: (body?: { note?: string }) =>
+    api.post<AttendanceRecord>("/attendance/check-out", body ?? {}),
+};
+
+export const workforceApi = {
+  currentRoster: (week_start?: string) =>
+    api.get<RosterDetail | null>("/workforce/rosters/current", week_start ? { week_start } : undefined),
+  listRosters: (status?: string) =>
+    api.get<RosterOut[]>("/workforce/rosters", status ? { status } : undefined),
+  generateRoster: (body: { week_start: string; department_id?: string }) =>
+    api.post<RosterDetail>("/workforce/rosters/generate", body),
+  publishRoster: (id: string) => api.post<RosterDetail>(`/workforce/rosters/${id}/publish`),
+  staffingChart: (rosterId: string) =>
+    api.get<StaffingRow[]>(`/workforce/rosters/${rosterId}/staffing`),
+  leave: (params?: { status?: string; user_id?: string }) =>
+    api.get<LeaveOut[]>("/workforce/leave", params),
+  requestLeave: (body: { start_date: string; end_date: string; leave_type: string; reason?: string }) =>
+    api.post<LeaveOut>("/workforce/leave", body),
+  decideLeave: (leaveId: string, approve: boolean) =>
+    api.post<LeaveOut>(`/workforce/leave/${leaveId}/decide`, { approve }),
+};
+
+export const reportsApi = {
+  list: (departmentId?: string) =>
+    api.get<StaffReportOut[]>("/reports", departmentId ? { department_id: departmentId } : undefined),
+  mine: () => api.get<StaffReportOut[]>("/reports/mine"),
+  create: (body: {
+    department_id: string;
+    shift_date: string;
+    shift_type: string;
+    summary: string;
+    highlights?: string[];
+    issues_encountered?: string[];
+    handover_notes?: string;
+  }) => api.post<StaffReportOut>("/reports", body),
+  approve: (id: string) => api.post<StaffReportOut>(`/reports/${id}/approve`),
+};
+
+export const revenueApi = {
+  forecast: (days: number = 30) => api.get<any[]>("/revenue/forecast", { days }),
+  rateCard: (days: number = 30) => api.get<any[]>("/revenue/rate-card", { days }),
+  competitors: (days: number = 14) => api.get<any[]>("/revenue/competitors", { days }),
+  simulate: (body: SimulateRequest) => api.post<SimulateResult>("/revenue/simulate", body),
+  applyRates: (body: { room_category_id: string; dates: string[]; rate: number; source_card_id?: string }) =>
+    api.post<any>("/revenue/rates/apply", body),
+  rateHistory: (categoryId?: string, limit: number = 50) =>
+    api.get<any[]>("/revenue/rates/history", { category_id: categoryId, limit }),
+};
+
+export const roomsApi = {
+  board: () => api.get<BackendRoomBoard>("/rooms/board"),
+  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
+    api.get<BackendRoom[]>("/rooms", params),
+  occupancy: () =>
+    api.get<{
+      total_rooms: number;
+      occupied_rooms: number;
+      occupancy_rate: number;
+      as_of: string;
+    }>("/property/occupancy"),
+};
+
 

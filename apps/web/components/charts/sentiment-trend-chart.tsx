@@ -14,7 +14,12 @@ import {
 } from "recharts";
 
 import { axisProps, chartColors, gridProps, tooltipProps } from "@/lib/chart-theme";
-import type { SentimentPoint } from "@/lib/demo/guest-profile";
+
+export interface SentimentPoint {
+  date: string;
+  sentiment: number;
+  range: [number, number];
+}
 
 /**
  * How a guest has felt about us over time, with the uncertainty around it.
