@@ -129,9 +129,20 @@ def check_in(
     The room must be ready and free. A double-allocated room is the one front-desk bug
     that a guest notices immediately, so both checks happen before anything is written.
     """
-    booking = get_booking(db, property_id, booking_id)
+    from app.api.property.models import Room, RoomStatus
+
+    # Serialize allocations for a room and booking in the same database transaction.
+    booking = db.scalars(select(Booking).where(
+        Booking.id == booking_id, Booking.property_id == property_id
+    ).with_for_update()).first()
+    if booking is None:
+        raise NotFound("Booking not found")
     if booking.status != BookingStatus.CONFIRMED:
         raise Conflict(f"That booking is {booking.status}, not confirmed")
+
+    today = local_today()
+    if not booking.check_in_date <= today < booking.check_out_date:
+        raise Conflict("Booking is outside its check-in window")
 
     # Serialize allocation for this door. The partial unique index on active stays is
     # the final guard if another writer bypasses this service.
@@ -142,6 +153,8 @@ def check_in(
         raise NotFound("Room not found")
     if room.category_id != booking.room_category_id:
         raise Conflict("Room is not in the booked category")
+    if room.status != RoomStatus.READY:
+        raise Conflict(f"Room {room.number} is {room.status} — it is not ready for a guest")
     occupied = db.scalars(
         select(Stay).where(
             Stay.property_id == property_id,
@@ -151,9 +164,6 @@ def check_in(
     ).first()
     if occupied is not None:
         raise Conflict("That room is already occupied")
-
-    if room.status != RoomStatus.READY:
-        raise Conflict(f"Room {room.number} is {room.status} — it is not ready for a guest")
 
     stay = Stay(
         property_id=property_id,
@@ -166,6 +176,9 @@ def check_in(
     )
     booking.status = BookingStatus.CHECKED_IN
     booking.room_id = room_id
+    previous_room_status = room.status
+    room.status = RoomStatus.OCCUPIED
+    room.status_changed_at = utcnow()
     db.add(stay)
     try:
         db.commit()
@@ -198,16 +211,20 @@ def check_out(db: Session, property_id: UUID, stay_id: UUID, *, actor_id: str) -
         raise NotFound("Stay not found")
     if stay.status != StayStatus.IN_HOUSE:
         raise Conflict("That stay is already closed")
+    if stay.booking.status != BookingStatus.CHECKED_IN:
+        raise Conflict("The booking is not checked in")
+
+    room = db.scalars(select(Room).where(
+        Room.id == stay.room_id, Room.property_id == property_id
+    ).with_for_update()).first()
+    if room is None:
+        raise NotFound("Room not found")
 
     stay.status = StayStatus.CHECKED_OUT
     stay.checked_out_at = utcnow()
     stay.booking.status = BookingStatus.CHECKED_OUT
     # Room turnover and access revocation commit with the stay. A delayed event must
     # never leave a checked-out guest's QR usable or housekeeping falsely ready.
-    room = db.scalars(select(Room).where(Room.id == stay.room_id,
-        Room.property_id == property_id).with_for_update()).first()
-    if room is None:
-        raise NotFound("Room not found")
     previous_room_status = room.status
     room.status = RoomStatus.DIRTY
     room.status_changed_at = utcnow()
@@ -294,6 +311,15 @@ def record_visit(
     meta: dict | None = None,
     commit: bool = True,
 ) -> GuestVisit:
+    from app.api.guest.models import Guest
+
+    guest = db.get(Guest, guest_id)
+    if guest is None or guest.property_id != property_id:
+        raise NotFound("Guest not found at this property")
+    if stay_id is not None:
+        stay = get_stay(db, property_id, stay_id)
+        if stay.guest_id != guest_id:
+            raise NotFound("Stay not found for this guest")
     visit = GuestVisit(
         property_id=property_id,
         guest_id=guest_id,
@@ -347,14 +373,13 @@ def arrivals_and_departures(db: Session, property_id: UUID, day: date | None = N
     """The front desk's morning screen."""
     target = day or local_today()
     arriving = list_bookings(db, property_id, status=BookingStatus.CONFIRMED, arriving_on=target)
-    departing = [
-        s for s in list_stays(db, property_id) if s.booking.check_out_date == target
-    ]
     in_house = list_stays(db, property_id)
+    departing = [s for s in in_house if s.booking.check_out_date == target]
     return {
         "date": target,
         "arrivals": arriving,
         "departures": departing,
+        "in_house": in_house,
         "in_house_count": len(in_house),
     }
 

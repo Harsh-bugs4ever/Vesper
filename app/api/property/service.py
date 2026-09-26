@@ -179,7 +179,19 @@ def set_room_status(
     note: str | None = None,
     force: bool = False,
 ) -> Room:
-    room = get_room(db, property_id, room_id)
+    room = db.scalars(select(Room).where(
+        Room.id == room_id, Room.property_id == property_id
+    ).with_for_update()).first()
+    if room is None:
+        raise NotFound("Room not found")
+    if new_status in {RoomStatus.READY, RoomStatus.INSPECTION, RoomStatus.CLEANING}:
+        from app.api.frontdesk.models import Stay, StayStatus
+        occupied = db.scalars(select(Stay.id).where(
+            Stay.property_id == property_id, Stay.room_id == room_id,
+            Stay.status == StayStatus.IN_HOUSE,
+        )).first()
+        if occupied is not None:
+            raise Conflict("An in-house stay still occupies this room")
     previous = room.status
     if new_status == RoomStatus.OCCUPIED:
         raise Invalid("Occupancy is determined by active stays")

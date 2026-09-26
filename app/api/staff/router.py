@@ -11,7 +11,7 @@ from app.api.identity.models import User
 from app.api.property.models import Room
 from vesper_common.errors import Forbidden
 
-from . import service
+from . import service, reporting
 from .schemas import (
     AttendanceOut,
     AttendanceSummary,
@@ -25,10 +25,13 @@ from .schemas import (
     TaskOut,
     TaskStatusUpdate,
     TeamProgress,
+    ReportCreate,
+    ReportOut,
 )
 
 attendance_router = APIRouter(prefix="/attendance", tags=["attendance"])
 tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
+reports_router = APIRouter(prefix="/reports", tags=["staff-reports"])
 
 
 def _detail(task) -> TaskDetail:
@@ -107,11 +110,10 @@ def my_tasks(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> list[TaskDetail]:
-    scope = principal.scoped_department(department_id)
     tasks = service.list_tasks(
         db, UUID(principal.property_id), assignee_id=UUID(principal.id), include_done=include_done
     )
-    return [_detail(t) for t in tasks]
+    return [_detail(t) for t in tasks if principal.can_see_department(t.department_id)]
 
 
 @tasks_router.get("", response_model=TaskBoard)
@@ -123,6 +125,7 @@ def list_tasks(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> TaskBoard:
+    scope = principal.scoped_department(department_id)
     tasks = service.list_tasks(
         db,
         UUID(principal.property_id),
@@ -132,7 +135,9 @@ def list_tasks(
         include_done=include_done,
     )
     if principal.role == Role.STAFF:
-        tasks = [task for task in tasks if str(task.assignee_id) == principal.id]
+        tasks = [task for task in tasks if str(task.assignee_id) == principal.id or (
+            task.assignee_id is None and principal.can(Perm.TASKS_POOL_READ)
+        )]
     counts: dict[str, int] = {}
     for task in tasks:
         counts[task.status] = counts.get(task.status, 0) + 1
@@ -152,7 +157,7 @@ def create_task(
     principal.require_department_record(db, body.department_id)
     if body.assignee_id is not None:
         assignee = db.get(User, body.assignee_id)
-        if assignee is None or not assignee.is_active or not any(str(a.property_id) == principal.property_id and a.department_id == body.department_id for a in assignee.assignments):
+        if assignee is None or not assignee.is_active or assignee.role.key != Role.STAFF or not any(str(a.property_id) == principal.property_id and a.department_id == body.department_id for a in assignee.assignments):
             raise Forbidden("Assignee is outside the task department")
     if body.room_id is not None:
         room = db.get(Room, body.room_id)
@@ -189,7 +194,14 @@ def claim(
     principal: Principal = Depends(requires(Perm.TASKS_READ)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
-    principal.require_object(service.get_task(db, UUID(principal.property_id), task_id), owner_field="assignee_id")
+    if principal.role != Role.STAFF:
+        raise Forbidden("Task claiming is for assigned staff")
+    task = service.get_task(db, UUID(principal.property_id), task_id)
+    principal.require_object(task)
+    if task.assignee_id is None:
+        principal.require(Perm.TASKS_POOL_READ)
+    elif str(task.assignee_id) != principal.id:
+        raise Forbidden("Task belongs to another staff member")
     return _detail(
         service.claim_task(db, UUID(principal.property_id), task_id, UUID(principal.id))
     )
@@ -205,7 +217,7 @@ def assign(
     task = service.get_task(db, UUID(principal.property_id), task_id)
     principal.require_object(task)
     assignee = db.get(User, body.assignee_id)
-    if assignee is None or not assignee.is_active or not any(str(a.property_id) == principal.property_id and a.department_id == task.department_id for a in assignee.assignments):
+    if assignee is None or not assignee.is_active or assignee.role.key != Role.STAFF or not any(str(a.property_id) == principal.property_id and a.department_id == task.department_id for a in assignee.assignments):
         raise Forbidden("Assignee is outside the task department")
     task = service.assign_task(
         db, UUID(principal.property_id), task_id, body.assignee_id, principal.id
@@ -220,7 +232,10 @@ def set_status(
     principal: Principal = Depends(requires(Perm.TASKS_COMPLETE)),
     db: Session = Depends(get_session),
 ) -> TaskDetail:
-    principal.require_object(service.get_task(db, UUID(principal.property_id), task_id), owner_field="assignee_id")
+    task_row = service.get_task(db, UUID(principal.property_id), task_id)
+    principal.require_object(task_row)
+    if principal.role == Role.STAFF and str(task_row.assignee_id) != principal.id:
+        raise Forbidden("Only the assignee may change this task")
     task = service.update_status(
         db,
         UUID(principal.property_id),
@@ -228,5 +243,67 @@ def set_status(
         body.status.value,
         actor_id=principal.id,
         note=body.note,
+        allow_supervisor=principal.role in {Role.MANAGER, Role.GM},
     )
     return _detail(task)
+
+
+@reports_router.post("", response_model=ReportOut, status_code=status.HTTP_201_CREATED)
+def create_report(
+    body: ReportCreate,
+    principal: Principal = Depends(requires(Perm.REPORTS_WRITE)),
+    db: Session = Depends(get_session),
+) -> ReportOut:
+    principal.require_department_record(db, body.department_id)
+    return ReportOut.model_validate(reporting.create_report(
+        db, UUID(principal.property_id), UUID(principal.id), body
+    ))
+
+
+@reports_router.get("/mine", response_model=list[ReportOut])
+def my_reports(
+    principal: Principal = Depends(requires(Perm.REPORTS_WRITE)),
+    db: Session = Depends(get_session),
+) -> list[ReportOut]:
+    rows = reporting.list_reports(db, UUID(principal.property_id), reporter_id=UUID(principal.id))
+    return [ReportOut.model_validate(row) for row in rows if principal.can_see_department(row.reporter_department_id)]
+
+
+@reports_router.get("", response_model=list[ReportOut])
+def department_reports(
+    department_id: UUID | None = None,
+    principal: Principal = Depends(requires(Perm.REPORTS_READ)),
+    db: Session = Depends(get_session),
+) -> list[ReportOut]:
+    scope = principal.scoped_department(department_id)
+    rows = reporting.list_reports(db, UUID(principal.property_id), department_id=scope)
+    return [ReportOut.model_validate(row) for row in rows]
+
+
+@reports_router.get("/{report_id}", response_model=ReportOut)
+def get_report(
+    report_id: UUID,
+    principal: Principal = Depends(current_user),
+    db: Session = Depends(get_session),
+) -> ReportOut:
+    row = reporting.get_report(db, UUID(principal.property_id), report_id)
+    if str(row.reported_by) == principal.id:
+        principal.require_department(row.reporter_department_id)
+    else:
+        principal.require(Perm.REPORTS_READ)
+        principal.require_object(row)
+    return ReportOut.model_validate(row)
+
+
+@reports_router.post("/{report_id}/approve", response_model=ReportOut)
+def approve_report(
+    report_id: UUID,
+    principal: Principal = Depends(requires(Perm.REPORTS_APPROVE)),
+    db: Session = Depends(get_session),
+) -> ReportOut:
+    row = reporting.get_report(db, UUID(principal.property_id), report_id)
+    principal.require_object(row)
+    return ReportOut.model_validate(reporting.approve_report(
+        db, UUID(principal.property_id), report_id, UUID(principal.id), "scheduled",
+        allow_general_manager=principal.role == Role.GM,
+    ))

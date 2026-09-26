@@ -24,6 +24,8 @@ from vesper_common.errors import NotFound
 from vesper_common.security import Principal, current_guest, current_user, requires
 
 from . import staff_reviews
+from .models import GuestStaffReview, StaffPerformanceSummary
+from sqlalchemy import select
 from .engines import staff_rating
 from .schemas import (
     RateableStaff,
@@ -36,6 +38,22 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/staff-reviews", tags=["staff-reviews"])
+
+
+def _performance_visible(db: Session, principal: Principal, staff_id: UUID,
+                         department_id: UUID | None) -> bool:
+    if principal.role in {"gm", "service"}:
+        return True
+    if not principal.can_see_department(department_id):
+        return False
+    # The persisted score is property-wide for a person. If reviews span departments,
+    # only GM and the employee may read it until each department has its own score.
+    outside = db.scalar(select(GuestStaffReview.id).where(
+        GuestStaffReview.property_id == UUID(principal.property_id),
+        GuestStaffReview.staff_id == staff_id,
+        GuestStaffReview.department_id.is_distinct_from(department_id),
+    ).limit(1))
+    return outside is None
 
 
 def _bearer(request: Request) -> str | None:
@@ -154,6 +172,8 @@ def board(
     property_id = UUID(principal.property_id)
     scope = principal.scoped_department(department_id)
     ranked, unranked = staff_reviews.leaderboard(db, property_id, department_id=scope)
+    ranked = [row for row in ranked if _performance_visible(db, principal, row.staff_id, row.department_id)]
+    unranked = [row for row in unranked if _performance_visible(db, principal, row.staff_id, row.department_id)]
 
     return StaffPerformanceBoard(
         ranked=[StaffPerformanceOut.model_validate(row) for row in ranked],
@@ -172,10 +192,16 @@ def staff_detail(
     """One person's score and the reviews behind it."""
     property_id = UUID(principal.property_id)
     user = db.get(User, staff_id)
-    if user is None or not any(str(a.property_id) == principal.property_id and (principal.role in {"gm", "service"} or principal.can_see_department(a.department_id)) for a in user.assignments):
+    if user is None or not any(str(a.property_id) == principal.property_id for a in user.assignments):
         raise NotFound("Staff member not found")
-    row = staff_reviews.rebuild_summary(db, property_id, staff_id)
-    reviews = staff_reviews.reviews_for_staff(db, property_id, staff_id)
+    row = db.scalars(select(StaffPerformanceSummary).where(
+        StaffPerformanceSummary.property_id == property_id,
+        StaffPerformanceSummary.staff_id == staff_id,
+    )).first()
+    if row is None or not _performance_visible(db, principal, staff_id, row.department_id):
+        raise NotFound("Staff performance record not found")
+    reviews = staff_reviews.reviews_for_staff(db, property_id, staff_id,
+                                              department_id=row.department_id)
 
     detail = StaffPerformanceDetail.model_validate(row)
     detail.reviews = [StaffReviewOut.model_validate(review) for review in reviews]
@@ -190,7 +216,15 @@ def recompute(
 ) -> StaffPerformanceOut:
     """Rebuild one person's summary from their ratings."""
     user = db.get(User, staff_id)
-    if user is None or not any(str(a.property_id) == principal.property_id and (principal.role in {"gm", "service"} or principal.can_see_department(a.department_id)) for a in user.assignments):
+    if user is None or not any(str(a.property_id) == principal.property_id for a in user.assignments):
         raise NotFound("Staff member not found")
+    summary = db.scalars(select(StaffPerformanceSummary).where(
+        StaffPerformanceSummary.property_id == UUID(principal.property_id),
+        StaffPerformanceSummary.staff_id == staff_id,
+    )).first()
+    if summary is None or not _performance_visible(db, principal, staff_id, summary.department_id):
+        raise NotFound("Staff performance record not found")
     row = staff_reviews.rebuild_summary(db, UUID(principal.property_id), staff_id)
+    if not _performance_visible(db, principal, staff_id, row.department_id):
+        raise NotFound("Staff performance record not found")
     return StaffPerformanceOut.model_validate(row)

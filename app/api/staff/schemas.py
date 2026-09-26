@@ -115,3 +115,30 @@ class TeamProgress(BaseModel):
     in_progress: int
     done_today: int
     overdue: int
+
+
+class ReportCreate(BaseModel):
+    department_id: UUID
+    category: str = Field(pattern=r"^(room_defect|service|safety|supplies|general)$")
+    summary: str = Field(min_length=3, max_length=160)
+    description: str | None = None
+    severity: str = Field(default="normal", pattern=r"^(low|normal|high)$")
+    room_id: UUID | None = None
+    evidence: list[str] = Field(default_factory=list, max_length=10)
+
+
+class ReportOut(ORMModel):
+    id: UUID
+    department_id: UUID
+    reporter_department_id: UUID | None = None
+    responsible_manager_id: UUID | None = None
+    reported_by: UUID | None = None
+    category: str
+    summary: str
+    description: str | None = None
+    severity: str
+    evidence: list[str]
+    status: str
+    room_id: UUID | None = None
+    work_order_id: UUID | None = None
+    created_at: datetime

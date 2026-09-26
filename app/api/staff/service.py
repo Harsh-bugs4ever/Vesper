@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import as_utc, local_day_bounds, local_today, property_tz, utcnow
-from vesper_common.errors import Conflict, Invalid, NotFound
+from vesper_common.errors import Conflict, Forbidden, Invalid, NotFound
 from vesper_common.events import Event, bus
 
 from .models import Attendance, Shift, Task, TaskPriority, TaskSource, TaskStatus
@@ -308,12 +308,15 @@ def list_tasks(
 
 
 def assign_task(db: Session, property_id: UUID, task_id: UUID, assignee_id: UUID, actor_id: str) -> Task:
-    task = get_task(db, property_id, task_id)
+    task = db.scalars(select(Task).where(Task.id == task_id, Task.property_id == property_id).with_for_update()).first()
+    if task is None:
+        raise NotFound("Task not found")
     if task.status in {TaskStatus.DONE, TaskStatus.CANCELLED}:
         raise Conflict("That task is already closed")
-    task.assignee_id = assignee_id
-    if task.status == TaskStatus.OPEN:
+    if task.assignee_id != assignee_id:
         task.status = TaskStatus.ASSIGNED
+        task.accepted_at = None
+    task.assignee_id = assignee_id
     db.commit()
     db.refresh(task)
     bus.publish(Event.TASK_ASSIGNED, _task_payload(task), property_id=str(property_id), actor_id=actor_id)
@@ -322,7 +325,11 @@ def assign_task(db: Session, property_id: UUID, task_id: UUID, assignee_id: UUID
 
 def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID) -> Task:
     """Staff app 'accept' button. First tap wins; the second gets a clear 409."""
-    task = get_task(db, property_id, task_id)
+    task = db.scalars(select(Task).where(Task.id == task_id, Task.property_id == property_id).with_for_update()).first()
+    if task is None:
+        raise NotFound("Task not found")
+    if task.status in {TaskStatus.DONE, TaskStatus.CANCELLED}:
+        raise Conflict("That task is already closed")
     if task.assignee_id and task.assignee_id != user_id:
         raise Conflict("Somebody else already took this one")
     task.assignee_id = user_id
@@ -337,11 +344,25 @@ def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID) -> 
 
 
 def update_status(
-    db: Session, property_id: UUID, task_id: UUID, new_status: str, *, actor_id: str, note: str | None = None
+    db: Session, property_id: UUID, task_id: UUID, new_status: str, *, actor_id: str, note: str | None = None,
+    allow_supervisor: bool = False,
 ) -> Task:
-    task = get_task(db, property_id, task_id)
+    task = db.scalars(select(Task).where(Task.id == task_id, Task.property_id == property_id).with_for_update()).first()
+    if task is None:
+        raise NotFound("Task not found")
     if task.status in {TaskStatus.DONE, TaskStatus.CANCELLED}:
         raise Conflict("That task is already closed")
+    if not allow_supervisor and str(task.assignee_id) != actor_id:
+        raise Forbidden("Only the assignee may change this task")
+    allowed = {
+        TaskStatus.OPEN: {TaskStatus.CANCELLED},
+        TaskStatus.ASSIGNED: {TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED},
+        TaskStatus.IN_PROGRESS: {TaskStatus.DONE, TaskStatus.CANCELLED},
+    }
+    if new_status not in allowed.get(task.status, set()):
+        raise Conflict(f"Cannot move a task from {task.status} to {new_status}")
+    if new_status == TaskStatus.DONE and task.assignee_id is None:
+        raise Conflict("An unassigned task cannot be completed")
 
     task.status = new_status
     if new_status == TaskStatus.IN_PROGRESS:

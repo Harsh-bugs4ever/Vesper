@@ -324,14 +324,12 @@ export const property = {
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
-<<<<<<< Updated upstream
-  /** Public property summary, safe for landing/orientation without staff credentials. */
-  public: (propertyId?: string) =>
+  /** Public summary for the landing page. */
+  publicSummary: (propertyId?: string) =>
     api.get<BackendPropertySummary>(
       "/property/public",
       propertyId ? { property_id: propertyId } : undefined
     ),
-  /** Room categories belonging to this property (calls public endpoint first, falls back to authenticated). */
   roomCategories: async (propertyId?: string): Promise<BackendRoomCategory[]> => {
     try {
       return await api.get<BackendRoomCategory[]>(
@@ -339,10 +337,9 @@ export const property = {
         propertyId ? { property_id: propertyId } : undefined
       );
     } catch {
-      return await api.get<BackendRoomCategory[]>("/property/room-categories");
+      return api.get<BackendRoomCategory[]>("/property/room-categories");
     }
   },
-  /** Occupancy count and percentage from backend. */
   occupancy: () =>
     api.get<{
       total_rooms: number;
@@ -350,24 +347,6 @@ export const property = {
       occupancy_rate: number;
       as_of: string;
     }>("/property/occupancy"),
-};
-
-export const rooms = {
-  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
-    api.get<BackendRoom[]>("/rooms", params),
-  board: () => api.get<BackendRoomBoard>("/rooms/board"),
-  get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
-  setStatus: (id: string, status: string, note?: string) =>
-    api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
-};
-
-export const amenities = {
-  /**
-   * Persisted guest amenity catalogue.
-   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
-   */
-  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
-=======
   amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
   public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
   saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
@@ -431,7 +410,19 @@ export interface PublicProperty {
 export const guestProperty = {
   room: () => api.guestGet<GuestRoom>("/guest/room"),
   amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
->>>>>>> Stashed changes
+};
+
+export const amenities = {
+  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
+};
+
+export const rooms = {
+  list: (params?: { status?: string; floor?: number; category_id?: string }) =>
+    api.get<BackendRoom[]>("/rooms", params),
+  board: () => api.get<BackendRoomBoard>("/rooms/board"),
+  get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
+  setStatus: (id: string, status: string, note?: string) =>
+    api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
 };
 
 export interface GuestSession {

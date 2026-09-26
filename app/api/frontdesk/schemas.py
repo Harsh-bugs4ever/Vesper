@@ -110,4 +110,5 @@ class FrontDeskDay(BaseModel):
     date: date
     arrivals: list[BookingOut]
     departures: list[StayOut]
+    in_house: list[StayOut]
     in_house_count: int
