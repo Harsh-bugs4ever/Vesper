@@ -26,13 +26,13 @@ export function ConnectedOverview({
   title: string;
   description: string;
   queryKey: string;
-  load: () => Promise<OverviewData>;
+  load: (propertyId?: string) => Promise<OverviewData>;
 }) {
   const { isConnected, user } = useAuth();
   const [search, setSearch] = useState("");
   const query = useQuery({
     queryKey: ["connected-overview", queryKey, user?.propertyId, user?.id],
-    queryFn: load,
+    queryFn: () => load(user?.propertyId),
     enabled: isConnected && Boolean(user),
     retry: false,
     staleTime: 30_000,

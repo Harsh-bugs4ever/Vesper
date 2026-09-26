@@ -37,6 +37,7 @@ export interface Department {
 export function toUiRole(user: BackendUser, departmentKey?: string): UserRole {
   switch (user.role) {
     case "owner":
+      return "owner";
     case "gm":
       return "general_manager";
     case "manager":
@@ -56,7 +57,7 @@ export function toUiRole(user: BackendUser, departmentKey?: string): UserRole {
 }
 
 const ROLE_TITLES: Record<string, string> = {
-  owner: "Owner",
+  owner: "Property Owner",
   gm: "General Manager",
   manager: "Department Manager",
   supervisor: "Supervisor",
@@ -199,6 +200,7 @@ export function isAdminUser(user: User): boolean {
     holdsPermission(user.permissions, "users:read") ||
     holdsPermission(user.permissions, "rates:approve") ||
     holdsPermission(user.permissions, "tasks:manage") ||
+    user.role === "owner" ||
     user.role === "general_manager" ||
     user.role === "dept_manager_fb" ||
     user.role === "dept_manager_hk" ||

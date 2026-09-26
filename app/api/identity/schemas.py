@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Literal
 
-RoleKey = Literal["gm", "manager", "staff"]
+RoleKey = Literal["owner", "gm", "manager", "staff"]
 
 
 class AssignmentIn(BaseModel):

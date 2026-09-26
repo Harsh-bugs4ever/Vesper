@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -243,6 +244,23 @@ function LiveActionQueue() {
     queryKey: statsKey,
     queryFn: () => api.get<ActionStats>("/cards/stats"),
     refetchInterval: 60_000,
+  });
+
+  const recommendationsMutation = useMutation({
+    mutationFn: () => api.post<{ cards_raised: number }>("/revenue/cards/propose?days=14"),
+    onSuccess: async (result) => {
+      await client.invalidateQueries({ queryKey: key });
+      showToast({
+        title: result.cards_raised ? "Recommendations added" : "No rate changes suggested",
+        description: result.cards_raised
+          ? `${result.cards_raised} rate recommendation${result.cards_raised === 1 ? "" : "s"} added to the queue.`
+          : "The current 14-day forecast did not produce a rate change above the recommendation thresholds.",
+        type: "default",
+      });
+    },
+    onError: (error: Error) => {
+      showToast({ title: "Could not generate recommendations", description: error.message, type: "error" });
+    },
   });
 
   const approveMutation = useMutation({
@@ -570,8 +588,20 @@ function LiveActionQueue() {
             <p className="mx-auto mt-1 max-w-sm text-sm text-sand-600">
               {includeDecided
                 ? "Try clearing filters to see all cards."
-                : "The AI engines will raise new cards as demand, sensor telemetry, and inventory change."}
+                : "There are no pending recommendations for these filters. Check the revenue forecast and department alerts for current signals, then return here to review any actions they raise."}
             </p>
+            {!includeDecided && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {(user?.role === "owner" || user?.role === "general_manager") && (
+                  <Button type="button" onClick={() => recommendationsMutation.mutate()} disabled={recommendationsMutation.isPending}>
+                    {recommendationsMutation.isPending ? "Checking forecast…" : "Generate rate recommendations"}
+                  </Button>
+                )}
+                <Link href="/admin/rates" className="inline-flex items-center rounded-lg border border-sage-300 px-4 py-2 text-sm font-medium text-sage-800 hover:bg-sage-50">
+                  Open revenue forecast
+                </Link>
+              </div>
+            )}
           </PanelBody>
         </Panel>
       ) : (

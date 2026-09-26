@@ -130,27 +130,27 @@ class Principal:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Property is outside your assignment")
 
     def require_department(self, department_id: str | UUID | None) -> None:
-        if department_id is None or (self.role not in {Role.GM, "service"} and str(department_id) not in self.department_ids):
+        if department_id is None or (self.role not in {Role.GM, Role.OWNER, "service"} and str(department_id) not in self.department_ids):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Department is outside your assignment")
 
     def can_see_department(self, department_id: str | UUID | None) -> bool:
-        return bool(department_id is not None and (self.role in {Role.GM, "service"} or str(department_id) in self.department_ids))
+        return bool(department_id is not None and (self.role in {Role.GM, Role.OWNER, "service"} or str(department_id) in self.department_ids))
 
     def can_see_event(self, department_id: str | UUID | None) -> bool:
-        return self.role == Role.GM or self.can_see_department(department_id)
+        return self.role in {Role.GM, Role.OWNER} or self.can_see_department(department_id)
 
     def scoped_department(self, requested: str | UUID | None) -> UUID | None:
         if requested is not None:
             self.require_department(requested)
             return UUID(str(requested))
-        if self.role in {Role.GM, "service"}:
+        if self.role in {Role.GM, Role.OWNER, "service"}:
             return None
         if len(self.department_ids) == 1:
             return UUID(next(iter(self.department_ids)))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Select an assigned department")
 
     def require_department_key(self, db: Session, key: str) -> None:
-        if self.role in {Role.GM, "service"}:
+        if self.role in {Role.GM, Role.OWNER, "service"}:
             return
         from app.api.property.models import Department
         department_id = db.scalar(select(Department.id).where(Department.property_id == UUID(self.property_id), Department.key == key))
@@ -164,7 +164,7 @@ class Principal:
 
     def require_object(self, obj: Any, *, owner_field: str | None = None) -> None:
         self.require_property(getattr(obj, "property_id", None))
-        if self.role in {Role.GM, "service"}:
+        if self.role in {Role.GM, Role.OWNER, "service"}:
             return
         department_id = getattr(obj, "department_id", None)
         if department_id is not None and self.can_see_department(department_id):
@@ -262,10 +262,10 @@ def authorize_staff_principal(principal: Principal, db: Session) -> Principal:
     if departments:
         existing = {str(value) for value in db.scalars(select(Department.id).where(Department.property_id == UUID(principal.property_id), Department.id.in_([UUID(value) for value in departments])))}
         departments &= existing
-    if user.role.key != Role.GM and not departments:
+    if user.role.key not in {Role.GM, Role.OWNER} and not departments:
         _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Department assignment required")
-    if user.role.key == Role.GM and not any(a.department_id is None and str(a.property_id) == principal.property_id for a in assignments):
+    if user.role.key in {Role.GM, Role.OWNER} and not any(a.department_id is None and str(a.property_id) == principal.property_id for a in assignments):
         _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Branch overview assignment required")
 
@@ -305,10 +305,10 @@ def requires(*permissions: str):
 
 
 def requires_gm(*permissions: str):
-    """Specialist analytics require a live GM role, not an old permission grant."""
+    """Specialist analytics require a live GM or Owner role, not an old permission grant."""
     def dependency(principal: Principal = Depends(current_user)) -> Principal:
-        if principal.role not in {Role.GM, "service"}:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "General Manager access required")
+        if principal.role not in {Role.GM, Role.OWNER, "service"}:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "General Manager or Owner access required")
         for permission in permissions:
             principal.require(str(permission))
         return principal

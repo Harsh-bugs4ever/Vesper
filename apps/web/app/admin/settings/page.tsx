@@ -153,7 +153,7 @@ export default function ResortSettingsPage() {
     },
   ]);
 
-  const isAuthorized = role === "general_manager";
+  const isAuthorized = role === "general_manager" || role === "owner";
 
   const handleSaveSettings = () => {
     showToast({
@@ -718,6 +718,9 @@ export default function ResortSettingsPage() {
           <p className="text-xs text-sand-600">
             Establish human-in-the-loop safety boundaries for AI Prophet, XGBoost, and OR-Tools optimization engines.
           </p>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-950">
+            <strong>Demo controls:</strong> these sliders show the intended approval boundaries but are not saved as live policy. Each engine must explicitly enforce a threshold before it changes whether an action is routed or executed. Review high-impact actions in the Action Queue.
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Confidence & Impact Guardrails */}

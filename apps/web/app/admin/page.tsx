@@ -7,6 +7,7 @@ import { UserCheck, ArrowRight } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
 import { GmDashboard, ManagerDashboard } from "@/components/connected/live-dashboard";
+import { OwnerDashboard } from "@/components/connected/owner-dashboard";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 
@@ -41,6 +42,11 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     );
+  }
+
+  // Property Owner
+  if (user?.role === "owner") {
+    return <OwnerDashboard />;
   }
 
   // Department managers (F&B, Housekeeping)

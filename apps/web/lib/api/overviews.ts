@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, property } from "@/lib/api";
 import type { OverviewData } from "@/components/connected/connected-overview";
 
 type Forecast = { stay_date: string; predicted_occupancy: number; lower_bound: number; upper_bound: number; predicted_adr: number; confidence: number; model_name: string };
@@ -13,7 +13,7 @@ type AttendanceTeam = { work_date: string; expected: number; present: number; la
 type SentimentSummary = { samples: number; average_sentiment: number; label: string; negative_share: number; top_themes: { theme: string; count: number }[] };
 type SentimentTrend = { department_id: string; points: { date: string; average_sentiment: number; samples: number }[] };
 type Offer = { id: string; guest_id: string; offer_type: string; status: string; discount_pct: number; estimated_value: number; expires_on: string | null };
-type RateHistory = { id: string; stay_date: string; new_rate: number; previous_rate: number | null; source: string; created_at: string };
+type RateHistory = { id: string; room_category_id: string; stay_date: string; new_rate: number; previous_rate: number | null; source: string; created_at: string };
 
 const money = (value: number) => `₹${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const pct = (value: number) => `${Math.round(value * 100)}%`;
@@ -133,13 +133,17 @@ export async function loadReports(): Promise<OverviewData> {
   };
 }
 
-export async function loadRevenueInsights(): Promise<OverviewData> {
-  const history = await api.get<RateHistory[]>("/revenue/rates/history");
+export async function loadRevenueInsights(propertyId?: string): Promise<OverviewData> {
+  const [history, categories] = await Promise.all([
+    api.get<RateHistory[]>("/revenue/rates/history"),
+    property.roomCategories(propertyId),
+  ]);
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const changed = history.filter((row) => row.previous_rate != null);
   return {
     metrics: [metric("Rate changes", String(history.length)), metric("Increases", String(changed.filter((row) => Number(row.new_rate) > Number(row.previous_rate)).length)), metric("Decreases", String(changed.filter((row) => Number(row.new_rate) < Number(row.previous_rate)).length))],
-    columns: [{ key: "date", label: "Stay date" }, { key: "previous", label: "Previous rate" }, { key: "new", label: "New rate" }, { key: "change", label: "Change" }, { key: "source", label: "Source" }],
-    rows: history.map((row) => ({ id: row.id, date: date(row.stay_date), previous: row.previous_rate == null ? "Base rate" : money(row.previous_rate), new: money(row.new_rate), change: row.previous_rate == null ? "—" : money(Number(row.new_rate) - Number(row.previous_rate)), source: row.source })),
-    note: "This page explains recorded rate changes. Attribution of occupancy and revenue movement needs a historical comparison API.",
+    columns: [{ key: "date", label: "Stay date" }, { key: "department", label: "Department" }, { key: "category", label: "Room category" }, { key: "previous", label: "Previous rate" }, { key: "new", label: "New rate" }, { key: "change", label: "Change" }],
+    rows: history.map((row) => ({ id: row.id, date: date(row.stay_date), department: "Rooms", category: categoryNames.get(row.room_category_id) ?? "Room", previous: row.previous_rate == null ? "Base rate" : money(row.previous_rate), new: money(row.new_rate), change: row.previous_rate == null ? "—" : money(Number(row.new_rate) - Number(row.previous_rate)) })),
+    note: "Department identifies where the rate change applies. Rate movement alone does not represent realized revenue.",
   };
 }

@@ -267,8 +267,8 @@ def main() -> int:
     for label, count in counts.items():
         print(f"  {label:<22} {count}")
     print(f"\nSign in with any email below and the password: {PASSWORD}")
-    print("  owner@vesper.demo      gm      — legacy demo account, now General Manager")
-    print("  gm@vesper.demo         gm      — approves rates and offers")
+    print("  owner@vesper.demo      owner   — Property Owner / Executive Director")
+    print("  gm@vesper.demo         gm      — General Manager")
     print("  fom@vesper.demo        manager — front office")
     print("  exec@vesper.demo       manager — housekeeping")
     print("  chef@vesper.demo       manager — food & beverage")
@@ -314,6 +314,29 @@ def _seed(db) -> dict[str, int]:
         db.add(row)
         departments[key] = row
     db.flush()
+
+    # --- monthly departmental budgets for the owner and procurement dashboards ---
+    # These are explicitly synthetic demo allocations, aligned to the active month.
+    period_start = today.replace(day=1)
+    next_month = (period_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    period_end = next_month - timedelta(days=1)
+    budget_allocations = {
+        "front_office": Decimal("1800000"),
+        "housekeeping": Decimal("2400000"),
+        "fnb": Decimal("5200000"),
+        "maintenance": Decimal("3100000"),
+        "store": Decimal("1600000"),
+    }
+    for department_key, allocation in budget_allocations.items():
+        db.add(inv.DepartmentBudget(
+            property_id=pid,
+            department_id=departments[department_key].id,
+            period_start=period_start,
+            period_end=period_end,
+            currency="INR",
+            allocated=allocation,
+        ))
+    counts["department_budgets"] = len(budget_allocations)
 
     categories = {}
     for key, name, rate, occupancy, amenities in ROOM_CATEGORIES:
@@ -378,10 +401,11 @@ def _seed(db) -> dict[str, int]:
 
     roles = {}
     for key, perms in DEFAULT_ROLE_PERMISSIONS.items():
+        label_text = "Property Owner" if key == "owner" else ("General Manager" if key == "gm" else str(key).title())
         row = ident.Role(
             property_id=pid,
             key=str(key),
-            label="General Manager" if key == "gm" else str(key).title(),
+            label=label_text,
             permissions=sorted(str(p) for p in perms),
             is_system=True,
         )
@@ -417,10 +441,10 @@ def _seed(db) -> dict[str, int]:
         )
         db.add(row)
         users.append(row)
-        db.add(ident.UserAssignment(user=row, property_id=pid, department_id=departments[department].id if department and role != "gm" else None))
+        db.add(ident.UserAssignment(user=row, property_id=pid, department_id=departments[department].id if department and role not in {"gm", "owner"} else None))
         return row
 
-    add_user("owner@vesper.demo", "Rustom Mistry", "gm", None, "EMP0001")
+    add_user("owner@vesper.demo", "Rustom Mistry", "owner", None, "EMP0001")
     add_user("gm@vesper.demo", "Anjali Verma", "gm", None, "EMP0002")
     front_manager = add_user("fom@vesper.demo", "Nikhil Rao", "manager", "front_office", "EMP0003")
     housekeeping_manager = add_user("exec@vesper.demo", "Sunita Pillai", "manager", "housekeeping", "EMP0004")
@@ -824,6 +848,214 @@ def _seed(db) -> dict[str, int]:
             )
             comp_rates += 1
     counts["competitor_rates"] = comp_rates
+
+    # --- rate history (revenue changes visible to owner) -------------------------
+    # Seed 30 days of rate history so the Revenue Insights page is not empty.
+    rate_history_count = 0
+    owner_user = users[0]  # owner is first user
+    gm_user = users[1]     # gm is second user
+    for cat_key, cat_row in categories.items():
+        base = float(cat_row.base_rate)
+        for days_ago in range(30, 0, -1):
+            day = today - timedelta(days=days_ago)
+            prev_rate = Decimal(int(base * random.uniform(0.85, 1.05) / 100) * 100)
+            new_rate = Decimal(int(base * random.uniform(0.90, 1.30) / 100) * 100)
+            # Only log meaningful changes (more than 5% swing)
+            if abs(float(new_rate) - float(prev_rate)) / max(float(prev_rate), 1) < 0.05:
+                continue
+            source = random.choices(
+                [rev.RateSource.ACTION_CARD, rev.RateSource.MANUAL, rev.RateSource.BASE],
+                weights=[55, 30, 15],
+            )[0]
+            db.add(rev.RateHistory(
+                property_id=pid,
+                room_category_id=cat_row.id,
+                stay_date=day,
+                previous_rate=prev_rate,
+                new_rate=new_rate,
+                source=source,
+                changed_by=gm_user.id if source == rev.RateSource.MANUAL else None,
+            ))
+            rate_history_count += 1
+    db.flush()
+    counts["rate_history_entries"] = rate_history_count
+
+    # --- owner-level AI action cards (populates the Action Queue) ----------------
+    import vesper_models.action as act
+
+    owner_action_cards = [
+        # High-impact rate surge for Diwali peak
+        dict(
+            engine="revenue.demand",
+            kind=act.CardKind.RATE_CHANGE,
+            status=act.CardStatus.PENDING,
+            title="Diwali Peak: Raise Suite ADR by +18%",
+            summary=(
+                "Suite occupancy pace for Oct 20–Nov 5 is tracking at 94% — 12 points above "
+                "the seasonal baseline. Competitor comp-set rates are ₹6,200 lower on average. "
+                "AI recommends raising Suite ADR from ₹38,900 to ₹45,900 to capture peak demand "
+                "premium. Projected incremental yield: ₹4.8L across 15 nights."
+            ),
+            drivers=[
+                {"label": "94% Occupancy Pace", "detail": "15 days ahead of arrival — highest advance booking in 14 months", "weight": 0.45},
+                {"label": "Comp-Set Under-pricing", "detail": "Sea Breeze & Novotel averaging ₹6,200 below our current suite rate", "weight": 0.30},
+                {"label": "Diwali Event Premium", "detail": "Historical Diwali ADR uplift: +22% vs standard weekend in this property", "weight": 0.25},
+            ],
+            confidence=0.91,
+            impact_amount=Decimal("480000"),
+            urgency=act.Urgency.HIGH,
+            score=0.82,
+            required_permission="cards:approve",
+            payload={"category": "suite", "new_rate": 45900, "current_rate": 38900, "nights": 15, "editable_fields": ["new_rate"]},
+            undo_payload={"category": "suite", "restore_rate": 38900},
+        ),
+        # Solar PPA — CapEx decision
+        dict(
+            engine="asset.sustainability",
+            kind=act.CardKind.WORK_ORDER,
+            status=act.CardStatus.PENDING,
+            title="Approve 120 kW Rooftop Solar PPA Contract",
+            summary=(
+                "DISCOM tariff has increased 14.6% YoY. A 120 kW rooftop solar PPA with "
+                "SunEdge Energy cuts monthly DISCOM draw by 24%, saving ₹4.2L per month. "
+                "Zero upfront capital — performance-based PPA model over 15 years. "
+                "Payback vs baseline: 18 months. IRR: 22.4%."
+            ),
+            drivers=[
+                {"label": "+14.6% Electricity Tariff Rise", "detail": "DISCOM unit rate increased from ₹9.20 to ₹10.55/kWh in FY26", "weight": 0.40},
+                {"label": "₹4.2L/mo Projected Savings", "detail": "Based on 120 kW generation at 5.2 peak sun hours/day", "weight": 0.40},
+                {"label": "Zero CapEx PPA Structure", "detail": "SunEdge Energy performance contract — no upfront investment required", "weight": 0.20},
+            ],
+            confidence=0.88,
+            impact_amount=Decimal("420000"),
+            urgency=act.Urgency.MEDIUM,
+            score=0.77,
+            required_permission="cards:approve",
+            payload={"vendor": "SunEdge Energy", "contract_value": 0, "monthly_savings": 420000, "payback_months": 18},
+            undo_payload={},
+        ),
+        # Chiller preventive maintenance
+        dict(
+            engine="asset.anomaly",
+            kind=act.CardKind.WORK_ORDER,
+            status=act.CardStatus.PENDING,
+            title="Chiller Unit #1: Preventive Overhaul Before Warranty Expiry",
+            summary=(
+                "Vibration telemetry on CHL-01 shows a +0.12g/week trend over the past 14 days, "
+                "approaching the 3.8 mm/s manufacturer threshold. Compressor warranty expires in "
+                "47 days. Scheduling a warranty-covered overhaul now avoids a ₹12.5L emergency "
+                "rebuild if the unit fails mid-summer peak. Recommended: schedule within 10 days."
+            ),
+            drivers=[
+                {"label": "Vibration Trend +0.12g/wk", "detail": "14-day upward drift detected on CHL-01 vibration sensor", "weight": 0.50},
+                {"label": "47 Days to Warranty Expiry", "detail": "OEM warranty covers compressor replacement at zero cost until expiry", "weight": 0.35},
+                {"label": "Peak Summer Risk", "detail": "Chiller failure in May-Jun peak season means 8+ hours downtime, 80+ room impact", "weight": 0.15},
+            ],
+            confidence=0.85,
+            impact_amount=Decimal("1250000"),
+            urgency=act.Urgency.CRITICAL,
+            score=0.90,
+            required_permission="cards:approve",
+            payload={"asset_code": "CHL-01", "asset_name": "Chiller Unit 1", "action": "warranty_overhaul", "days_to_warranty_expiry": 47},
+            undo_payload={},
+        ),
+        # Executive suite refurbishment
+        dict(
+            engine="revenue.demand",
+            kind=act.CardKind.RATE_CHANGE,
+            status=act.CardStatus.PENDING,
+            title="Club Room Discount: Absorb Monsoon Trough (Jun 1–30)",
+            summary=(
+                "June occupancy forecast for Club Rooms is 58% — 22 points below the annual "
+                "average. Peer hotels are running 12–18% OTA discounts. Offering a ₹3,200 "
+                "off-peak discount on Club Rooms via OTA channel for Jun 1–30 is projected to "
+                "lift occupancy to 72%, recovering ₹2.1L of lost RevPAR."
+            ),
+            drivers=[
+                {"label": "58% Projected June Occupancy", "detail": "AI demand model lower-bound for Club category in monsoon trough", "weight": 0.45},
+                {"label": "Competitor OTA Discounting", "detail": "Novotel and Sea Breeze both running 15%+ off-peak promotions", "weight": 0.35},
+                {"label": "RevPAR Recovery ₹2.1L", "detail": "Modelled uplift from 58% to 72% occupancy on 55 Club rooms", "weight": 0.20},
+            ],
+            confidence=0.79,
+            impact_amount=Decimal("210000"),
+            urgency=act.Urgency.MEDIUM,
+            score=0.62,
+            required_permission="cards:approve",
+            payload={"category": "club", "discount_amount": 3200, "channel": "ota", "start_date": str(today + timedelta(days=65)), "end_date": str(today + timedelta(days=95))},
+            undo_payload={},
+        ),
+        # F&B staff augmentation
+        dict(
+            engine="workforce.gap",
+            kind=act.CardKind.STAFFING_GAP,
+            status=act.CardStatus.PENDING,
+            title="F&B Staffing Gap: Add 4 Banquet Stewards for Oct Peak",
+            summary=(
+                "October banquet bookings are at 87% of hall capacity for all Saturdays. "
+                "Current banquet roster of 12 stewards is insufficient for 3-hall concurrent "
+                "operation. AI recommends hiring 4 temporary stewards from Oct 1–Nov 15, "
+                "preventing service failure risk across 8 high-value events."
+            ),
+            drivers=[
+                {"label": "87% Banquet Hall Booking Pace", "detail": "All Oct Saturdays at capacity; 3 simultaneous hall bookings pending", "weight": 0.50},
+                {"label": "12 Stewards vs 16 Required", "detail": "SLA model requires 4 stewards per 100 covers; Oct events average 480 covers", "weight": 0.35},
+                {"label": "8 High-Value Events at Risk", "detail": "Average banquet billing ₹2.8L per event — total exposure ₹22.4L", "weight": 0.15},
+            ],
+            confidence=0.82,
+            impact_amount=Decimal("2240000"),
+            urgency=act.Urgency.HIGH,
+            score=0.72,
+            required_permission="cards:approve",
+            payload={"department": "fnb", "headcount": 4, "role": "Banquet Steward", "start_date": str(today + timedelta(days=5)), "end_date": str(today + timedelta(days=50))},
+            undo_payload={},
+        ),
+        # One already-executed card to show history
+        dict(
+            engine="inventory.restock",
+            kind=act.CardKind.PURCHASE,
+            status=act.CardStatus.EXECUTED,
+            title="Emergency Restock: Coffee Beans (Coorg Roasters)",
+            summary=(
+                "Coffee bean stock fell to 6 kg — below the 8 kg minimum. At current room service "
+                "consumption of 1.8 kg/day, a stockout was imminent within 3 days. AI triggered "
+                "an emergency 25 kg reorder from Coorg Roasters."
+            ),
+            drivers=[
+                {"label": "Stock Below Minimum (6/8 kg)", "detail": "BV-COFFEE dropped below reorder threshold", "weight": 0.70},
+                {"label": "3-Day Stockout Risk", "detail": "1.8 kg/day room service consumption rate", "weight": 0.30},
+            ],
+            confidence=0.97,
+            impact_amount=Decimal("31250"),
+            urgency=act.Urgency.HIGH,
+            score=0.95,
+            required_permission="cards:approve",
+            payload={"sku": "BV-COFFEE", "quantity": 25, "supplier": "Coorg Roasters", "unit_cost": 1250},
+            undo_payload={"sku": "BV-COFFEE", "restore_quantity": 6},
+            decided_at=utcnow() - timedelta(hours=6),
+            executed_at=utcnow() - timedelta(hours=5),
+            decided_by=gm_user.id,
+        ),
+    ]
+
+    action_cards_seeded = 0
+    for card_data in owner_action_cards:
+        decided_at = card_data.pop("decided_at", None)
+        executed_at = card_data.pop("executed_at", None)
+        decided_by = card_data.pop("decided_by", None)
+        card = act.ActionCard(
+            property_id=pid,
+            **card_data,
+        )
+        if decided_at:
+            card.decided_at = decided_at
+        if executed_at:
+            card.executed_at = executed_at
+        if decided_by:
+            card.decided_by = decided_by
+        db.add(card)
+        action_cards_seeded += 1
+    db.flush()
+    counts["action_cards"] = action_cards_seeded
 
     # --- concierge knowledge base -------------------------------------------------
     for title, content, category in KNOWLEDGE:

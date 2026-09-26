@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Package,
   Settings,
+  Shield,
   Sprout,
   Tags,
   Users,
@@ -45,7 +46,7 @@ interface NavItem {
   permission?: string;
 }
 
-const MANAGEMENT = ["general_manager"];
+const MANAGEMENT = ["owner", "general_manager"];
 
 interface NavGroup {
   /** Omitted for the ungrouped first entry (Dashboard). */
@@ -55,7 +56,10 @@ interface NavGroup {
 
 const NAV: NavGroup[] = [
   {
-    items: [{ name: "Dashboard", href: "/admin", icon: LayoutGrid }],
+    items: [
+      { name: "Dashboard", href: "/admin", icon: LayoutGrid },
+      { name: "Owner Overview", href: "/admin/owner", icon: Shield, roles: ["owner", "general_manager"] },
+    ],
   },
   {
     label: "Operations",
@@ -66,13 +70,13 @@ const NAV: NavGroup[] = [
         name: "Housekeeping",
         href: "/admin/housekeeping",
         icon: BedDouble,
-        roles: ["general_manager", "dept_manager_hk"],
+        roles: ["owner", "general_manager", "dept_manager_hk"],
       },
       {
         name: "F&B",
         href: "/admin/fnb",
         icon: UtensilsCrossed,
-        roles: ["general_manager", "dept_manager_fb"],
+        roles: ["owner", "general_manager", "dept_manager_fb"],
       },
       { name: "Maintenance", href: "/admin/maintenance", icon: Wrench, permission: "workorder:approve" },
       { name: "Guest Requests", href: "/admin/requests", icon: ClipboardList, permission: "requests:read" },
@@ -105,7 +109,7 @@ const NAV: NavGroup[] = [
     items: [
       { name: "Room Status", href: "/admin/rooms", icon: Boxes },
       { name: "Inventory", href: "/admin/inventory", icon: Package, permission: "stock:read" },
-      { name: "Budgets", href: "/admin/budgets", icon: Wallet, roles: ["general_manager"] },
+      { name: "Budgets", href: "/admin/budgets", icon: Wallet, roles: ["owner", "general_manager"] },
       { name: "Settings", href: "/admin/settings", icon: Settings, roles: MANAGEMENT },
     ],
   },
@@ -117,14 +121,40 @@ const NAV: NavGroup[] = [
   },
 ];
 
+const OWNER_NAV: NavGroup[] = [
+  {
+    items: [
+      { name: "Owner Cockpit", href: "/admin/owner", icon: Shield },
+    ],
+  },
+  {
+    label: "Executive Portal",
+    items: [
+      { name: "Executive Reports", href: "/admin/reports", icon: LineChart },
+      { name: "Budgets & CapEx", href: "/admin/budgets", icon: Wallet },
+      { name: "Action Queue", href: "/admin/actions", icon: Zap },
+      { name: "Property Settings", href: "/admin/settings", icon: Settings },
+    ],
+  },
+];
+
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { role, hasPermission } = useAuth();
 
-  const groups = NAV.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => (!item.roles || Boolean(role && item.roles.includes(role))) && (!item.permission || hasPermission(item.permission))),
-  })).filter((group) => group.items.length > 0);
+  const isOwner = role === "owner";
+  const navSource = isOwner ? OWNER_NAV : NAV;
+
+  const groups = navSource
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          (!item.roles || Boolean(role && item.roles.includes(role))) &&
+          (!item.permission || hasPermission(item.permission))
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <>

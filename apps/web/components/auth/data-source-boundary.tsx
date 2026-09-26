@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/auth-context";
 const LIVE_ADMIN_ROUTES = new Set([
   "/admin",
   "/admin/actions",
+  "/admin/budgets",
   "/admin/communications",
   "/admin/data-insights",
   "/admin/demand-calendar",
@@ -20,6 +21,7 @@ const LIVE_ADMIN_ROUTES = new Set([
   "/admin/housekeeping",
   "/admin/inventory",
   "/admin/maintenance",
+  "/admin/owner",
   "/admin/payroll",
   "/admin/performance",
   "/admin/purchase-orders",

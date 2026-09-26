@@ -52,8 +52,8 @@ def token(property_id):
     return Principal(id=str(uuid4()), property_id=str(property_id), role="gm", permissions={Perm.USERS_WRITE})
 
 
-def test_only_three_internal_roles_and_no_implicit_inheritance():
-    assert set(DEFAULT_ROLE_PERMISSIONS) == {Role.GM, Role.MANAGER, Role.STAFF}
+def test_internal_roles_and_no_implicit_inheritance():
+    assert set(DEFAULT_ROLE_PERMISSIONS) == {Role.OWNER, Role.GM, Role.MANAGER, Role.STAFF}
     assert Perm.ATTENDANCE_MARK not in DEFAULT_ROLE_PERMISSIONS[Role.GM]
     assert Perm.USERS_WRITE not in DEFAULT_ROLE_PERMISSIONS[Role.MANAGER]
 

@@ -24,6 +24,8 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
       // Route strictly based on authenticated backend role
       if (user.role === "employee") {
         router.push("/staff");
+      } else if (user.role === "owner") {
+        router.push("/admin/owner");
       } else {
         router.push("/admin");
       }
@@ -34,6 +36,11 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const setPreset = (presetEmail: string) => {
+    setEmail(presetEmail);
+    setPassword("vesper123");
   };
 
   return (
@@ -169,6 +176,39 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
               </div>
             </div>
           </form>
+
+          {/* Quick Demo Credentials Presets */}
+          <div className="mt-6 rounded-xl border border-sand-200/80 bg-sand-50/70 p-4">
+            <p className="text-xs font-semibold text-sand-800 mb-2.5">Quick Demo Accounts</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPreset("owner@vesper.demo")}
+                className="flex flex-col items-start rounded-lg border border-gold-300/60 bg-gold-50/50 p-2 text-left transition-colors hover:bg-gold-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+              >
+                <span className="text-xs font-bold text-gold-950">Property Owner</span>
+                <span className="text-[10px] text-gold-800/80 font-mono">owner@vesper.demo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPreset("gm@vesper.demo")}
+                className="flex flex-col items-start rounded-lg border border-sage-300/60 bg-sage-50/50 p-2 text-left transition-colors hover:bg-sage-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
+              >
+                <span className="text-xs font-bold text-sage-950">General Manager</span>
+                <span className="text-[10px] text-sage-800/80 font-mono">gm@vesper.demo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPreset("fom@vesper.demo")}
+                className="flex flex-col items-start rounded-lg border border-sand-300/60 bg-white p-2 text-left transition-colors hover:bg-sand-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sand-500"
+              >
+                <span className="text-xs font-bold text-sand-900">Front Office Mgr</span>
+                <span className="text-[10px] text-sand-600 font-mono">fom@vesper.demo</span>
+              </button>
+            </div>
+          </div>
 
           {/* Guest Access Alternative */}
           <div className="mt-8 border-t border-sand-200 pt-6">

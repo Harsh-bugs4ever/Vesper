@@ -362,6 +362,15 @@ python scripts/seed_workflow.py --property-id YOUR-PROPERTY-UUID --apply
 The workflow pack is repeatable and does not delete existing data. See
 [the workflow review and walkthrough](docs/workflow-review-and-demo.md).
 
+For an already-seeded resort, add only missing monthly department budgets without
+resetting the database:
+
+```bash
+python scripts/seed_finance_demo.py --list-properties
+python scripts/seed_finance_demo.py --property-id YOUR-PROPERTY-UUID
+python scripts/seed_finance_demo.py --property-id YOUR-PROPERTY-UUID --apply
+```
+
 Or the backend on the host, with reload, against Postgres and Redis in Docker:
 
 ```bash

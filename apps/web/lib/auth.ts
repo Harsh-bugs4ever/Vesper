@@ -10,6 +10,7 @@
  */
 
 export type UserRole =
+  | "owner"
   | "general_manager"
   | "dept_manager_fb"
   | "dept_manager_hk"
@@ -120,6 +121,29 @@ export const PERMISSIONS_LIST: PermissionDefinition[] = [
  * actually holds — that always comes from `user.permissions` on the backend response.
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
+  owner: [
+    "rates:view_forecast",
+    "rates:approve",
+    "rates:approve_high_impact",
+    "revenue:simulator",
+    "tasks:manage",
+    "rooms:manage_status",
+    "rooms:inspect",
+    "stock:manage",
+    "purchases:request",
+    "purchases:approve_high_impact",
+    "attendance:view_dept",
+    "roster:manage",
+    "sensors:view",
+    "work_orders:resolve",
+    "guest:sentiment_view",
+    "users:manage",
+    "roles:manage",
+    "resort:configure",
+    "integrations:manage",
+    "audit:view",
+    "audit:view_full",
+  ],
   general_manager: [
     "rates:view_forecast",
     "rates:approve",

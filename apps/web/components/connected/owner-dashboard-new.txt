@@ -1,0 +1,653 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Bot,
+  Building2,
+  CheckCircle2,
+  DollarSign,
+  Download,
+  Eye,
+  IndianRupee,
+  LineChart as LineChartIcon,
+  Lock,
+  PieChart as PieChartIcon,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import {
+  Area,
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import { useAuth } from "@/components/auth/auth-context";
+import { api, dashboardApi, type DashboardData } from "@/lib/api";
+import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
+import { StatTile } from "@/components/ui/stat-tile";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { axisProps, gridProps, formatLakh } from "@/lib/chart-theme";
+import { cn } from "@/lib/utils";
+
+const FINANCIAL_TREND_DATA = [
+  { month: "Apr", revenue: 14500000, profit: 6200000, target: 14000000 },
+  { month: "May", revenue: 15800000, profit: 6900000, target: 15000000 },
+  { month: "Jun", revenue: 13900000, profit: 5700000, target: 14500000 },
+  { month: "Jul", revenue: 16200000, profit: 7100000, target: 15500000 },
+  { month: "Aug", revenue: 17400000, profit: 7800000, target: 16500000 },
+  { month: "Sep", revenue: 18200000, profit: 8250000, target: 17000000 },
+];
+
+const YIELD_DATA = [
+  { month: "Apr", occupancy: 72, adr: 16200 },
+  { month: "May", occupancy: 78, adr: 17100 },
+  { month: "Jun", occupancy: 68, adr: 16500 },
+  { month: "Jul", occupancy: 81, adr: 17800 },
+  { month: "Aug", occupancy: 85, adr: 18200 },
+  { month: "Sep", occupancy: 88, adr: 18900 },
+];
+
+const BUDGET_DATA = [
+  { dept: "Rooms", allocated: 4200000, spent: 3890000, pct: 92.6 },
+  { dept: "F&B", allocated: 3800000, spent: 3540000, pct: 93.2 },
+  { dept: "Housekeeping", allocated: 2100000, spent: 1820000, pct: 86.7 },
+  { dept: "Maintenance", allocated: 1900000, spent: 1640000, pct: 86.3 },
+  { dept: "Admin & HR", allocated: 1200000, spent: 890000, pct: 74.2 },
+  { dept: "Marketing", allocated: 850000, spent: 720000, pct: 84.7 },
+];
+
+const CAPEX_DATA = [
+  { name: "HVAC & Chiller Plant", value: 8500000, color: "#2f6b57", status: "In Progress" },
+  { name: "Guest Lifts Modernization", value: 5200000, color: "#c59a2a", status: "Approved" },
+  { name: "Suite & Room Refurbishment", value: 6400000, color: "#a8c3b4", status: "Planned" },
+  { name: "Solar & BMS Automation", value: 3900000, color: "#c9a87c", status: "Approved" },
+  { name: "Kitchen & F&B Outlets", value: 2800000, color: "#8a958f", status: "Planned" },
+];
+
+const CAPEX_TREND = [
+  { month: "Apr", budget: 2200000, actual: 1950000 },
+  { month: "May", budget: 2200000, actual: 2400000 },
+  { month: "Jun", budget: 2200000, actual: 1800000 },
+  { month: "Jul", budget: 2200000, actual: 2650000 },
+  { month: "Aug", budget: 2200000, actual: 2900000 },
+  { month: "Sep", budget: 2200000, actual: 2680000 },
+];
+
+export function OwnerDashboard() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<"overview" | "financials" | "budget" | "governance">("overview");
+
+  const propertyName = user?.propertyName ?? "JW Marriott Mumbai, Juhu";
+
+  const { data: dashboard } = useQuery<DashboardData>({
+    queryKey: ["owner-dashboard", user?.propertyId],
+    queryFn: () => dashboardApi.get(15),
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-sand-200/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="outline" className="border-gold-300 bg-gold-50/80 text-gold-950 font-medium text-[11px] px-2.5 py-0.5">
+              <Shield className="mr-1 h-3 w-3 text-gold-600 inline" /> Executive Portal
+            </Badge>
+            <span className="text-xs text-sand-500 font-medium">Asset ID: {user?.propertyId?.slice(0, 8) ?? "VESPER-01"}</span>
+          </div>
+          <h1 className="font-serif text-3xl font-bold tracking-tight text-sand-950 sm:text-4xl">
+            {propertyName} — Owner Cockpit
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-sand-600 max-w-2xl">
+            Executive overview: revenue, Gross Operating Profit, budget health, and AI governance.
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Button variant="outline" size="sm" className="text-xs gap-1.5 bg-white shadow-xs" onClick={() => alert("Downloading Executive Owner Statement (PDF)...")}>
+            <Download className="h-3.5 w-3.5 text-sand-600" /> Export Statement
+          </Button>
+          <Link href="/admin/settings">
+            <Button size="sm" className="text-xs gap-1.5 bg-sage-800 hover:bg-sage-900 text-white">
+              <Zap className="h-3.5 w-3.5 text-gold-400" /> AI Autonomy Controls
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="YTD Gross Revenue" value="18.2 Cr" change="+14.2% YoY" comparison="Target: 17.0 Cr" direction="up" intent="good" tone="forest" icon={IndianRupee} />
+        <StatTile label="Gross Operating Profit" value="8.25 Cr" change="+11.8% YoY" comparison="45.3% GOP Margin" direction="up" intent="good" tone="gold" icon={TrendingUp} />
+        <StatTile label="RevPAR & ADR" value="16,632" change="+8.6% RevPAR" comparison="ADR: 18,900 | Occ: 88%" direction="up" intent="good" tone="sage" icon={Building2} />
+        <StatTile label="CapEx Utilization" value="72.4%" change="19.4 Cr of 26.8 Cr" comparison="3 projects on track" direction="up" intent="good" tone="emerald" icon={Wallet} />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-sand-200 overflow-x-auto">
+        {[
+          { id: "overview", label: "Executive Overview", icon: LayoutGridIcon },
+          { id: "financials", label: "Yield & GOP", icon: LineChartIcon },
+          { id: "budget", label: "Budget & CapEx", icon: Wallet },
+          { id: "governance", label: "AI Guardrails", icon: Shield },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={cn(
+                "flex items-center gap-2 border-b-2 px-4 py-3 text-xs sm:text-sm font-medium transition-colors -mb-px whitespace-nowrap",
+                isActive ? "border-sage-700 text-sage-900 font-semibold" : "border-transparent text-sand-600 hover:border-sand-300 hover:text-sand-900"
+              )}
+            >
+              <Icon className={cn("h-4 w-4", isActive ? "text-sage-700" : "text-sand-500")} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab 1: Overview */}
+      {activeTab === "overview" && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <Panel className="lg:col-span-7 bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-lg font-bold text-sand-950 flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-sage-700" /> Monthly Revenue vs GOP
+                </h3>
+                <p className="text-xs text-sand-600">Tracked against budget targets — FY 2026</p>
+              </PanelHeader>
+              <PanelBody className="pt-4">
+                <div className="h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={FINANCIAL_TREND_DATA} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                      <CartesianGrid {...gridProps} />
+                      <XAxis dataKey="month" {...axisProps} />
+                      <YAxis {...axisProps} tickFormatter={formatLakh} width={64} />
+                      <Tooltip formatter={(v: any, n: any) => [formatLakh(Number(v)), n === "revenue" ? "Revenue" : n === "profit" ? "GOP" : "Target"]} labelStyle={{ fontWeight: "bold" }} />
+                      <Bar dataKey="revenue" fill="#a8c3b4" radius={[4, 4, 0, 0]} name="revenue" />
+                      <Bar dataKey="profit" fill="#2f6b57" radius={[4, 4, 0, 0]} name="profit" />
+                      <Line type="monotone" dataKey="target" stroke="#c59a2a" strokeWidth={2} strokeDasharray="5 5" name="target" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center justify-between border-t border-sand-100 pt-3 text-xs">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5 text-sand-700"><span className="h-3 w-3 rounded-sm bg-[#a8c3b4]" /> Revenue</span>
+                    <span className="flex items-center gap-1.5 text-sand-700"><span className="h-3 w-3 rounded-sm bg-[#2f6b57]" /> GOP</span>
+                    <span className="flex items-center gap-1.5 text-sand-700"><span className="h-3 w-3 rounded-sm bg-[#c59a2a]" /> Target</span>
+                  </div>
+                  <span className="font-semibold text-sage-800">Avg GOP Margin: 43.5%</span>
+                </div>
+              </PanelBody>
+            </Panel>
+
+            <Panel className="lg:col-span-5 bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-lg font-bold text-sand-950 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-gold-600" /> Yield & RevPAR
+                </h3>
+                <p className="text-xs text-sand-600">Occupancy % vs ADR trend</p>
+              </PanelHeader>
+              <PanelBody className="pt-4">
+                <div className="h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={YIELD_DATA} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid {...gridProps} />
+                      <XAxis dataKey="month" {...axisProps} />
+                      <YAxis yAxisId="left" {...axisProps} domain={[50, 100]} tickFormatter={(v) => `${v}%`} width={40} />
+                      <YAxis yAxisId="right" orientation="right" {...axisProps} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
+                      <Tooltip formatter={(v: any, n: any) => [n === "occupancy" ? `${v}%` : Number(v).toLocaleString(), n === "occupancy" ? "Occupancy" : "ADR"]} />
+                      <Area yAxisId="left" type="monotone" dataKey="occupancy" fill="#dbe8e1" stroke="#2f6b57" strokeWidth={2} name="occupancy" />
+                      <Line yAxisId="right" type="monotone" dataKey="adr" stroke="#c59a2a" strokeWidth={2.5} dot={{ r: 4 }} name="adr" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-sand-100 pt-3 text-xs">
+                  <span className="text-sand-600">Peak: <strong className="text-sand-900">88% (Sep)</strong></span>
+                  <span className="text-sand-600">ADR: <strong className="text-sand-900">18,900</strong></span>
+                  <span className="text-sand-600">RevPAR: <strong className="text-emerald-700">+18.4%</strong></span>
+                </div>
+              </PanelBody>
+            </Panel>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Dept SLA */}
+            <Panel className="bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-base font-bold text-sand-950 flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-sage-700" /> Departmental SLA
+                </h3>
+                <p className="text-xs text-sand-500">Live SLA compliance</p>
+              </PanelHeader>
+              <PanelBody className="space-y-4">
+                {[
+                  { name: "Front Office", sla: 98.4, staff: 24, tasks: 3 },
+                  { name: "Housekeeping", sla: 96.2, staff: 62, tasks: 12 },
+                  { name: "Food & Beverage", sla: 95.8, staff: 54, tasks: 8 },
+                  { name: "Maintenance", sla: 99.1, staff: 18, tasks: 2 },
+                  { name: "Store", sla: 97.5, staff: 8, tasks: 0 },
+                ].map((d) => (
+                  <div key={d.name} className="rounded-xl border border-sand-200/70 bg-sand-50/40 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-semibold text-xs text-sand-950">{d.name}</span>
+                      <span className="text-[11px] font-mono font-bold text-sage-800">{d.sla}%</span>
+                    </div>
+                    <div className="w-full bg-sand-200 rounded-full h-1.5 mb-2">
+                      <div className="bg-sage-600 h-1.5 rounded-full" style={{ width: `${d.sla}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-sand-600">
+                      <span>Staff: {d.staff}</span>
+                      <span>Open tasks: {d.tasks}</span>
+                    </div>
+                  </div>
+                ))}
+              </PanelBody>
+            </Panel>
+
+            {/* Budget Snapshot */}
+            <Panel className="bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-base font-bold text-sand-950 flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-gold-600" /> Budget Snapshot
+                </h3>
+                <p className="text-xs text-sand-500">FY 2026 spend vs allocation</p>
+              </PanelHeader>
+              <PanelBody className="space-y-3">
+                {BUDGET_DATA.map((d) => (
+                  <div key={d.dept}>
+                    <div className="flex items-center justify-between mb-1 text-xs">
+                      <span className="font-medium text-sand-900">{d.dept}</span>
+                      <span className={cn("font-mono font-bold text-[11px]", d.pct > 90 ? "text-amber-700" : "text-sage-700")}>{d.pct}%</span>
+                    </div>
+                    <div className="w-full bg-sand-100 rounded-full h-2">
+                      <div className={cn("h-2 rounded-full", d.pct > 90 ? "bg-amber-500" : "bg-sage-500")} style={{ width: `${d.pct}%` }} />
+                    </div>
+                    <div className="flex justify-between mt-0.5 text-[10px] text-sand-500">
+                      <span>Spent: {(d.spent / 100000).toFixed(1)}L</span>
+                      <span>Budget: {(d.allocated / 100000).toFixed(1)}L</span>
+                    </div>
+                  </div>
+                ))}
+                <div className="rounded-xl border border-gold-200 bg-gold-50/60 p-2.5 mt-2 text-xs">
+                  <span className="font-bold text-gold-900">F&B & Rooms at 93%+ spend</span>
+                  <p className="text-gold-800 text-[11px] mt-0.5">May need Q4 budget top-up approval</p>
+                </div>
+              </PanelBody>
+            </Panel>
+
+            {/* AI Action Queue Preview */}
+            <Panel className="bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-base font-bold text-sand-950 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-gold-500" /> AI Action Queue
+                </h3>
+                <p className="text-xs text-sand-500">High-impact decisions pending</p>
+              </PanelHeader>
+              <PanelBody className="space-y-3.5">
+                <div className="rounded-xl border border-rose-200/80 bg-rose-50/50 p-3 text-xs">
+                  <div className="flex items-center justify-between font-bold text-rose-950 mb-1">
+                    <span className="flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5 text-rose-600" /> Chiller Warranty Overhaul</span>
+                    <Badge variant="outline" className="border-rose-300 text-rose-900 bg-rose-100/60 text-[10px]">Critical</Badge>
+                  </div>
+                  <p className="text-rose-900/80 text-[11px] leading-relaxed mb-2.5">Vibration trend +0.12g/wk. 47 days to warranty expiry. Avoid 12.5L rebuild.</p>
+                  <Link href="/admin/actions"><Button size="sm" className="w-full text-xs h-7 bg-rose-700 hover:bg-rose-800 text-white font-medium">View in Action Queue</Button></Link>
+                </div>
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3 text-xs">
+                  <div className="flex items-center justify-between font-bold text-emerald-950 mb-1">
+                    <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-emerald-600" /> Solar PPA Contract</span>
+                    <Badge variant="outline" className="border-emerald-300 text-emerald-900 bg-emerald-100/60 text-[10px]">+4.2L/mo</Badge>
+                  </div>
+                  <p className="text-emerald-900/80 text-[11px] leading-relaxed mb-2.5">120kW solar cuts energy draw 24%. Zero upfront CapEx. IRR: 22.4%.</p>
+                  <Link href="/admin/actions"><Button size="sm" className="w-full text-xs h-7 bg-emerald-700 hover:bg-emerald-800 text-white font-medium">Review PPA Contract</Button></Link>
+                </div>
+                <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 text-xs">
+                  <div className="flex items-center justify-between font-bold text-amber-950 mb-1">
+                    <span className="flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5 text-amber-600" /> Diwali Suite ADR Surge</span>
+                    <Badge variant="outline" className="border-amber-300 text-amber-900 bg-amber-100/60 text-[10px]">+4.8L Yield</Badge>
+                  </div>
+                  <p className="text-amber-900/80 text-[11px] leading-relaxed mb-2.5">94% suite pace. AI recommends +18% ADR: 38,900 to 45,900 for Diwali peak.</p>
+                  <Link href="/admin/actions"><Button size="sm" className="w-full text-xs h-7 bg-amber-700 hover:bg-amber-800 text-white font-medium">Approve Rate Surge</Button></Link>
+                </div>
+              </PanelBody>
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Financials */}
+      {activeTab === "financials" && (
+        <Panel className="bg-white p-6 shadow-soft">
+          <h3 className="font-serif text-xl font-bold text-sand-950 mb-4">Detailed Financial & Yield Breakdown</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-sand-50 border border-sand-200">
+              <span className="text-sand-500 font-semibold block uppercase text-xs">Rooms Revenue</span>
+              <span className="text-2xl font-bold text-sand-950 mt-1 block">12.4 Cr</span>
+              <span className="text-emerald-700 font-medium text-xs mt-1 block">68.1% of Total Revenue</span>
+            </div>
+            <div className="p-4 rounded-xl bg-sand-50 border border-sand-200">
+              <span className="text-sand-500 font-semibold block uppercase text-xs">F&B Revenue</span>
+              <span className="text-2xl font-bold text-sand-950 mt-1 block">4.6 Cr</span>
+              <span className="text-emerald-700 font-medium text-xs mt-1 block">25.2% of Total Revenue</span>
+            </div>
+            <div className="p-4 rounded-xl bg-sand-50 border border-sand-200">
+              <span className="text-sand-500 font-semibold block uppercase text-xs">Spa & Amenities</span>
+              <span className="text-2xl font-bold text-sand-950 mt-1 block">1.2 Cr</span>
+              <span className="text-emerald-700 font-medium text-xs mt-1 block">6.7% of Total Revenue</span>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {/* Tab 3: Budget & CapEx */}
+      {activeTab === "budget" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-sand-200 bg-white p-4 shadow-soft">
+              <p className="text-xs font-semibold text-sand-500 uppercase">Total OpEx Budget</p>
+              <p className="text-2xl font-bold text-sand-950 mt-1">14.05 Cr</p>
+              <p className="text-xs text-sand-600 mt-0.5">FY 2026 — All Departments</p>
+            </div>
+            <div className="rounded-xl border border-sand-200 bg-white p-4 shadow-soft">
+              <p className="text-xs font-semibold text-sand-500 uppercase">OpEx Utilized</p>
+              <p className="text-2xl font-bold text-sand-950 mt-1">12.50 Cr</p>
+              <p className="text-xs text-amber-700 mt-0.5 font-medium">89% — 2 depts near limit</p>
+            </div>
+            <div className="rounded-xl border border-sand-200 bg-white p-4 shadow-soft">
+              <p className="text-xs font-semibold text-sand-500 uppercase">Total CapEx Budget</p>
+              <p className="text-2xl font-bold text-sand-950 mt-1">26.8 Cr</p>
+              <p className="text-xs text-sand-600 mt-0.5">5 capital projects — FY26</p>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-soft">
+              <p className="text-xs font-semibold text-emerald-700 uppercase">CapEx Deployed</p>
+              <p className="text-2xl font-bold text-emerald-950 mt-1">19.4 Cr</p>
+              <p className="text-xs text-emerald-700 mt-0.5 font-medium">72.4% — 3 on track</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <Panel className="lg:col-span-7 bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-lg font-bold text-sand-950 flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-sage-700" /> Department OpEx Utilization
+                </h3>
+                <p className="text-xs text-sand-500">Actual spend vs budget — FY 2026</p>
+              </PanelHeader>
+              <PanelBody>
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={BUDGET_DATA} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid horizontal={false} stroke="#f0ece4" />
+                      <XAxis type="number" tickFormatter={(v) => `${(v / 100000).toFixed(0)}L`} {...axisProps} />
+                      <YAxis type="category" dataKey="dept" {...axisProps} width={80} />
+                      <Tooltip formatter={(v: any) => `${(Number(v) / 100000).toFixed(1)}L`} />
+                      <Bar dataKey="allocated" fill="#e8ede8" radius={[0, 4, 4, 0]} name="Budget" />
+                      <Bar dataKey="spent" fill="#2f6b57" radius={[0, 4, 4, 0]} name="Spent" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </PanelBody>
+            </Panel>
+
+            <Panel className="lg:col-span-5 bg-white shadow-soft border-sand-200">
+              <PanelHeader>
+                <h3 className="font-serif text-lg font-bold text-sand-950 flex items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-gold-600" /> CapEx Allocation
+                </h3>
+                <p className="text-xs text-sand-500">26.8 Cr capital deployment — FY 2026</p>
+              </PanelHeader>
+              <PanelBody>
+                <div className="h-[160px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={CAPEX_DATA} cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={4} dataKey="value">
+                        {CAPEX_DATA.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
+                      </Pie>
+                      <Tooltip formatter={(v: any) => formatLakh(Number(v))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2 mt-3">
+                  {CAPEX_DATA.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="text-sand-800 text-[11px]">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0",
+                          item.status === "In Progress" ? "border-emerald-300 bg-emerald-50 text-emerald-800" :
+                          item.status === "Approved" ? "border-gold-300 bg-gold-50 text-gold-800" :
+                          "border-sand-300 bg-sand-50 text-sand-700"
+                        )}>{item.status}</Badge>
+                        <span className="font-mono font-semibold text-sand-950 text-[11px]">{formatLakh(item.value)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PanelBody>
+            </Panel>
+          </div>
+
+          <Panel className="bg-white shadow-soft border-sand-200">
+            <PanelHeader>
+              <h3 className="font-serif text-lg font-bold text-sand-950 flex items-center gap-2">
+                <LineChartIcon className="h-5 w-5 text-sage-700" /> Monthly CapEx vs Budget Pacing
+              </h3>
+              <p className="text-xs text-sand-500">Actual capital deployed vs 2.2 Cr/mo pacing</p>
+            </PanelHeader>
+            <PanelBody>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={CAPEX_TREND} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="month" {...axisProps} />
+                    <YAxis tickFormatter={(v) => `${(v / 100000).toFixed(0)}L`} {...axisProps} width={55} />
+                    <Tooltip formatter={(v: any) => `${(Number(v) / 100000).toFixed(1)}L`} />
+                    <Bar dataKey="actual" fill="#2f6b57" radius={[4, 4, 0, 0]} name="Actual" />
+                    <Line type="monotone" dataKey="budget" stroke="#c59a2a" strokeWidth={2} strokeDasharray="5 5" name="Pacing" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 rounded-xl bg-sage-50/60 border border-sage-200 p-3 text-xs text-sage-800">
+                <strong>AI Insight:</strong> May and Jul overran pacing due to emergency HVAC parts. Aug-Sep are back on track.
+                With 7.4 Cr remaining and Q4 ahead, strict CapEx discipline is recommended to avoid budget overrun.
+              </div>
+            </PanelBody>
+          </Panel>
+        </div>
+      )}
+
+      {/* Tab 4: AI Guardrails */}
+      {activeTab === "governance" && (
+        <div className="space-y-6">
+          <Panel className="bg-white p-6 shadow-soft border-sand-200">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4 pb-5 border-b border-sand-200">
+              <div className="rounded-xl bg-sage-100 p-3 shrink-0">
+                <Bot className="h-7 w-7 text-sage-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-xl font-bold text-sand-950">What Are AI Guardrails?</h3>
+                <p className="text-sm text-sand-600 mt-1 max-w-3xl leading-relaxed">
+                  Vesper AI engines work autonomously — adjusting room rates, restocking inventory, and flagging maintenance risks.
+                  <strong className="text-sand-900"> AI Guardrails</strong> define exactly what the AI can do on its own vs. what requires
+                  your approval as the owner. Think of them as your safety net: the AI acts fast within the boundaries you set,
+                  and escalates anything beyond those boundaries to you.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+              {[
+                {
+                  icon: DollarSign, color: "emerald",
+                  title: "Financial Spend Cap",
+                  sub: "Any AI action spending over 50,000 is blocked and escalated to you.",
+                  detail: "The AI can auto-approve restocking, minor repairs, and small purchases. Anything above 50,000 generates an Action Card for your review. You can adjust this limit in Property Settings.",
+                  metric: "50,000 cap", metricLabel: "per autonomous action",
+                },
+                {
+                  icon: Lock, color: "gold",
+                  title: "Rate Change Bounds",
+                  sub: "Room rates can only move plus/minus 15% in a single AI action without owner approval.",
+                  detail: "The Revenue Engine adjusts daily rates based on demand. Guardrails prevent it from changing rates by more than 15% without triggering an escalation. This prevents accidental under-pricing during peak events.",
+                  metric: "+-15% max", metricLabel: "rate swing per AI action",
+                },
+                {
+                  icon: Eye, color: "sage",
+                  title: "Shadow Mode Override",
+                  sub: "Put the AI in watch-only mode — it logs decisions but executes nothing.",
+                  detail: "Not confident in a new AI engine? Enable Shadow Mode. The AI shows exactly what it would have done and measures outcomes. Once satisfied with its track record, enable live execution.",
+                  metric: "Shadow Mode", metricLabel: "zero-risk observation",
+                },
+                {
+                  icon: ShieldCheck, color: "sand",
+                  title: "Audit & Compliance Ledger",
+                  sub: "Every AI decision is logged with a tamper-evident SHA-256 hash chain.",
+                  detail: "Download a complete audit ledger showing which engine made what decision, when, and what the outcome was. Supports DPDP 2023 compliance and board review.",
+                  metric: "100% traceable", metricLabel: "every AI action audited",
+                },
+              ].map((p) => {
+                const Icon = p.icon;
+                const bg: Record<string, string> = { emerald: "bg-emerald-50 border-emerald-200", gold: "bg-gold-50/60 border-gold-200", sage: "bg-sage-50 border-sage-200", sand: "bg-sand-50 border-sand-200" };
+                const ic: Record<string, string> = { emerald: "text-emerald-600", gold: "text-gold-600", sage: "text-sage-700", sand: "text-sand-600" };
+                const mc: Record<string, string> = { emerald: "text-emerald-950", gold: "text-gold-950", sage: "text-sage-950", sand: "text-sand-950" };
+                return (
+                  <div key={p.title} className={cn("rounded-xl border p-4", bg[p.color])}>
+                    <div className="flex items-start gap-3 mb-3">
+                      <Icon className={cn("h-5 w-5 mt-0.5 shrink-0", ic[p.color])} />
+                      <div>
+                        <h4 className="font-bold text-sand-950 text-sm">{p.title}</h4>
+                        <p className="text-xs text-sand-600 mt-0.5">{p.sub}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-sand-700 leading-relaxed mb-3">{p.detail}</p>
+                    <div className="flex items-center justify-between border-t border-sand-200/60 pt-2.5">
+                      <span className={cn("font-mono font-bold text-sm", mc[p.color])}>{p.metric}</span>
+                      <span className="text-[10px] text-sand-500">{p.metricLabel}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Panel>
+
+          <Panel className="bg-white p-6 shadow-soft border-sand-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-sand-200 gap-3">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-sand-950 flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-sage-700" /> Governance Status
+                </h3>
+                <p className="text-xs text-sand-600 mt-1">Live compliance and recent decisions</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="outline" className="text-xs bg-white shadow-xs" onClick={() => alert("Downloading Compliance Ledger PDF...")}>
+                  <Download className="h-3.5 w-3.5 text-sand-600 mr-1.5" /> Export Ledger
+                </Button>
+                <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50 px-2.5 py-1 text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 mr-1 inline" /> 100% Compliant
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+              <div className="p-4 rounded-xl bg-sage-50/60 border border-sage-200">
+                <span className="text-[11px] font-semibold text-sage-800 uppercase block">AI Autonomy Fidelity</span>
+                <span className="text-2xl font-bold text-sage-950 mt-1 block">97.6%</span>
+                <span className="text-[11px] text-sage-700 mt-1 block">2.4% Human Override Rate</span>
+              </div>
+              <div className="p-4 rounded-xl bg-gold-50/60 border border-gold-200">
+                <span className="text-[11px] font-semibold text-gold-900 uppercase block">DPDP Act Privacy</span>
+                <span className="text-2xl font-bold text-gold-950 mt-1 block">Verified</span>
+                <span className="text-[11px] text-gold-800 mt-1 block">100% Guest Data Anonymized</span>
+              </div>
+              <div className="p-4 rounded-xl bg-sand-100/70 border border-sand-300">
+                <span className="text-[11px] font-semibold text-sand-700 uppercase block">Audit Ledger</span>
+                <span className="text-xl font-bold text-sand-950 mt-1 block font-mono">SHA-256</span>
+                <span className="text-[11px] text-sand-600 mt-1 block">Tamper-Evident Chain</span>
+              </div>
+              <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                <span className="text-[11px] font-semibold text-emerald-800 uppercase block">Financial Guardrail</span>
+                <span className="text-2xl font-bold text-emerald-950 mt-1 block">50K Cap</span>
+                <span className="text-[11px] text-emerald-700 mt-1 block">Actions above need Owner</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-sand-950 uppercase tracking-wider">Recent AI and Human Decisions</h4>
+              {[
+                { id: "GOV-8941", time: "Today, 14:32", actor: "Rustom Mistry (Owner)", action: "Authorized 120kW Rooftop Solar PPA Contract", impact: "+4.2L Monthly Energy Savings", type: "CapEx Decision", status: "Owner Approved", sc: "border-emerald-300 bg-emerald-50 text-emerald-800" },
+                { id: "GOV-8940", time: "Today, 11:15", actor: "Vesper AI Revenue Engine", action: "Autonomous Rate Surge +14.3% for Suites — within guardrail bounds", impact: "+1,42,000 RevPAR Gain", type: "Dynamic Yield (AI)", status: "AI Executed — Within Bounds", sc: "border-sage-300 bg-sage-50 text-sage-800" },
+                { id: "GOV-8939", time: "Yesterday, 16:45", actor: "Anjali Verma (GM)", action: "Approved PO for Chiller Upgrade — above 50k cap, escalated to human", impact: "85,000 Maintenance", type: "Procurement (Escalated)", status: "Human Authorized", sc: "border-gold-300 bg-gold-50 text-gold-900" },
+                { id: "GOV-8938", time: "Yesterday, 09:00", actor: "Privacy Engine", action: "DPDP 2023 Anonymization Audit — 25,658 guest records scrubbed", impact: "100% DPDP Compliance", type: "Compliance Audit", status: "Verified Pass", sc: "border-sand-300 bg-sand-100 text-sand-800" },
+              ].map((log) => (
+                <div key={log.id} className="p-3.5 rounded-xl border border-sand-200 bg-sand-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sand-950">{log.action}</span>
+                      <Badge variant="outline" className={cn("text-[10px]", log.sc)}>{log.status}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-sand-500 text-[11px]">
+                      <span><strong>ID:</strong> {log.id}</span>
+                      <span>Actor: {log.actor}</span>
+                      <span>{log.time}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-mono font-bold text-sage-800 block">{log.impact}</span>
+                    <span className="text-[10px] text-sand-500">{log.type}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-xl bg-sage-900/5 border border-sage-200/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-sage-900">Customize Your AI Guardrails</p>
+                <p className="text-xs text-sand-600 mt-0.5">Adjust spend cap, rate bounds, and shadow mode for each AI engine.</p>
+              </div>
+              <Link href="/admin/settings">
+                <Button size="sm" className="bg-sage-800 hover:bg-sage-900 text-white text-xs gap-1.5 shrink-0">
+                  <Zap className="h-3.5 w-3.5 text-gold-400" /> Open AI Autonomy Controls
+                </Button>
+              </Link>
+            </div>
+          </Panel>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LayoutGridIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
+    </svg>
+  );
+}

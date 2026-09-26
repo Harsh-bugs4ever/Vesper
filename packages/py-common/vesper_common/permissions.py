@@ -8,9 +8,11 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
+    OWNER = "owner"
     GM = "gm"
     MANAGER = "manager"
     STAFF = "staff"
+
 
 
 class Perm(StrEnum):
@@ -171,9 +173,32 @@ GM_PERMS: set[str] = {
     Perm.OFFERS_APPROVE,
     Perm.SIMULATOR_RUN,
     Perm.LEARNING_READ,
+    Perm.DASHBOARD_READ,
+    Perm.FORECAST_READ,
+}
+
+OWNER_PERMS: set[str] = GM_PERMS | {
+    Perm.DASHBOARD_READ,
+    Perm.FORECAST_READ,
+    Perm.LEARNING_READ,
+    Perm.SIMULATOR_RUN,
+    Perm.BUDGET_READ,
+    Perm.BUDGET_MANAGE,
+    Perm.REPORTS_READ,
+    Perm.REPORTS_APPROVE,
+    Perm.AUDIT_READ,
+    Perm.RATES_APPROVE,
+    Perm.OFFERS_APPROVE,
+    Perm.PROPERTY_READ,
+    Perm.PROPERTY_WRITE,
+    Perm.USERS_READ,
+    Perm.USERS_WRITE,
+    Perm.ROLES_WRITE,
+    Perm.SETTINGS_WRITE,
 }
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    Role.OWNER: OWNER_PERMS,
     Role.GM: GM_PERMS,
     Role.MANAGER: MANAGER_PERMS,
     Role.STAFF: STAFF_PERMS,
