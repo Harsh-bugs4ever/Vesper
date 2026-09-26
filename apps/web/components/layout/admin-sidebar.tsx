@@ -123,9 +123,10 @@ const NAV: NavGroup[] = [
     label: "Property",
     items: [
       { name: "Resort Twin (3D)", href: "/admin/rooms", icon: Boxes },
-      { name: "Inventory", href: "/admin/inventory", icon: Package },
+      { name: "Inventory", href: "/admin/inventory", icon: Package, permission: "stock:read" },
       { name: "Suppliers", href: "/admin/suppliers", icon: Truck },
-      { name: "Purchase Orders", href: "/admin/purchase-orders", icon: ReceiptText },
+      { name: "Purchase Orders", href: "/admin/purchase-orders", icon: ReceiptText, permission: "stock:read" },
+      { name: "Budgets", href: "/admin/budgets", icon: Wallet, roles: ["general_manager"] },
       { name: "Settings", href: "/admin/settings", icon: Settings, roles: MANAGEMENT },
     ],
   },

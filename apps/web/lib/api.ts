@@ -244,6 +244,7 @@ export interface BackendUser {
   department_id: string | null;
   property_id: string;
   permissions: string[];
+  assignments?: { property_id: string; department_id: string | null }[];
 }
 
 /** `GET /property` — the branch this user belongs to, as the backend knows it. */
@@ -324,7 +325,6 @@ export const property = {
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
-<<<<<<< Updated upstream
   /** Public property summary, safe for landing/orientation without staff credentials. */
   public: (propertyId?: string) =>
     api.get<BackendPropertySummary>(
@@ -350,6 +350,13 @@ export const property = {
       occupancy_rate: number;
       as_of: string;
     }>("/property/occupancy"),
+  amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
+  publicDetail: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
+  saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
+  uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
+  uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
+  updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
+    api.patch<RoomImage>(`/property/images/${imageId}`, data),
 };
 
 export const rooms = {
@@ -367,14 +374,6 @@ export const amenities = {
    * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
    */
   list: () => api.get<GuestAmenity[]>("/guest/amenities"),
-=======
-  amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
-  public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
-  saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
-  uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
-  uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
-  updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
-    api.patch<RoomImage>(`/property/images/${imageId}`, data),
 };
 
 export interface RoomImage {
@@ -431,7 +430,6 @@ export interface PublicProperty {
 export const guestProperty = {
   room: () => api.guestGet<GuestRoom>("/guest/room"),
   amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
->>>>>>> Stashed changes
 };
 
 export interface GuestSession {
