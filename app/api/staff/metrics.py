@@ -73,9 +73,7 @@ def scope(
         return branch, department_id
 
     if principal.role == Role.MANAGER:
-        dept = UUID(principal.department_id) if principal.department_id else (
-            UUID(next(iter(principal.department_ids))) if len(principal.department_ids) == 1 else None
-        )
+        dept = UUID(next(iter(principal.department_ids))) if len(principal.department_ids) == 1 else None
         if dept is None:
             raise Forbidden("Select an assigned department")
         checked_employee(dept)

@@ -54,6 +54,14 @@ def test_employee_filter_rejects_outside_department():
         metrics.scope(db, actor, branch_id=None, department_id=uuid4())
 
 
+def test_manager_with_multiple_departments_must_select_one():
+    branch, first, second = uuid4(), uuid4(), uuid4()
+    actor = principal("manager", branch, department=first)
+    actor.department_ids.add(str(second))
+    with pytest.raises(Forbidden):
+        metrics.scope(MagicMock(), actor)
+
+
 def test_staff_cannot_select_another_employee():
     actor = principal("staff", uuid4(), department=uuid4())
     with pytest.raises(Forbidden):
