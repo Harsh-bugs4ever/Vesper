@@ -95,10 +95,37 @@ def guest_menu(
 
 
 @guest_router.get("/amenities", response_model=list[AmenityOut])
-def guest_amenities(principal: Principal = Depends(active_guest),
-                    db: Session = Depends(get_session)) -> list[AmenityOut]:
-    return [AmenityOut.model_validate(a) for a in
-            property_service.list_amenities(db, UUID(principal.property_id))]
+def guest_amenities(
+    request: Request, db: Session = Depends(get_session)
+) -> list[AmenityOut]:
+    """Guest amenities catalogue. Public or Guest Stay Token."""
+    prop_id: UUID | None = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        if token:
+            try:
+                from vesper_common.security import decode_guest_token
+                principal = decode_guest_token(token)
+                if principal and principal.property_id:
+                    prop_id = UUID(principal.property_id)
+            except Exception:
+                pass
+
+    if prop_id is None:
+        from app.api.property.models import Property
+        from sqlalchemy import select
+        prop = db.scalars(select(Property).order_by(Property.created_at)).first()
+        if prop:
+            prop_id = prop.id
+
+    if prop_id is None:
+        return []
+
+    return [
+        AmenityOut.model_validate(a)
+        for a in property_service.list_amenities(db, prop_id)
+    ]
 
 
 @guest_router.get("/room", response_model=GuestRoomOut)
