@@ -132,7 +132,7 @@ export function GmDashboard() {
 
   const dismissMutation = useMutation({
     mutationFn: (cardId: string) =>
-      actionCardsApi.dismiss(cardId, "dismissed_from_cockpit"),
+      actionCardsApi.dismiss(cardId, "other", "Dismissed from GM cockpit"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gm-action-cards"] });
       queryClient.invalidateQueries({ queryKey: ["gm-dashboard"] });
