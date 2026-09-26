@@ -52,6 +52,7 @@ import {
   type RequestDetail,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import GuestChatEscalationsPage from "@/app/admin/guest-chat/page";
 
 const CHANNEL_ICONS = {
   whatsapp: MessageSquare,
@@ -84,7 +85,7 @@ const REQUEST_STATUS_VARIANTS: Record<string, "default" | "success" | "warning" 
   cancelled: "error",
 };
 
-type Tab = "inbox" | "diagnostics" | "csv_import";
+type Tab = "inbox" | "guest-escalations" | "diagnostics" | "csv_import";
 
 export default function CommunicationsPage() {
   const { user, role, hasPermission } = useAuth();
@@ -348,6 +349,10 @@ export default function CommunicationsPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-sand-200 pb-2">
+        <Button variant={activeTab === "guest-escalations" ? "default" : "outline"} size="sm"
+          onClick={() => setActiveTab("guest-escalations")} className="text-xs">
+          Guest Escalations
+        </Button>
         <Button
           variant={activeTab === "inbox" ? "default" : "outline"}
           size="sm"
@@ -384,6 +389,8 @@ export default function CommunicationsPage() {
           <span>Batch Data Operations</span>
         </Button>
       </div>
+
+      {activeTab === "guest-escalations" && <GuestChatEscalationsPage />}
 
       {/* TAB 1: Department Inbox */}
       {activeTab === "inbox" && (

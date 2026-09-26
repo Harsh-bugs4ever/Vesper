@@ -883,11 +883,12 @@ export interface ActionCardDetail {
   engine: string;
   urgency: "urgent" | "high" | "medium" | "low" | string;
   status: "pending" | "approved" | "executed" | "dismissed" | "snoozed" | string;
-  headline: string;
-  rationale: string;
+  title: string;
+  summary: string;
+  impact_amount: number;
   confidence: number;
   department_id: string | null;
-  drivers?: ActionDriver[];
+  drivers: ActionDriver[];
   adjustments?: Record<string, unknown>;
   can_undo?: boolean;
   undo_seconds_left?: number;

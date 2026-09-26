@@ -98,7 +98,7 @@ flowchart TD
    **action queue** ranks by confidence × impact × urgency and puts in the owner's
    queue.
 6. The owner approves it. The action queue executes, logs it to the audit trail, and gives
-   them a 10-second undo.
+   them a 10-minute undo window.
 7. A week later the outcome is scored back — if the suggestion was good, that engine's
    confidence goes up. Vesper gets better at its own job.
 8. Meanwhile the guest saw *Delivered* on their phone and tapped four stars.
@@ -333,6 +333,18 @@ docker compose up --build        # redis, the backend, the web app
 make migrate                     # bring the database to head
 make seed                        # the demo resort: 355 rooms, ~180 staff, a year of bookings
 ```
+
+To add the connected guest, staff and manager walkthrough to that synthetic resort,
+find its ID and preview the changes before applying them:
+
+```bash
+python scripts/seed_workflow.py --list-properties
+python scripts/seed_workflow.py --property-id YOUR-PROPERTY-UUID
+python scripts/seed_workflow.py --property-id YOUR-PROPERTY-UUID --apply
+```
+
+The add-on is repeatable and does not delete existing data. See
+[the workflow review and walkthrough](docs/workflow-review-and-demo.md).
 
 Or the backend on the host, with reload, against Postgres and Redis in Docker:
 

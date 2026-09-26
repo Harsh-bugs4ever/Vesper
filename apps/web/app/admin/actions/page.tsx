@@ -128,7 +128,7 @@ const DISMISS_REASONS = [
   { value: "not_accurate", label: "Not accurate — the data is wrong" },
   { value: "already_handled", label: "Already handled manually" },
   { value: "bad_timing", label: "Bad timing — come back later" },
-  { value: "not_relevant", label: "Not relevant for this property" },
+  { value: "not_worth_it", label: "Impact does not justify this action" },
 ];
 
 function urgencyForCard(card: Card) {

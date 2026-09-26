@@ -91,7 +91,7 @@ export default function DataInsightsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-action-insights"] });
       showToast({
         title: "Action Approved",
-        description: `Executed: ${card.headline}. Safe revert window open for 10s.`,
+        description: `Executed: ${card.title}.${card.undo_seconds_left ? ` Undo available for ${card.undo_seconds_left}s.` : ""}`,
         type: "success",
       });
       setSelectedCard(null);
@@ -254,10 +254,10 @@ export default function DataInsightsPage() {
                           </span>
                         </div>
                         <h4 className="font-serif text-base font-bold text-sand-950 pt-1">
-                          {card.headline}
+                          {card.title}
                         </h4>
                         <p className="max-w-3xl text-xs text-sand-600 leading-relaxed">
-                          {card.rationale}
+                          {card.summary}
                         </p>
                       </div>
 
@@ -325,8 +325,8 @@ export default function DataInsightsPage() {
       {/* Model Drilldown Drawer */}
       <Drawer
         open={Boolean(selectedCard)}
-        onClose={() => setSelectedCard(null)}
-        title={selectedCard?.headline ?? "Model Details"}
+        onOpenChange={(open) => { if (!open) setSelectedCard(null); }}
+        title={selectedCard?.title ?? "Action Details"}
         description={selectedCard ? `Engine: ${selectedCard.engine} · Confidence: ${Math.round(selectedCard.confidence * 100)}%` : ""}
       >
         {selectedCard && (
@@ -335,7 +335,7 @@ export default function DataInsightsPage() {
               <h5 className="font-semibold text-xs text-sand-950 uppercase tracking-wider">
                 Full Algorithmic Rationale
               </h5>
-              <p className="text-xs text-sand-700 leading-relaxed">{selectedCard.rationale}</p>
+              <p className="text-xs text-sand-700 leading-relaxed">{selectedCard.summary}</p>
             </div>
 
             {selectedCard.drivers && selectedCard.drivers.length > 0 && (

@@ -5,8 +5,8 @@ Their identities and department assignments are preserved.
 """
 from alembic import op
 
-revision = "0007"
-down_revision = "0006"
+revision = "0007_manager_areas"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 

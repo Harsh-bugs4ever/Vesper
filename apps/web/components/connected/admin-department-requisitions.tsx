@@ -241,7 +241,7 @@ export function AdminDepartmentRequisitions() {
                 );
 
                 const isResponsibleManager =
-                  canApprove && (user?.id === req.responsible_manager_id || user?.role === "general_manager" || user?.role === "gm");
+                  canApprove && (user?.id === req.responsible_manager_id || user?.role === "general_manager");
 
                 return (
                   <article

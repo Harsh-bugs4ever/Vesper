@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 
 import { SentimentTrendChart } from "@/components/charts/sentiment-trend-chart";
+import { ConnectedOverview } from "@/components/connected/connected-overview";
+import { loadFeedback } from "@/lib/api/overviews";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
@@ -38,6 +40,7 @@ const TABS = [
   { value: "at-risk", label: "At-Risk Guests" },
   { value: "offers", label: "Retention Offers" },
   { value: "sentiment", label: "Sentiment Trend" },
+  { value: "feedback", label: "Feedback" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["value"];
@@ -112,10 +115,19 @@ export default function GuestProfilePage() {
     },
   });
 
-  const chartPoints = sentimentTrend.map((row: any) => ({
-    date: row.date ?? row.day ?? "Day",
-    rating: row.rating ?? row.score ?? 4.0,
-  }));
+  const chartPoints = sentimentTrend.flatMap((department: any) =>
+    (department.points ?? []).filter((point: any) =>
+      typeof point.average_sentiment === "number" && typeof point.date === "string"
+    ).map((point: any) => ({
+      date: point.date,
+      sentiment: Math.round((point.average_sentiment + 1) * 50),
+      // The API supplies no confidence interval; show the full possible range.
+      range: [0, 100] as [number, number],
+    }))
+  );
+  const chartAverage = chartPoints.length
+    ? chartPoints.reduce((sum, point) => sum + point.sentiment, 0) / chartPoints.length
+    : 0;
 
   const activeOffers = offers.filter((o) => o.status === "proposed" || o.status === "active" || o.status === "pending");
 
@@ -144,6 +156,8 @@ export default function GuestProfilePage() {
 
       <SectionTabs tabs={TABS} value={tab} onChange={setTab} />
 
+      {tab === "feedback" && <ConnectedOverview title="Guest feedback" description="Persisted sentiment trends and review volume." queryKey="guest-feedback" load={loadFeedback} />}
+
       {tab === "overview" && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
           <div className="space-y-4">
@@ -159,7 +173,7 @@ export default function GuestProfilePage() {
                     Loading sentiment trend…
                   </p>
                 ) : chartPoints.length > 0 ? (
-                  <SentimentTrendChart data={chartPoints} />
+                  <SentimentTrendChart data={chartPoints} average={chartAverage} />
                 ) : (
                   <div className="py-12 text-center text-sm text-sand-500">
                     <p className="font-semibold text-sand-800">No Sentiment Points</p>
@@ -462,7 +476,7 @@ export default function GuestProfilePage() {
           />
           <PanelBody className="pt-4">
             {chartPoints.length > 0 ? (
-              <SentimentTrendChart data={chartPoints} />
+              <SentimentTrendChart data={chartPoints} average={chartAverage} />
             ) : (
               <p className="py-12 text-center text-sm text-sand-500">
                 No sentiment trend data available.

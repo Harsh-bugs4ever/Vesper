@@ -249,10 +249,20 @@ def approve(db: Session, principal: Principal, card_id: UUID, adjustments: dict 
     applied" is the state nobody notices until the rate never changed.
     """
     property_id = UUID(principal.property_id)
-    card = get_card(db, property_id, card_id)
+    # Serialize decisions before checking status. The lock is released when the
+    # approved state is committed, before the downstream executor runs; a second
+    # request then observes APPROVED and cannot execute the same card again.
+    card = db.scalars(select(ActionCard).where(
+        ActionCard.id == card_id, ActionCard.property_id == property_id,
+    ).with_for_update()).first()
+    if card is None:
+        raise NotFound("Action card not found")
     principal.require_object(card)
-    _assert_actionable(card)
     principal.require(card.required_permission)
+    if card.status == CardStatus.EXECUTED and card.decided_by == UUID(principal.id):
+        if adjustments is None or adjustments == (card.adjustments or {}):
+            return card
+    _assert_actionable(card)
     _assert_claimable_by(card, principal)
 
     if adjustments:
@@ -599,6 +609,7 @@ def shadow_mode_enabled(property_id: UUID | str) -> bool:
 
 def _assert_actionable(card: ActionCard) -> None:
     if card.status in {
+        CardStatus.APPROVED,
         CardStatus.EXECUTED,
         CardStatus.UNDONE,
         CardStatus.DISMISSED,

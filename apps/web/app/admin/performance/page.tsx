@@ -599,7 +599,7 @@ export default function PerformancePage() {
       {/* Staff Review Details Drawer */}
       <Drawer
         open={Boolean(selectedStaffDetail)}
-        onClose={() => setSelectedStaffDetail(null)}
+        onOpenChange={(open) => { if (!open) setSelectedStaffDetail(null); }}
         title={selectedStaffDetail ? `${selectedStaffDetail.name} · Feedback Log` : "Feedback"}
         description={selectedStaffDetail ? `${selectedStaffDetail.department} · Score: ${selectedStaffDetail.score?.toFixed(2) ?? "—"}` : ""}
       >

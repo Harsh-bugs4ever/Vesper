@@ -46,12 +46,20 @@ def test_employee_filter_rejects_outside_department():
     branch, department, employee = uuid4(), uuid4(), uuid4()
     actor = principal("manager", branch, department=department)
     db = MagicMock()
-    db.scalar.side_effect = [department, None]
+    db.scalar.return_value = None
     with pytest.raises(NotFound):
         metrics.scope(db, actor, branch_id=None, department_id=department,
                       employee_id=employee)
-    with pytest.raises(HTTPException):
+    with pytest.raises(Forbidden):
         metrics.scope(db, actor, branch_id=None, department_id=uuid4())
+
+
+def test_manager_with_multiple_departments_must_select_one():
+    branch, first, second = uuid4(), uuid4(), uuid4()
+    actor = principal("manager", branch, department=first)
+    actor.department_ids.add(str(second))
+    with pytest.raises(Forbidden):
+        metrics.scope(MagicMock(), actor)
 
 
 def test_staff_cannot_select_another_employee():
@@ -73,10 +81,14 @@ def test_employee_totals_match_source_records():
     reviews = [SimpleNamespace(guest_id=uuid4(), rating=rating)
                for rating in (5, 4, 4, 3)]
     db = MagicMock()
-    db.scalars.side_effect = [attendance, assigned, completed, reviews]
+    db.execute.side_effect = [
+        SimpleNamespace(one=lambda: SimpleNamespace(days=2, late=1, minutes=540)),
+        SimpleNamespace(one=lambda: SimpleNamespace(assigned=3, completed=2)),
+        SimpleNamespace(one=lambda: SimpleNamespace(reviews=4, distinct_guests=4, mean_rating=4.0)),
+    ]
     result = metrics.employee_metrics(db, branch, employee, department,
                                       date(2026, 9, 1), date(2026, 9, 30))
-    assert result["attendance_days"] == 1
+    assert result["attendance_days"] == 2
     assert result["late_shifts"] == 1
     assert result["worked_minutes"] == 540
     assert result["assigned_tasks"] == 3
@@ -87,7 +99,11 @@ def test_employee_totals_match_source_records():
 
 def test_thin_review_data_has_no_rating_score():
     db = MagicMock()
-    db.scalars.side_effect = [[], [], [], [SimpleNamespace(guest_id=uuid4(), rating=5)]]
+    db.execute.side_effect = [
+        SimpleNamespace(one=lambda: SimpleNamespace(days=0, late=0, minutes=0)),
+        SimpleNamespace(one=lambda: SimpleNamespace(assigned=0, completed=0)),
+        SimpleNamespace(one=lambda: SimpleNamespace(reviews=1, distinct_guests=1, mean_rating=5.0)),
+    ]
     result = metrics.employee_metrics(db, uuid4(), uuid4(), None,
                                       date(2026, 9, 1), date(2026, 9, 30))
     assert result["guest_reviews"] == 1
@@ -97,20 +113,24 @@ def test_thin_review_data_has_no_rating_score():
 
 def test_gm_overview_totals_match_record_counts():
     db = MagicMock()
-    db.scalar.side_effect = [10, 4, 7, 5, 2, 1, 1]
-    db.scalars.return_value = []
+    db.scalar.side_effect = [10, 4, 2, 1]
+    db.scalars.return_value.all.return_value = []
+    db.execute.return_value.all.return_value = []
     result = overview.gm_overview(db, uuid4(), date(2026, 9, 1), date(2026, 9, 30))
     assert result["occupancy"] == {"total_rooms": 10, "occupied_rooms": 4, "rate": 0.4}
-    assert result["guests"] == {"registered": 7, "in_house": 5}
+    assert result["guests"] == {"in_house": 4, "expected_arrivals": 2, "expected_departures": 1}
     assert (result["arrivals_today"], result["departures_today"]) == (2, 1)
-    assert result["exceptions"] == [{"kind": "out_of_order_rooms", "count": 1,
-                                     "path": "/rooms/board"}]
-    assert result["insights"]["source"] == "factual"
+    assert result["exceptions"] == []
+    assert result["insights"]["source"] == "system_aggregate"
 
 
 def test_department_overview_contains_only_its_aggregates():
     db = MagicMock()
-    db.scalar.side_effect = [3, 1, 4, 2, 6, 5]
+    db.execute.side_effect = [
+        SimpleNamespace(one=lambda: SimpleNamespace(open_tasks=4, overdue_tasks=2, completed_tasks=6)),
+        SimpleNamespace(one=lambda: SimpleNamespace(open_requests=3, overdue_requests=1)),
+    ]
+    db.scalar.return_value = 5
     department = SimpleNamespace(id=uuid4(), name="Housekeeping")
     result = overview.department_overview(db, uuid4(), department,
         date(2026, 9, 1), date(2026, 9, 30))

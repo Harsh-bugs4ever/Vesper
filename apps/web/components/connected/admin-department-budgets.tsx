@@ -76,7 +76,7 @@ export function AdminDepartmentBudgets() {
   const deptMap = new Map(deptList.map((d) => [d.id, d]));
 
   const canManage =
-    hasPermission("budget:manage") || user?.role === "general_manager" || user?.role === "gm";
+    hasPermission("budget:manage") || user?.role === "general_manager";
 
   const createMutation = useMutation({
     mutationFn: async () => {
