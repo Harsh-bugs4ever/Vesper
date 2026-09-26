@@ -2,7 +2,7 @@
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import Integer, func, select
+from sqlalchemy import Integer, case, func, select
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
@@ -106,7 +106,7 @@ def employee_metrics(
     att_stmt = select(
         func.count(Attendance.id).label("days"),
         func.coalesce(
-            func.sum(func.case((Attendance.is_late.is_(True), 1), else_=0)),
+            func.sum(case((Attendance.is_late.is_(True), 1), else_=0)),
             0,
         ).label("late"),
         func.coalesce(func.sum(Attendance.worked_minutes), 0).label("minutes"),
@@ -125,7 +125,7 @@ def employee_metrics(
     task_stmt = select(
         func.count(Task.id).label("assigned"),
         func.coalesce(
-            func.sum(func.case((Task.status == TaskStatus.DONE, 1), else_=0)),
+            func.sum(case((Task.status == TaskStatus.DONE, 1), else_=0)),
             0,
         ).label("completed"),
     ).where(

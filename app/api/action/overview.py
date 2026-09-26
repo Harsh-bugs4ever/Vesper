@@ -2,7 +2,7 @@
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
@@ -70,17 +70,17 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
     task_stmt = select(
         Task.department_id,
         func.coalesce(
-            func.sum(func.case((Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]), 1), else_=0)),
+            func.sum(case((Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]), 1), else_=0)),
             0,
         ).label("open_tasks"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]) & (Task.due_at < now), 1
             ), else_=0)),
             0,
         ).label("overdue_tasks"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 (Task.status == TaskStatus.DONE) & (Task.completed_at >= begin_dt) & (Task.completed_at <= finish_dt), 1
             ), else_=0)),
             0,
@@ -96,11 +96,11 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
     req_stmt = select(
         ServiceRequest.department_id,
         func.coalesce(
-            func.sum(func.case((ServiceRequest.status.in_(req_open_statuses), 1), else_=0)),
+            func.sum(case((ServiceRequest.status.in_(req_open_statuses), 1), else_=0)),
             0,
         ).label("open_requests"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 ServiceRequest.status.in_(req_open_statuses) & (ServiceRequest.due_at < now), 1
             ), else_=0)),
             0,
@@ -224,17 +224,17 @@ def department_overview(
     # 1. Tasks
     t_stmt = select(
         func.coalesce(
-            func.sum(func.case((Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]), 1), else_=0)),
+            func.sum(case((Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]), 1), else_=0)),
             0,
         ).label("open_tasks"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 Task.status.in_([TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS]) & (Task.due_at < now), 1
             ), else_=0)),
             0,
         ).label("overdue_tasks"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 (Task.status == TaskStatus.DONE) & (Task.completed_at >= begin_dt) & (Task.completed_at <= finish_dt), 1
             ), else_=0)),
             0,
@@ -249,11 +249,11 @@ def department_overview(
     req_open_statuses = [RequestStatus.RAISED, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS]
     r_stmt = select(
         func.coalesce(
-            func.sum(func.case((ServiceRequest.status.in_(req_open_statuses), 1), else_=0)),
+            func.sum(case((ServiceRequest.status.in_(req_open_statuses), 1), else_=0)),
             0,
         ).label("open_requests"),
         func.coalesce(
-            func.sum(func.case((
+            func.sum(case((
                 ServiceRequest.status.in_(req_open_statuses) & (ServiceRequest.due_at < now), 1
             ), else_=0)),
             0,
