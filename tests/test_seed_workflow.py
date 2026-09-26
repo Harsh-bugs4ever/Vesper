@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from uuid import uuid4
+from contextlib import nullcontext
+from importlib import import_module
+import sys
 
 import pytest
 
@@ -45,6 +48,9 @@ class FakeSession:
     def add(self, row):
         self.rows[(type(row), row.id)] = row
 
+    def flush(self):
+        pass
+
     def commit(self):
         self.commits += 1
 
@@ -76,3 +82,13 @@ def test_scenario_ids_are_stable_and_property_scoped():
     property_id = uuid4()
     assert scenario_id(property_id, "guest:housekeeping") == scenario_id(property_id, "guest:housekeeping")
     assert scenario_id(property_id, "guest:housekeeping") != scenario_id(uuid4(), "guest:housekeeping")
+
+
+def test_list_properties_explains_empty_database(monkeypatch, capsys):
+    workflow = import_module("scripts.seed_workflow")
+    db = SimpleNamespace(scalars=lambda statement: [])
+    monkeypatch.setattr(workflow, "session_scope", lambda: nullcontext(db))
+    monkeypatch.setattr(sys, "argv", ["seed_workflow.py", "--list-properties"])
+
+    assert workflow.main() == 1
+    assert "No properties found" in capsys.readouterr().out

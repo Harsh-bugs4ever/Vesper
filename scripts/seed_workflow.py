@@ -83,6 +83,9 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         added.append(key)
         if apply:
             db.add(model(id=row_id, property_id=property_id, **fields))
+            # Several cross-context references are plain UUIDs. Flush in story order
+            # so rows with real foreign keys (such as a PO's stock item) exist first.
+            db.flush()
         return row_id
 
     # Story 1: an overdue guest request remains visible to the guest, a housekeeper,
@@ -250,7 +253,13 @@ def main() -> int:
     from app.api.property.models import Property
     with session_scope() as db:
         if args.list_properties:
-            for row in db.scalars(select(Property).order_by(Property.name)):
+            properties = list(db.scalars(select(Property).order_by(Property.name)))
+            if not properties:
+                print("No properties found in the configured database. For a local demo, run "
+                      "python scripts/seed.py without --reset; if the app already has data, "
+                      "check VESPER_DATABASE_URL.")
+                return 1
+            for row in properties:
                 print(f"{row.id}  {row.name}")
             return 0
         if args.property_id is None:

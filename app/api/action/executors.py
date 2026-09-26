@@ -173,6 +173,10 @@ _EXECUTORS: dict[str, Callable[[Any], ExecResult]] = {
     "work_order": _execute_via_event,
     "retention_offer": _execute_via_event,
     "staffing_gap": _execute_via_event,
+    "facility_promo": _execute_via_event,
+    "guest_recovery": _execute_via_event,
+    "vision_audit": _execute_via_event,
+    "chef_special": _execute_via_event,
 }
 
 _UNDOERS: dict[str, Callable[[Any], ExecResult]] = {
@@ -182,4 +186,8 @@ _UNDOERS: dict[str, Callable[[Any], ExecResult]] = {
     "work_order": _undo_via_event,
     "retention_offer": _undo_via_event,
     "staffing_gap": _undo_via_event,
+    "facility_promo": _undo_via_event,
+    "guest_recovery": _undo_via_event,
+    "vision_audit": _undo_via_event,
+    "chef_special": _undo_via_event,
 }

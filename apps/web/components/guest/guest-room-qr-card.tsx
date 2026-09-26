@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Bed,
@@ -20,7 +21,11 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { Scanner } from "@yudiel/react-qr-scanner";
+
+const Scanner = dynamic(
+  () => import("@yudiel/react-qr-scanner").then((module) => module.Scanner),
+  { ssr: false, loading: () => <p className="py-6 text-sm text-sand-600">Opening camera…</p> },
+);
 
 import { VesperMark } from "@/components/layout/vesper-mark";
 import { Button } from "@/components/ui/button";

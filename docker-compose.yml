@@ -85,8 +85,8 @@ services:
       dockerfile: apps/web/Dockerfile
 
     environment:
-      # Browser reaches the backend through the host.
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Next.js proxies browser requests to the backend on Docker's internal network.
+      API_PROXY_TARGET: http://backend:8000
 
     ports:
       - "3000:3000"

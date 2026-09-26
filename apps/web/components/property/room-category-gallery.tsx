@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { AlertCircle, Bed, ImageOff, RefreshCw, Users } from "lucide-react";
 import { property as propertyApi, type BackendRoomCategory } from "@/lib/api";
+import { getRoomCategoryImages } from "@/lib/marriott-images";
 
 interface RoomCategoryGalleryProps {
   propertyId?: string;
@@ -128,39 +129,37 @@ export function RoomCategoryGallery({ propertyId, className = "" }: RoomCategory
         {!loading && !error && categories.length > 0 && (
           <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             {categories.map((category) => {
-              const sortedImages = category.images
-                ? [...category.images].sort((a, b) => a.order - b.order)
+              const fallbackImages = getRoomCategoryImages(category.key || category.name);
+              const sortedImages = category.images && category.images.length > 0
+                ? [...category.images].sort((a, b) => ("order" in a ? (a as any).order : 0) - ("order" in b ? (b as any).order : 0))
                 : [];
-              const primaryImage = sortedImages[0];
+              const primaryUrl = sortedImages[0]?.url || fallbackImages[0]?.url;
+              const primaryAlt = sortedImages[0]?.alt_text || fallbackImages[0]?.alt || `${category.name} photograph`;
 
               return (
                 <article
                   key={category.id}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-sand-200 bg-white shadow-subtle transition-all duration-300 hover:shadow-elevated"
+                  className="flex flex-col overflow-hidden rounded-2xl border border-sand-200 bg-white shadow-subtle transition-all duration-300 hover:shadow-elevated group"
                 >
-                  {/* Image / Neutral Placeholder */}
+                  {/* Category Image */}
                   <div className="relative h-64 w-full bg-sand-100 overflow-hidden">
-                    {primaryImage?.url ? (
+                    {primaryUrl ? (
                       <Image
-                        src={primaryImage.url}
-                        alt={primaryImage.alt_text || `${category.name} photograph`}
+                        src={primaryUrl}
+                        alt={primaryAlt}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        className="object-cover"
+                        className="object-cover transition-transform duration-700 group-hover:scale-105"
                       />
                     ) : (
-                      /* Neutral placeholder when backend has no uploaded photo */
                       <div
                         className="flex h-full w-full flex-col items-center justify-center bg-sand-100/90 p-6 text-center text-sand-500 border-b border-sand-200"
                         role="img"
-                        aria-label={`Neutral placeholder for ${category.name}. No photo currently uploaded.`}
+                        aria-label={`Neutral placeholder for ${category.name}.`}
                       >
                         <ImageOff className="h-9 w-9 text-sand-400" strokeWidth={1.5} aria-hidden="true" />
                         <span className="mt-3 text-xs font-medium text-sand-600">
                           Photo pending
-                        </span>
-                        <span className="mt-1 text-[11px] text-sand-400">
-                          Official property photograph not uploaded
                         </span>
                       </div>
                     )}

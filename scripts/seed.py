@@ -46,6 +46,30 @@ ROOM_CATEGORIES = [
     ("suite", "Suite", 38900, 4, ["Separate living room", "Sea view", "Butler"]),
 ]
 
+ROOM_CATEGORY_IMAGES = {
+    "deluxe": [
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-premium-room-2715-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "JW Marriott Deluxe Premium King Room", True),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-twin-deluxe-5333-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "JW Marriott Deluxe Twin Room", False),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-guestroom-8493-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Deluxe Guest Room Interior", False),
+    ],
+    "executive": [
+        ("https://cache.marriott.com/is/image/marriotts7prod/jw-bomjw-twin-executive-lounge-21464:Classic-Hor?wid=1336&fit=constrain", "Executive Lounge & Twin Room", True),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-executive-8497-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Executive Room Suite", False),
+    ],
+    "club": [
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-club-8499-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "JW Marriott Club Ocean Room", True),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-ocean-8495-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Panoramic Arabian Sea Ocean View", False),
+    ],
+    "suite": [
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-grand-ocean-6995-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Grand Ocean Luxury Suite", True),
+        ("https://cache.marriott.com/is/image/marriotts7prod/jw-bomjw-living-room-33278:Wide-Hor?wid=750&fit=constrain", "Suite Private Living Room", False),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-royal-8503-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Royal Suite Master Bedroom", False),
+        ("https://cache.marriott.com/is/image/marriotts7prod/jw-bomjw-king-28398:Wide-Hor?wid=750&fit=constrain", "King Bed Suite", False),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-presidential-8501-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Presidential Suite Lounge", False),
+        ("https://cache.marriott.com/content/dam/marriott-renditions/BOMJW/bomjw-bath-6719-hor-wide.jpg?output-quality=70&interpolation=progressive-bilinear&downsize=750px:*", "Marble En-suite Luxury Bathroom", False),
+    ],
+}
+
 # 355 rooms across 11 floors, weighted towards the cheaper categories as a real
 # property is.
 CATEGORY_MIX = ["deluxe"] * 180 + ["executive"] * 95 + ["club"] * 55 + ["suite"] * 25
@@ -267,6 +291,20 @@ def _seed(db) -> dict[str, int]:
         )
         db.add(row)
         categories[key] = row
+    db.flush()
+
+    for cat_key, img_list in ROOM_CATEGORY_IMAGES.items():
+        if cat_key in categories:
+            cat_row = categories[cat_key]
+            for pos, (url, alt, is_primary) in enumerate(img_list):
+                db.add(prop.RoomImage(
+                    property_id=pid,
+                    category_id=cat_row.id,
+                    url=url,
+                    alt_text=alt,
+                    position=pos,
+                    is_primary=is_primary,
+                ))
     db.flush()
 
     rooms: list = []
