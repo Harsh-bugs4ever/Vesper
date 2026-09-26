@@ -12,8 +12,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY apps/web ./
 COPY packages/ui-kit ../../packages/ui-kit
 # Rewrites are compiled during the build; target the backend's Compose service.
-ARG API_PROXY_TARGET=http://backend:8000
-ENV API_PROXY_TARGET=$API_PROXY_TARGET
+ARG BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=$BACKEND_URL
 RUN npm run build
 
 FROM node:20-alpine AS runner

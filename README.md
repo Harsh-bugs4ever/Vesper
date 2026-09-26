@@ -370,8 +370,10 @@ make dev                         # uvicorn app.main:app --reload on :8000
 For a phone or another computer on the same network, open the web app at
 `http://YOUR-PC-LAN-IP:3000`. The web server forwards `/backend/*` to FastAPI, so
 the backend can remain on `127.0.0.1:8000` in local development. If FastAPI runs
-on a different machine, set `API_PROXY_TARGET` for the web server to its reachable
-origin. QR links use the web origin on which they were generated.
+on a different machine, set `BACKEND_URL` to its reachable origin in
+`apps/web/.env.local` for local Next.js, or in root `.env` for Docker Compose.
+Rebuild the web app after changing it because Next.js compiles the proxy rewrite
+during the build. QR links use the web origin on which they were generated.
 
 For a fast demo, build the web app once and run its production server:
 

@@ -3,6 +3,8 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const backendUrl = (process.env.BACKEND_URL || process.env.API_PROXY_TARGET || "http://127.0.0.1:8000")
+  .replace(/\/+$/, "");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -12,7 +14,7 @@ const nextConfig = {
   async rewrites() {
     return [{
       source: "/backend/:path*",
-      destination: `${process.env.API_PROXY_TARGET || "http://127.0.0.1:8000"}/:path*`,
+      destination: `${backendUrl}/:path*`,
     }];
   },
   // Running `next build` while the dev server is open must not replace its chunks.
