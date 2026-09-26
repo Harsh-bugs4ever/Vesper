@@ -336,7 +336,8 @@ make seed                        # rooms, staff, bookings, orders and connected 
 
 `python scripts/seed.py` is the single command for the complete demo. It creates
 rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
-staff tasks, requisitions, guest requests, issue reports and manager scenarios.
+staff tasks, one assigned task for every demo staff account, requisitions, guest
+requests, issue reports and manager scenarios.
 Running it again fills missing demo attendance, food-order task links, menu stock
 and workflow examples, and recovers the food-order seed if an earlier run stopped
 before creating any orders. It also repairs old placeholder room references when exactly

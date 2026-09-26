@@ -13,6 +13,7 @@ import pytest
 
 from scripts import seed, seed_fnb, seed_workflow
 from scripts.seed_existing import enrich_existing_demo
+from scripts.seed_staff_tasks import seed_staff_tasks
 from vesper_common.clock import property_tz, utcnow
 
 
@@ -48,17 +49,22 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(seed, "session_scope", Session)
     monkeypatch.setattr(seed, "_seed", lambda db: calls.append("base"))
     from scripts import seed_existing
+    from scripts import seed_staff_tasks as assignments_module
     monkeypatch.setattr(seed_existing, "enrich_existing_demo",
                         lambda db, pid: calls.append(("enrich", pid)) or
                         {"attendance_added": 0, "food_tasks_added": 0,
                          "stock_items_added": 0, "recipes_completed": 0})
+    monkeypatch.setattr(assignments_module, "seed_staff_tasks",
+                        lambda db, pid: calls.append(("assign", pid)) or
+                        {"staff_accounts": 6, "tasks_added": 6, "already_present": 0})
     monkeypatch.setattr(seed_workflow, "seed_workflow",
                         lambda db, pid, *, apply: calls.append((pid, apply)) or
                         {"created": 0, "already_present": 35})
     monkeypatch.setattr(seed.sys, "argv", ["seed.py"])
 
     assert seed.main() == 0
-    assert calls == [("enrich", property_id), (property_id, True)]
+    assert calls == [("enrich", property_id), ("assign", property_id),
+                     (property_id, True)]
     assert "No base data was reset" in capsys.readouterr().out
 
 
@@ -68,6 +74,55 @@ def test_reset_requires_explicit_confirmation_before_database_access(monkeypatch
     with pytest.raises(SystemExit, match="2"):
         seed.main()
     assert "drops every Vesper schema" in capsys.readouterr().err
+
+
+def test_every_demo_staff_member_gets_one_scoped_assigned_task(monkeypatch):
+    _app_model_aliases(monkeypatch)
+    from vesper_models.staff import Task, TaskStatus
+
+    property_id = uuid4()
+    role = SimpleNamespace(id=uuid4())
+    departments = [SimpleNamespace(id=uuid4(), key=key) for key in
+        ("housekeeping", "fnb", "front_office", "maintenance", "store", "security")]
+    users = [SimpleNamespace(id=uuid4(), department_id=department.id,
+                             email=f"{department.key}1@vesper.demo")
+             for department in departments]
+    room = SimpleNamespace(id=uuid4(), number="401")
+    stock = SimpleNamespace(id=uuid4(), sku="LN-TOWEL", name="Bath Towels")
+
+    class Session:
+        def __init__(self):
+            self.tasks = {}
+
+        def get(self, model, row_id):
+            if model.__name__ == "Property":
+                return SimpleNamespace(name="JW Marriott Mumbai, Juhu")
+            return self.tasks.get(row_id)
+
+        def scalar(self, statement):
+            return role
+
+        def scalars(self, statement):
+            model = statement.column_descriptions[0]["entity"]
+            return {"Department": departments, "User": users,
+                    "Room": [room], "StockItem": [stock]}.get(model.__name__, [])
+
+        def add(self, task):
+            self.tasks[task.id] = task
+
+    db = Session()
+    first = seed_staff_tasks(db, property_id)
+    second = seed_staff_tasks(db, property_id)
+    assert first == {"staff_accounts": 6, "tasks_added": 6, "already_present": 0}
+    assert second == {"staff_accounts": 6, "tasks_added": 0, "already_present": 6}
+    assert len(db.tasks) == 6
+    for user in users:
+        task = next(task for task in db.tasks.values() if task.assignee_id == user.id)
+        assert isinstance(task, Task)
+        assert task.property_id == property_id
+        assert task.department_id == user.department_id
+        assert task.status == TaskStatus.ASSIGNED
+        assert task.title and task.description and task.due_at
 
 
 def test_existing_demo_enrichment_is_repeatable(monkeypatch):

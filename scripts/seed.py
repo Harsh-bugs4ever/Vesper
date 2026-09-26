@@ -219,6 +219,7 @@ def main() -> int:
             ).limit(1))
         if existing_id is not None:
             from scripts.seed_existing import enrich_existing_demo
+            from scripts.seed_staff_tasks import seed_staff_tasks
             from scripts.seed_workflow import seed_workflow
             import vesper_models.guest as guest
             with session_scope() as db:
@@ -231,10 +232,13 @@ def main() -> int:
                     food_counts = seed_fnb_data(db, property_id=existing_id)
                     print(f"Recovered missing food-order seed: {food_counts['fnb_orders_total']} orders")
                 enrichment = enrich_existing_demo(db, existing_id)
+                assignments = seed_staff_tasks(db, existing_id)
                 result = seed_workflow(db, existing_id, apply=True)
             print(f"Demo resort already exists. Added {result['created']} workflow rows; "
                   f"{result['already_present']} already present.")
             for label, count in enrichment.items():
+                print(f"  {label:<22} {count}")
+            for label, count in assignments.items():
                 print(f"  {label:<22} {count}")
             print("No base data was reset.")
             return 0
@@ -836,6 +840,10 @@ def _seed(db) -> dict[str, int]:
         from scripts.seed_fnb import seed_fnb_data
     fnb_counts = seed_fnb_data(db, property_id=pid)
     counts.update(fnb_counts)
+
+    from scripts.seed_staff_tasks import seed_staff_tasks
+    assignment_counts = seed_staff_tasks(db, pid)
+    counts["assigned_staff_tasks"] = assignment_counts["tasks_added"]
 
     # Finish the single-command demo with linked guest, staff and manager stories.
     # Their stable IDs make the ordinary rerun safe after an interrupted first run.
