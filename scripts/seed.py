@@ -218,11 +218,25 @@ def main() -> int:
                 prop.Property.name == "JW Marriott Mumbai, Juhu"
             ).limit(1))
         if existing_id is not None:
+            from scripts.seed_existing import enrich_existing_demo
             from scripts.seed_workflow import seed_workflow
+            import vesper_models.guest as guest
             with session_scope() as db:
+                has_food_orders = db.scalar(select(guest.ServiceRequest.id).where(
+                    guest.ServiceRequest.property_id == existing_id,
+                    guest.ServiceRequest.kind == guest.RequestKind.ROOM_SERVICE,
+                ).limit(1)) is not None
+                if not has_food_orders:
+                    from scripts.seed_fnb import seed_fnb_data
+                    food_counts = seed_fnb_data(db, property_id=existing_id)
+                    print(f"Recovered missing food-order seed: {food_counts['fnb_orders_total']} orders")
+                enrichment = enrich_existing_demo(db, existing_id)
                 result = seed_workflow(db, existing_id, apply=True)
-            print(f"Demo resort already exists. Added {result['created']} missing workflow rows; "
-                  f"{result['already_present']} already present. No base data was reset.")
+            print(f"Demo resort already exists. Added {result['created']} workflow rows; "
+                  f"{result['already_present']} already present.")
+            for label, count in enrichment.items():
+                print(f"  {label:<22} {count}")
+            print("No base data was reset.")
             return 0
 
     if args.reset:

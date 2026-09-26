@@ -1,7 +1,7 @@
 """The base seed stays one-command and its food orders have real links."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from importlib import import_module
 from types import SimpleNamespace
@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 
 from scripts import seed, seed_fnb, seed_workflow
+from scripts.seed_existing import enrich_existing_demo
 from vesper_common.clock import property_tz, utcnow
 
 
@@ -20,7 +21,7 @@ def _app_model_aliases(monkeypatch):
     package = types.ModuleType("vesper_models")
     package.__path__ = []
     monkeypatch.setitem(sys.modules, "vesper_models", package)
-    for name in ("property", "identity", "frontdesk", "guest", "staff"):
+    for name in ("property", "identity", "frontdesk", "guest", "inventory", "staff"):
         model = import_module(f"app.api.{name}.models")
         monkeypatch.setitem(sys.modules, f"vesper_models.{name}", model)
         setattr(package, name, model)
@@ -46,13 +47,18 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(seed, "inspect", lambda engine: SimpleNamespace(has_table=lambda *a, **kw: True))
     monkeypatch.setattr(seed, "session_scope", Session)
     monkeypatch.setattr(seed, "_seed", lambda db: calls.append("base"))
+    from scripts import seed_existing
+    monkeypatch.setattr(seed_existing, "enrich_existing_demo",
+                        lambda db, pid: calls.append(("enrich", pid)) or
+                        {"attendance_added": 0, "food_tasks_added": 0,
+                         "stock_items_added": 0, "recipes_completed": 0})
     monkeypatch.setattr(seed_workflow, "seed_workflow",
                         lambda db, pid, *, apply: calls.append((pid, apply)) or
                         {"created": 0, "already_present": 35})
     monkeypatch.setattr(seed.sys, "argv", ["seed.py"])
 
     assert seed.main() == 0
-    assert calls == [(property_id, True)]
+    assert calls == [("enrich", property_id), (property_id, True)]
     assert "No base data was reset" in capsys.readouterr().out
 
 
@@ -62,6 +68,132 @@ def test_reset_requires_explicit_confirmation_before_database_access(monkeypatch
     with pytest.raises(SystemExit, match="2"):
         seed.main()
     assert "drops every Vesper schema" in capsys.readouterr().err
+
+
+def test_existing_demo_enrichment_is_repeatable(monkeypatch):
+    _app_model_aliases(monkeypatch)
+    today = utcnow().astimezone(property_tz()).date()
+    property_id = uuid4()
+    role = SimpleNamespace(id=uuid4())
+    shift = SimpleNamespace(id=uuid4())
+    department = SimpleNamespace(id=uuid4())
+    user = SimpleNamespace(id=uuid4(), department_id=department.id)
+    stay = SimpleNamespace(id=uuid4())
+    request = SimpleNamespace(id=uuid4(), department_id=department.id,
+        accepted_by=None, room_id=uuid4(), room_number="401", note="Bring tea",
+        status="raised", due_at=utcnow() + timedelta(minutes=30),
+        accepted_at=None, delivered_at=None, items=[{"name": "Masala Chai"}],
+        created_at=utcnow())
+    menu = SimpleNamespace(recipe={})
+
+    class Session:
+        def __init__(self):
+            self.attendance = []
+            self.tasks = []
+            self.stock = []
+
+        def get(self, model, row_id):
+            return SimpleNamespace(name="JW Marriott Mumbai, Juhu", timezone="Asia/Kolkata")
+
+        def scalar(self, statement):
+            name = statement.column_descriptions[0]["entity"].__name__
+            return {"Role": role, "Shift": shift, "Department": department,
+                    "StockItem": self.stock[0] if self.stock else None}[name]
+
+        def scalars(self, statement):
+            desc = statement.column_descriptions[0]
+            name = desc["entity"].__name__
+            if name == "Task" and desc["name"] == "source_ref":
+                return [task.source_ref for task in self.tasks]
+            return {
+                "User": [user], "Attendance": self.attendance,
+                "Stay": [stay], "ServiceRequest": [request],
+                "MenuItem": [menu],
+            }.get(name, [])
+
+        def add(self, row):
+            if type(row).__name__ == "Attendance":
+                self.attendance.append(row)
+            elif type(row).__name__ == "Task":
+                self.tasks.append(row)
+            elif type(row).__name__ == "StockItem":
+                self.stock.append(row)
+
+        def flush(self):
+            for row in self.stock:
+                if row.id is None:
+                    row.id = uuid4()
+
+    db = Session()
+    first = enrich_existing_demo(db, property_id)
+    second = enrich_existing_demo(db, property_id)
+    assert first == {"attendance_added": 5, "food_tasks_added": 1,
+                     "historical_orders_repaired": 0, "historical_orders_unmatched": 0,
+                     "stock_items_added": 1, "recipes_completed": 1}
+    assert second == {key: 0 for key in first}
+    assert db.tasks[0].source_ref == request.id
+    assert db.tasks[0].assignee_id is None
+    assert menu.recipe == {str(db.stock[0].id): 0.08}
+
+
+def test_legacy_food_order_repairs_only_a_unique_booking(monkeypatch):
+    _app_model_aliases(monkeypatch)
+    category_id = uuid4()
+    guest_id = uuid4()
+    property_id = uuid4()
+    check_in_date = utcnow().astimezone(property_tz()).date() - timedelta(days=3)
+    request = SimpleNamespace(id=uuid4(), guest_id=guest_id,
+        room_id=category_id, room_number="Room-999", stay_id=uuid4(),
+        total_amount=Decimal("560"),
+        created_at=datetime.combine(check_in_date, time(17),
+                                    tzinfo=property_tz()).astimezone(timezone.utc))
+    room = SimpleNamespace(id=uuid4(), category_id=category_id, number="402")
+    booking = SimpleNamespace(id=uuid4(), guest_id=guest_id,
+        room_category_id=category_id, check_in_date=check_in_date,
+        check_out_date=check_in_date + timedelta(days=2),
+        total_amount=Decimal("12000"), room_id=None)
+    visit = SimpleNamespace(stay_id=None, outlet=None, meta={})
+
+    class Session:
+        stay = None
+
+        def get(self, model, row_id):
+            return SimpleNamespace(name="JW Marriott Mumbai, Juhu", timezone="Asia/Kolkata")
+
+        def scalar(self, statement):
+            name = statement.column_descriptions[0]["entity"].__name__
+            return {
+                "Role": SimpleNamespace(id=uuid4()),
+                "Shift": SimpleNamespace(id=uuid4()),
+                "Stay": self.stay,
+                "StockItem": SimpleNamespace(id=uuid4()),
+            }[name]
+
+        def scalars(self, statement):
+            name = statement.column_descriptions[0]["entity"].__name__
+            return {
+                "User": [], "Attendance": [], "Stay": [],
+                "ServiceRequest": [request], "Room": [room],
+                "Booking": [booking], "GuestVisit": [visit],
+                "MenuItem": [],
+            }.get(name, [])
+
+        def add(self, row):
+            if type(row).__name__ == "Stay":
+                self.stay = row
+
+    db = Session()
+    first = enrich_existing_demo(db, property_id)
+    second = enrich_existing_demo(db, property_id)
+    assert first["historical_orders_repaired"] == 1
+    assert first["historical_orders_unmatched"] == 0
+    assert second["historical_orders_repaired"] == 0
+    assert request.stay_id == db.stay.id
+    assert request.room_id == room.id
+    assert request.room_number == room.number
+    assert booking.room_id == room.id
+    assert visit.stay_id == db.stay.id
+    assert visit.meta["request_id"] == str(request.id)
 
 
 class Rows:

@@ -337,8 +337,12 @@ make seed                        # rooms, staff, bookings, orders and connected 
 `python scripts/seed.py` is the single command for the complete demo. It creates
 rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
 staff tasks, requisitions, guest requests, issue reports and manager scenarios.
-Running it again adds any missing workflow examples without duplicating the base
-resort or deleting data. `--reset --confirm-reset` is destructive and only for a
+Running it again fills missing demo attendance, food-order task links, menu stock
+and workflow examples, and recovers the food-order seed if an earlier run stopped
+before creating any orders. It also repairs old placeholder room references when exactly
+one historical booking matches; ambiguous rows are reported and left as they are.
+It does not duplicate the base resort or delete data.
+`--reset --confirm-reset` is destructive and only for a
 disposable database.
 
 To preview the connected workflow rows for an existing demo before applying them,
