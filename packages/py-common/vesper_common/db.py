@@ -50,9 +50,17 @@ SessionLocal = sessionmaker(autoflush=False, expire_on_commit=False)
 def get_engine():
     global _engine
     if _engine is None:
-        _engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
+        engine_kwargs: dict[str, Any] = {"pool_pre_ping": True, "future": True}
+        if "sqlite" not in settings.database_url:
+            engine_kwargs.update({
+                "pool_size": 20,
+                "max_overflow": 30,
+                "pool_timeout": 10,
+            })
+        _engine = create_engine(settings.database_url, **engine_kwargs)
         SessionLocal.configure(bind=_engine)
     return _engine
+
 
 
 class Base(DeclarativeBase):

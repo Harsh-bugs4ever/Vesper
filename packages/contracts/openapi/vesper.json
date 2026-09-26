@@ -290,6 +290,18 @@
       },
       "AskRequest": {
         "properties": {
+          "client_message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message Id"
+          },
           "question": {
             "maxLength": 500,
             "minLength": 2,
@@ -1836,6 +1848,18 @@
             "title": "Answer",
             "type": "string"
           },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1910,6 +1934,20 @@
         "title": "ConciergeOut",
         "type": "object"
       },
+      "DelegateRequest": {
+        "properties": {
+          "assignee_id": {
+            "format": "uuid",
+            "title": "Assignee Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignee_id"
+        ],
+        "title": "DelegateRequest",
+        "type": "object"
+      },
       "DepartmentOut": {
         "properties": {
           "default_sla_minutes": {
@@ -1949,6 +1987,55 @@
           "default_sla_minutes"
         ],
         "title": "DepartmentOut",
+        "type": "object"
+      },
+      "DepartmentSnapshot": {
+        "properties": {
+          "attendance_today": {
+            "title": "Attendance Today",
+            "type": "integer"
+          },
+          "completed_tasks_in_period": {
+            "title": "Completed Tasks In Period",
+            "type": "integer"
+          },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          },
+          "open_requests": {
+            "title": "Open Requests",
+            "type": "integer"
+          },
+          "open_tasks": {
+            "title": "Open Tasks",
+            "type": "integer"
+          },
+          "overdue_requests": {
+            "title": "Overdue Requests",
+            "type": "integer"
+          },
+          "overdue_tasks": {
+            "title": "Overdue Tasks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "department_id",
+          "department_name",
+          "open_requests",
+          "overdue_requests",
+          "open_tasks",
+          "overdue_tasks",
+          "completed_tasks_in_period",
+          "attendance_today"
+        ],
+        "title": "DepartmentSnapshot",
         "type": "object"
       },
       "DismissReason": {
@@ -2011,6 +2098,36 @@
           "detail"
         ],
         "title": "Driver",
+        "type": "object"
+      },
+      "EmployeeOption": {
+        "properties": {
+          "employee_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Code"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "full_name"
+        ],
+        "title": "EmployeeOption",
         "type": "object"
       },
       "EngineReport": {
@@ -2080,6 +2197,38 @@
           "outcomes_needed"
         ],
         "title": "EngineReport",
+        "type": "object"
+      },
+      "FactualInsights": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "state",
+          "generated_at",
+          "items"
+        ],
+        "title": "FactualInsights",
         "type": "object"
       },
       "ForecastOut": {
@@ -2180,6 +2329,99 @@
           "in_house_count"
         ],
         "title": "FrontDeskDay",
+        "type": "object"
+      },
+      "GMOverviewOut": {
+        "properties": {
+          "arrivals_today": {
+            "title": "Arrivals Today",
+            "type": "integer"
+          },
+          "branch_id": {
+            "format": "uuid",
+            "title": "Branch Id",
+            "type": "string"
+          },
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentSnapshot"
+            },
+            "title": "Departments",
+            "type": "array"
+          },
+          "departures_today": {
+            "title": "Departures Today",
+            "type": "integer"
+          },
+          "exceptions": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewException"
+            },
+            "title": "Exceptions",
+            "type": "array"
+          },
+          "freshness": {
+            "title": "Freshness",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "guests": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Guests",
+            "type": "object"
+          },
+          "insights": {
+            "$ref": "#/components/schemas/FactualInsights"
+          },
+          "occupancy": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Occupancy",
+            "type": "object"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch_id",
+          "period_start",
+          "period_end",
+          "generated_at",
+          "freshness",
+          "guests",
+          "occupancy",
+          "arrivals_today",
+          "departures_today",
+          "departments",
+          "exceptions",
+          "insights"
+        ],
+        "title": "GMOverviewOut",
         "type": "object"
       },
       "GenerateRosterRequest": {
@@ -3206,6 +3448,42 @@
         "title": "MaintenanceSummary",
         "type": "object"
       },
+      "ManagerOverviewOut": {
+        "properties": {
+          "branch_id": {
+            "format": "uuid",
+            "title": "Branch Id",
+            "type": "string"
+          },
+          "department": {
+            "$ref": "#/components/schemas/DepartmentSnapshot"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch_id",
+          "period_start",
+          "period_end",
+          "generated_at",
+          "department"
+        ],
+        "title": "ManagerOverviewOut",
+        "type": "object"
+      },
       "MatrixOut": {
         "description": "Feeds the admin panel's permission matrix editor.",
         "properties": {
@@ -3817,6 +4095,29 @@
         "title": "OutcomeOut",
         "type": "object"
       },
+      "OverviewException": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "count",
+          "path"
+        ],
+        "title": "OverviewException",
+        "type": "object"
+      },
       "PassageCreate": {
         "properties": {
           "category": {
@@ -3880,6 +4181,114 @@
           "is_active"
         ],
         "title": "PassageOut",
+        "type": "object"
+      },
+      "PerformanceMetric": {
+        "properties": {
+          "assigned_tasks": {
+            "title": "Assigned Tasks",
+            "type": "integer"
+          },
+          "attendance_days": {
+            "title": "Attendance Days",
+            "type": "integer"
+          },
+          "branch_id": {
+            "format": "uuid",
+            "title": "Branch Id",
+            "type": "string"
+          },
+          "completed_tasks": {
+            "title": "Completed Tasks",
+            "type": "integer"
+          },
+          "data_state": {
+            "title": "Data State",
+            "type": "string"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "distinct_guest_reviews": {
+            "title": "Distinct Guest Reviews",
+            "type": "integer"
+          },
+          "employee_id": {
+            "format": "uuid",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "guest_reviews": {
+            "title": "Guest Reviews",
+            "type": "integer"
+          },
+          "late_shifts": {
+            "title": "Late Shifts",
+            "type": "integer"
+          },
+          "minimum_guest_reviews_for_rating": {
+            "title": "Minimum Guest Reviews For Rating",
+            "type": "integer"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "rating_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Mean"
+          },
+          "worked_minutes": {
+            "title": "Worked Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "employee_id",
+          "branch_id",
+          "department_id",
+          "period_start",
+          "period_end",
+          "attendance_days",
+          "late_shifts",
+          "worked_minutes",
+          "assigned_tasks",
+          "completed_tasks",
+          "guest_reviews",
+          "distinct_guest_reviews",
+          "rating_mean",
+          "minimum_guest_reviews_for_rating",
+          "data_state",
+          "generated_at"
+        ],
+        "title": "PerformanceMetric",
         "type": "object"
       },
       "PhotoUploadOut": {
@@ -6224,8 +6633,15 @@
       "SentimentSummary": {
         "properties": {
           "average_sentiment": {
-            "title": "Average Sentiment",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Sentiment"
           },
           "label": {
             "title": "Label",
@@ -6414,12 +6830,86 @@
         "title": "SnoozeRequest",
         "type": "object"
       },
+      "SpatialRoomOut": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "housekeeping_status": {
+            "title": "Housekeeping Status",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "occupied": {
+            "title": "Occupied",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "floor",
+          "category",
+          "housekeeping_status",
+          "occupied"
+        ],
+        "title": "SpatialRoomOut",
+        "type": "object"
+      },
+      "SpatialViewOut": {
+        "properties": {
+          "branch_id": {
+            "format": "uuid",
+            "title": "Branch Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "rooms": {
+            "items": {
+              "$ref": "#/components/schemas/SpatialRoomOut"
+            },
+            "title": "Rooms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "branch_id",
+          "generated_at",
+          "rooms"
+        ],
+        "title": "SpatialViewOut",
+        "type": "object"
+      },
       "StaffPerformanceBoard": {
         "description": "The board, and the people who are not on it.\n\nTwo lists rather than one: appending unrated staff to the bottom of a descending\ntable reads as \"worst\", and \"nobody has rated them yet\" is not a ranking.",
         "properties": {
           "house_average": {
-            "title": "House Average",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "House Average"
           },
           "minimum_reviews_for_score": {
             "title": "Minimum Reviews For Score",
@@ -7760,6 +8250,225 @@
         "title": "StockMovementOut",
         "type": "object"
       },
+      "SupportAsk": {
+        "properties": {
+          "client_message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message Id"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "SupportAsk",
+        "type": "object"
+      },
+      "SupportConversationOut": {
+        "properties": {
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "assigned_owner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Owner Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "escalation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Reason"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/SupportPostOut"
+            },
+            "title": "Posts",
+            "type": "array"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "unread_count": {
+            "default": 0,
+            "title": "Unread Count",
+            "type": "integer"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "topic",
+          "urgency",
+          "status",
+          "created_at",
+          "posts"
+        ],
+        "title": "SupportConversationOut",
+        "type": "object"
+      },
+      "SupportMessageWrite": {
+        "properties": {
+          "body": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "client_message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message Id"
+          },
+          "visibility": {
+            "default": "guest",
+            "pattern": "^(guest|internal)$",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "SupportMessageWrite",
+        "type": "object"
+      },
+      "SupportPostOut": {
+        "properties": {
+          "author_kind": {
+            "title": "Author Kind",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author_kind",
+          "visibility",
+          "body",
+          "created_at"
+        ],
+        "title": "SupportPostOut",
+        "type": "object"
+      },
       "TaskAssign": {
         "properties": {
           "assignee_id": {
@@ -8148,6 +8857,59 @@
           "expires_in"
         ],
         "title": "TokenPair",
+        "type": "object"
+      },
+      "TopicSummaryOut": {
+        "properties": {
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "oldest_unresolved_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Unresolved Hours"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unresolved": {
+            "title": "Unresolved",
+            "type": "integer"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "department_id",
+          "topic",
+          "urgency",
+          "total",
+          "unresolved",
+          "oldest_unresolved_hours"
+        ],
+        "title": "TopicSummaryOut",
         "type": "object"
       },
       "Urgency": {
@@ -9968,6 +10730,133 @@
         ]
       }
     },
+    "/attendance/records": {
+      "get": {
+        "operationId": "attendance_records_attendance_records_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "employee_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttendanceOut"
+                  },
+                  "title": "Response Attendance Records Attendance Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attendance Records",
+        "tags": [
+          "attendance"
+        ]
+      }
+    },
     "/attendance/shifts": {
       "get": {
         "operationId": "list_shifts_attendance_shifts_get",
@@ -11423,6 +12312,201 @@
         ]
       }
     },
+    "/dashboard/department": {
+      "get": {
+        "operationId": "manager_overview_dashboard_department_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerOverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manager Overview",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/dashboard/overview": {
+      "get": {
+        "operationId": "gm_overview_dashboard_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GMOverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Gm Overview",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
     "/guest-intel/at-risk": {
       "get": {
         "description": "Guests drifting away, most at risk first.",
@@ -11456,7 +12540,7 @@
     },
     "/guest-intel/concierge/ask": {
       "post": {
-        "description": "The guest chat. Rate limited per stay; answers only from the knowledge base.",
+        "description": "Persist the guest turn and route work before reporting a handoff.",
         "operationId": "guest_ask_guest_intel_concierge_ask_post",
         "requestBody": {
           "content": {
@@ -12985,6 +14069,188 @@
         "summary": "Open Session",
         "tags": [
           "guest-qr"
+        ]
+      }
+    },
+    "/guest/support/ask": {
+      "post": {
+        "operationId": "guest_support_ask_guest_support_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConciergeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Support Ask",
+        "tags": [
+          "guest-support"
+        ]
+      }
+    },
+    "/guest/support/conversations": {
+      "get": {
+        "operationId": "guest_list_conversations_guest_support_conversations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupportConversationOut"
+                  },
+                  "title": "Response Guest List Conversations Guest Support Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest List Conversations",
+        "tags": [
+          "guest-support"
+        ]
+      }
+    },
+    "/guest/support/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "guest_get_conversation_guest_support_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Get Conversation",
+        "tags": [
+          "guest-support"
+        ]
+      }
+    },
+    "/guest/support/conversations/{conversation_id}/messages": {
+      "post": {
+        "operationId": "guest_post_message_guest_support_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportMessageWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Post Message",
+        "tags": [
+          "guest-support"
         ]
       }
     },
@@ -15044,6 +16310,380 @@
         ]
       }
     },
+    "/performance/employees": {
+      "get": {
+        "operationId": "performance_employees_performance_employees_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmployeeOption"
+                  },
+                  "title": "Response Performance Employees Performance Employees Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Performance Employees",
+        "tags": [
+          "performance"
+        ]
+      }
+    },
+    "/performance/employees/{employee_id}": {
+      "get": {
+        "operationId": "employee_performance_performance_employees__employee_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "employee_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Employee Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceMetric"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Employee Performance",
+        "tags": [
+          "performance"
+        ]
+      }
+    },
+    "/performance/me": {
+      "get": {
+        "operationId": "my_performance_metrics_performance_me_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceMetric"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Performance Metrics",
+        "tags": [
+          "performance"
+        ]
+      }
+    },
+    "/performance/summary": {
+      "get": {
+        "operationId": "performance_summary_performance_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PerformanceMetric"
+                  },
+                  "title": "Response Performance Summary Performance Summary Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Performance Summary",
+        "tags": [
+          "performance"
+        ]
+      }
+    },
     "/property": {
       "get": {
         "operationId": "get_property_property_get",
@@ -15704,6 +17344,62 @@
           }
         ],
         "summary": "Set Shadow Mode",
+        "tags": [
+          "property"
+        ]
+      }
+    },
+    "/property/spatial": {
+      "get": {
+        "description": "Floor and room serviceability without names, notes or stay identifiers.",
+        "operationId": "spatial_view_property_spatial_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpatialViewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Spatial View",
         "tags": [
           "property"
         ]
@@ -17876,6 +19572,323 @@
         ]
       }
     },
+    "/support/conversations": {
+      "get": {
+        "operationId": "staff_list_conversations_support_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupportConversationOut"
+                  },
+                  "title": "Response Staff List Conversations Support Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff List Conversations",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
+    "/support/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "staff_get_conversation_support_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Get Conversation",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
+    "/support/conversations/{conversation_id}/delegate": {
+      "post": {
+        "operationId": "staff_delegate_conversation_support_conversations__conversation_id__delegate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelegateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Delegate Conversation",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
+    "/support/conversations/{conversation_id}/messages": {
+      "post": {
+        "operationId": "staff_post_message_support_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportMessageWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportPostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Post Message",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
+    "/support/conversations/{conversation_id}/resolve": {
+      "post": {
+        "operationId": "staff_resolve_conversation_support_conversations__conversation_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Resolve Conversation",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
+    "/support/topics": {
+      "get": {
+        "operationId": "staff_topic_summaries_support_topics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TopicSummaryOut"
+                  },
+                  "title": "Response Staff Topic Summaries Support Topics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Topic Summaries",
+        "tags": [
+          "staff-support"
+        ]
+      }
+    },
     "/tasks": {
       "get": {
         "operationId": "list_tasks_tasks_get",
@@ -18457,6 +20470,82 @@
         "summary": "Guest Profile",
         "tags": [
           "visits"
+        ]
+      }
+    },
+    "/workforce/employees": {
+      "get": {
+        "operationId": "roster_employees_workforce_employees_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "branch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmployeeOption"
+                  },
+                  "title": "Response Roster Employees Workforce Employees Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roster Employees",
+        "tags": [
+          "workforce"
         ]
       }
     },

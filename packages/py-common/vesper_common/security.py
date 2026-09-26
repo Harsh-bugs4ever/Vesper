@@ -201,6 +201,19 @@ def current_user(principal: Principal = Depends(current_principal), db: Session 
     return authorize_staff_principal(principal, db)
 
 
+_STAFF_AUTH_CACHE: dict[tuple[UUID, str], tuple[float, str, set[str], set[str], set[str], str | None]] = {}
+AUTH_CACHE_TTL_SECONDS = 3.0
+
+
+def invalidate_staff_auth_cache(user_id: UUID | None = None) -> None:
+    if user_id is None:
+        _STAFF_AUTH_CACHE.clear()
+    else:
+        keys_to_del = [k for k in _STAFF_AUTH_CACHE if k[0] == user_id]
+        for k in keys_to_del:
+            _STAFF_AUTH_CACHE.pop(k, None)
+
+
 def authorize_staff_principal(principal: Principal, db: Session) -> Principal:
     """Resolve live grants; JWT role and permissions are never an authority for people."""
     if principal.is_guest:
@@ -210,35 +223,68 @@ def authorize_staff_principal(principal: Principal, db: Session) -> Principal:
         return principal
     if principal.kind != ACCESS:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Access token required")
-    from app.api.identity.models import User
-    from app.api.property.models import Department, Property
+
     try:
         user_id = UUID(principal.id)
     except ValueError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid account") from None
+
+    # Check fast cache first
+    cache_key = (user_id, principal.property_id)
+    cached = _STAFF_AUTH_CACHE.get(cache_key)
+    import time
+    now_m = time.monotonic()
+    if cached and cached[0] > now_m:
+        _, role_key, perms, p_ids, d_ids, d_id = cached
+        principal.role = role_key
+        principal.permissions = set(perms)
+        principal.property_ids = set(p_ids)
+        principal.department_ids = set(d_ids)
+        principal.department_id = d_id
+        return principal
+
+    from app.api.identity.models import User
+    from app.api.property.models import Department, Property
+
     user = db.scalars(select(User).options(joinedload(User.role), joinedload(User.assignments)).where(User.id == user_id)).unique().first()
     if user is None or not user.is_active or user.role.key not in DEFAULT_ROLE_PERMISSIONS or user.role.property_id != user.property_id:
+        _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account no longer authorized")
     assignments = [a for a in user.assignments if a.property_id is not None]
     property_ids = {str(a.property_id) for a in assignments}
     if principal.property_id not in property_ids:
+        _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Property assignment revoked")
     if db.get(Property, UUID(principal.property_id)) is None:
+        _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Property no longer exists")
     departments = {str(a.department_id) for a in assignments if str(a.property_id) == principal.property_id and a.department_id}
     if departments:
         existing = {str(value) for value in db.scalars(select(Department.id).where(Department.property_id == UUID(principal.property_id), Department.id.in_([UUID(value) for value in departments])))}
         departments &= existing
     if user.role.key != Role.GM and not departments:
+        _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Department assignment required")
     if user.role.key == Role.GM and not any(a.department_id is None and str(a.property_id) == principal.property_id for a in assignments):
+        _STAFF_AUTH_CACHE.pop(cache_key, None)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Branch overview assignment required")
+
     principal.role = user.role.key
     principal.permissions = set(user.permissions)
     principal.property_ids = property_ids
     principal.department_ids = departments
     principal.department_id = next(iter(sorted(departments)), None)
+
+    _STAFF_AUTH_CACHE[cache_key] = (
+        now_m + AUTH_CACHE_TTL_SECONDS,
+        principal.role,
+        set(principal.permissions),
+        set(principal.property_ids),
+        set(principal.department_ids),
+        principal.department_id,
+    )
     return principal
+
 
 
 def current_guest(principal: Principal = Depends(current_principal)) -> Principal:

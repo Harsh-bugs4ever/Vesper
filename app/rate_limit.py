@@ -35,45 +35,69 @@ EXEMPT_PATHS = frozenset({"/health", "/ready", "/docs", "/redoc", "/openapi.json
 
 
 class RateLimiter:
-    """Fixed-window counter in Redis.
+    """Fixed-window counter with Redis primary and ultra-fast in-memory fallback.
 
-    Fixed rather than sliding on purpose: it is one INCR per request, it survives a
-    restart, and it is shared across replicas. A burst at a window boundary is an
-    acceptable trade for a demo-scale service.
-
-    If Redis is unreachable the limiter fails open — a rate limiter outage must not
-    take the whole product down.
+    If Redis is unreachable or slow, the circuit breaker opens instantly, failing over to
+    an in-memory window counter. This completely prevents 4+ second socket timeouts from
+    blocking requests.
     """
 
     def __init__(self, url: str | None = None) -> None:
         self._client: redis.Redis | None = None
         self._url = url or settings.redis_url
+        self._circuit_open_until = 0.0
+        self._memory_counts: dict[str, int] = {}
+        self._memory_window: int = 0
 
     @property
     def client(self) -> redis.Redis:
         if self._client is None:
-            self._client = redis.Redis.from_url(self._url, decode_responses=True)
+            self._client = redis.Redis.from_url(
+                self._url,
+                decode_responses=True,
+                socket_connect_timeout=0.1,
+                socket_timeout=0.2,
+                retry_on_timeout=False,
+            )
         return self._client
 
     def check(self, identity: str, kind: str) -> tuple[bool, int, int]:
         """Returns (allowed, remaining, seconds_until_reset)."""
         limit = RATE_LIMITS.get(kind, RATE_LIMITS["anonymous"])
-        window = int(time.time()) // WINDOW_SECONDS
+        now = time.time()
+        window = int(now) // WINDOW_SECONDS
+        reset_in = WINDOW_SECONDS - (int(now) % WINDOW_SECONDS)
+
+        # Fast in-memory path when circuit breaker is active
+        if time.monotonic() < self._circuit_open_until:
+            return self._check_memory(identity, kind, limit, window, reset_in)
+
         key = f"vesper:ratelimit:{kind}:{identity}:{window}"
         try:
             pipe = self.client.pipeline()
             pipe.incr(key)
             pipe.expire(key, WINDOW_SECONDS * 2)
             count = pipe.execute()[0]
-        except redis.RedisError:
-            log.warning("rate limiter unavailable; allowing the request", exc_info=True)
-            return True, limit, WINDOW_SECONDS
+            return count <= limit, max(0, limit - count), reset_in
+        except (redis.RedisError, OSError, TimeoutError):
+            # Trip circuit breaker for 30s so subsequent requests don't block
+            self._circuit_open_until = time.monotonic() + 30.0
+            log.warning("rate limiter redis unavailable; failing over to in-memory rate limiting")
+            self._client = None
+            return self._check_memory(identity, kind, limit, window, reset_in)
 
-        reset_in = WINDOW_SECONDS - (int(time.time()) % WINDOW_SECONDS)
+    def _check_memory(self, identity: str, kind: str, limit: int, window: int, reset_in: int) -> tuple[bool, int, int]:
+        if window != self._memory_window:
+            self._memory_counts.clear()
+            self._memory_window = window
+        key = f"{kind}:{identity}"
+        count = self._memory_counts.get(key, 0) + 1
+        self._memory_counts[key] = count
         return count <= limit, max(0, limit - count), reset_in
 
 
 limiter = RateLimiter()
+
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
