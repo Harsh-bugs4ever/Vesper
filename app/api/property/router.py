@@ -100,6 +100,41 @@ def list_departments(
     return [DepartmentOut.model_validate(r) for r in rows]
 
 
+@router.get("/public", response_model=PropertySummary)
+def get_public_property(
+    property_id: UUID | None = None,
+    db: Session = Depends(get_session),
+) -> PropertySummary:
+    """Guest-safe and public-safe property information for landing and orientation."""
+    p_id = property_id
+    if not p_id:
+        ids = service.list_property_ids(db)
+        if ids:
+            p_id = UUID(ids[0])
+    if not p_id:
+        from vesper_common.errors import NotFound
+        raise NotFound("Property not found")
+    prop = service.get_property(db, p_id)
+    return PropertySummary.model_validate(prop)
+
+
+@router.get("/public/room-categories", response_model=list[RoomCategoryOut])
+def list_public_categories(
+    property_id: UUID | None = None,
+    db: Session = Depends(get_session),
+) -> list[RoomCategoryOut]:
+    """Public room categories catalogue for guests and prospective arrivals."""
+    p_id = property_id
+    if not p_id:
+        ids = service.list_property_ids(db)
+        if ids:
+            p_id = UUID(ids[0])
+    if not p_id:
+        return []
+    rows = service.list_categories(db, p_id)
+    return [RoomCategoryOut.model_validate(r) for r in rows]
+
+
 @router.get("/room-categories", response_model=list[RoomCategoryOut])
 def list_categories(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
