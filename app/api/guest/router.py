@@ -74,6 +74,12 @@ def open_session(
     return GuestSession(**session)
 
 
+@guest_router.get("/active-rooms", response_model=list[dict])
+def active_rooms(db: Session = Depends(get_session)) -> list[dict]:
+    """Get active checked-in rooms with their QR secrets for testing and room cards."""
+    return service.list_active_checked_in_rooms(db)
+
+
 @guest_router.get("/menu", response_model=MenuOut)
 def guest_menu(
     principal: Principal = Depends(active_guest), db: Session = Depends(get_session)
@@ -134,6 +140,20 @@ def my_requests(
         db, UUID(principal.property_id), UUID(principal.stay_id)
     )
     return [_detail(r) for r in rows]
+
+
+@guest_router.get("/requests/{request_id}", response_model=RequestDetail)
+def get_my_request(
+    request_id: UUID,
+    principal: Principal = Depends(active_guest),
+    db: Session = Depends(get_session),
+) -> RequestDetail:
+    """The status of a single request, strictly scoped to the active stay."""
+    req = service.get_request(db, UUID(principal.property_id), request_id)
+    if req.stay_id != UUID(principal.stay_id):
+        from vesper_common.errors import Forbidden
+        raise Forbidden("That request belongs to another room")
+    return _detail(req)
 
 
 @guest_router.get("/served-by", response_model=list[dict])

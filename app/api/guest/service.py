@@ -18,7 +18,9 @@ from vesper_common.config import settings
 from vesper_common.errors import Conflict, Forbidden, Invalid, NotFound
 from vesper_common.events import Event, bus
 from vesper_common.security import create_guest_token
-from app.api.property.models import Property
+from app.api.frontdesk.models import Stay
+from app.api.inventory.models import StockItem
+from app.api.property.models import Property, Room
 
 from .models import Guest, IssueReport, IssueStatus, MenuItem, QrScan, RequestKind, RequestStatus, ServiceRequest
 
@@ -129,12 +131,56 @@ def menu(db: Session, property_id: UUID) -> dict:
         raise NotFound("Property not found")
     query = (
         select(MenuItem)
-        .where(MenuItem.property_id == property_id, MenuItem.is_available.is_(True))
+        .where(MenuItem.property_id == property_id)
         .order_by(MenuItem.category, MenuItem.name)
     )
-    grouped: dict[str, list[MenuItem]] = {}
-    for item in db.scalars(query):
-        grouped.setdefault(item.category, []).append(item)
+    items = list(db.scalars(query))
+
+    stock_ids: set[UUID] = set()
+    for item in items:
+        if item.recipe:
+            for sid_str in item.recipe.keys():
+                try:
+                    stock_ids.add(UUID(str(sid_str)))
+                except (ValueError, TypeError):
+                    pass
+
+    stock_map: dict[UUID, Decimal] = {}
+    if stock_ids:
+        stocks = db.scalars(
+            select(StockItem).where(
+                StockItem.property_id == property_id,
+                StockItem.id.in_(stock_ids),
+            )
+        )
+        stock_map = {s.id: s.quantity for s in stocks}
+
+    grouped: dict[str, list[dict]] = {}
+    for item in items:
+        effective_available = bool(item.is_available)
+        if effective_available and item.recipe:
+            for sid_str, needed in item.recipe.items():
+                try:
+                    sid = UUID(str(sid_str))
+                    available_qty = stock_map.get(sid)
+                    if available_qty is not None and available_qty < Decimal(str(needed)):
+                        effective_available = False
+                        break
+                except (ValueError, TypeError):
+                    continue
+
+        item_dict = {
+            "id": item.id,
+            "category": item.category,
+            "name": item.name,
+            "description": item.description,
+            "price": item.price,
+            "is_veg": item.is_veg,
+            "prep_minutes": item.prep_minutes,
+            "is_available": effective_available,
+        }
+        grouped.setdefault(item.category, []).append(item_dict)
+
     return {"currency": property_row.currency, "categories": grouped}
 
 
@@ -167,6 +213,32 @@ def create_request(
     sla = sla_minutes_override or (department or {}).get("default_sla_minutes") or DEFAULT_SLA_MINUTES[data.kind]
 
     lines, total = _price_order(db, property_id, data)
+
+    # Prevent duplicate requests from rapid repeated taps or retries within 30 seconds
+    recent_cutoff = utcnow() - timedelta(seconds=30)
+    existing_candidates = list(
+        db.scalars(
+            select(ServiceRequest).where(
+                ServiceRequest.property_id == property_id,
+                ServiceRequest.stay_id == stay_id,
+                ServiceRequest.kind == data.kind.value,
+                ServiceRequest.created_at >= recent_cutoff,
+                ServiceRequest.status == RequestStatus.RAISED,
+            ).order_by(ServiceRequest.created_at.desc())
+        )
+    )
+    for existing in existing_candidates:
+        if (existing.note or "").strip() == (data.note or "").strip():
+            existing_items = sorted(
+                [(str(i.get("menu_item_id")), int(i.get("quantity", 0))) for i in (existing.items or [])]
+            )
+            new_items = sorted(
+                [(str(i.menu_item_id), int(i.quantity)) for i in (data.items or [])]
+            )
+            if existing_items == new_items:
+                log.info("Duplicate request suppressed for stay %s (existing id %s)", stay_id, existing.id)
+                return existing
+
     request = ServiceRequest(
         property_id=property_id,
         stay_id=stay_id,
@@ -236,12 +308,42 @@ def _price_order(db: Session, property_id: UUID, data) -> tuple[list[dict], Deci
     if missing:
         raise Invalid("Some items are no longer on the menu", details={"menu_item_ids": missing})
 
+    stock_ids: set[UUID] = set()
+    for item in items:
+        if item.recipe:
+            for sid_str in item.recipe.keys():
+                try:
+                    stock_ids.add(UUID(str(sid_str)))
+                except (ValueError, TypeError):
+                    pass
+
+    stock_map: dict[UUID, Decimal] = {}
+    if stock_ids:
+        stocks = db.scalars(
+            select(StockItem).where(
+                StockItem.property_id == property_id,
+                StockItem.id.in_(stock_ids),
+            )
+        )
+        stock_map = {s.id: s.quantity for s in stocks}
+
     lines: list[dict] = []
     total = Decimal("0")
     for item in items:
         if not item.is_available:
             raise Invalid(f"{item.name} is unavailable right now")
         quantity = wanted[item.id]
+        if item.recipe:
+            for sid_str, per_portion in item.recipe.items():
+                try:
+                    sid = UUID(str(sid_str))
+                    needed = Decimal(str(per_portion)) * Decimal(str(quantity))
+                    available_qty = stock_map.get(sid)
+                    if available_qty is not None and available_qty < needed:
+                        raise Invalid(f"{item.name} is sold out and unavailable to order")
+                except (ValueError, TypeError):
+                    continue
+
         line_total = item.price * quantity
         total += line_total
         lines.append(
@@ -684,3 +786,36 @@ def _department(property_id: UUID, key: str) -> dict | None:
             return department
     log.warning("no '%s' department configured for property %s", key, property_id)
     return None
+
+
+def list_active_checked_in_rooms(db: Session) -> list[dict]:
+    """Return real checked-in rooms with valid QR access secrets for guest testing/cards."""
+    stays = list(
+        db.scalars(
+            select(Stay)
+            .where(Stay.status == "in_house")
+            .order_by(Stay.checked_in_at.desc())
+        )
+    )
+    results: list[dict] = []
+    for stay in stays:
+        room = db.get(Room, stay.room_id)
+        if not room:
+            continue
+        guest = db.get(Guest, stay.guest_id) if stay.guest_id else None
+        prop = db.get(Property, stay.property_id)
+        results.append(
+            {
+                "property_id": str(stay.property_id),
+                "property_name": prop.name if prop else "Vesper Luxury Resort",
+                "room_id": str(stay.room_id),
+                "room_number": stay.room_number,
+                "qr_secret": room.qr_secret,
+                "guest_name": guest.full_name if guest else "In-Room Guest",
+                "stay_id": str(stay.id),
+                "category": room.category.name if room.category else "Standard Room",
+                "floor": room.floor,
+            }
+        )
+    return results
+

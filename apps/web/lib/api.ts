@@ -153,7 +153,11 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
   const headers: Record<string, string> = {};
   const multipart = typeof FormData !== "undefined" && body instanceof FormData;
   if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
-  const guestRequest = guest || (path.startsWith("/guest/") && path !== "/guest/session");
+  const guestRequest =
+    guest ||
+    (path.startsWith("/guest/") &&
+      path !== "/guest/session" &&
+      path !== "/guest/active-rooms");
   const token = guestRequest ? guestTokens.access() : tokens.access();
   if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
 
