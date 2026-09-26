@@ -52,6 +52,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   /** Roles allowed to see the link. Omitted means everyone with admin access. */
   roles?: string[];
+  permission?: string;
 }
 
 const MANAGEMENT = ["general_manager"];
@@ -69,21 +70,21 @@ const NAV: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { name: "Reservations", href: "/admin/reservations", icon: CalendarDays },
-      { name: "Front Desk", href: "/admin/front-desk", icon: ConciergeBell },
+      { name: "Reservations", href: "/admin/reservations", icon: CalendarDays, permission: "bookings:read" },
+      { name: "Front Desk", href: "/admin/front-desk", icon: ConciergeBell, permission: "bookings:read" },
       {
         name: "Housekeeping",
         href: "/admin/housekeeping",
         icon: BedDouble,
-        roles: ["system_admin", "general_manager", "dept_manager_hk"],
+        roles: ["general_manager", "dept_manager_hk"],
       },
       {
         name: "F&B",
         href: "/admin/fnb",
         icon: UtensilsCrossed,
-        roles: ["system_admin", "general_manager", "dept_manager_fb"],
+        roles: ["general_manager", "dept_manager_fb"],
       },
-      { name: "Maintenance", href: "/admin/maintenance", icon: Wrench },
+      { name: "Maintenance", href: "/admin/maintenance", icon: Wrench, permission: "workorder:approve" },
       { name: "Guest Requests", href: "/admin/requests", icon: ClipboardList },
       { name: "Guest Chat", href: "/admin/guest-chat", icon: MessagesSquare },
     ],
@@ -103,7 +104,7 @@ const NAV: NavGroup[] = [
     label: "People",
     items: [
       { name: "Staff Roster", href: "/admin/roster", icon: UsersRound },
-      { name: "Attendance", href: "/admin/staff", icon: Users },
+      { name: "Attendance", href: "/admin/staff", icon: Users, permission: "tasks:assign" },
       { name: "Performance", href: "/admin/performance", icon: Award },
       { name: "Payroll", href: "/admin/payroll", icon: ReceiptText, roles: MANAGEMENT },
       { name: "AI Learning", href: "/admin/training", icon: GraduationCap },
@@ -141,11 +142,11 @@ const NAV: NavGroup[] = [
 
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
-  const { role } = useAuth();
+  const { role, hasPermission } = useAuth();
 
   const groups = NAV.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.roles || Boolean(role && item.roles.includes(role))),
+    items: group.items.filter((item) => (!item.roles || Boolean(role && item.roles.includes(role))) && (!item.permission || hasPermission(item.permission))),
   })).filter((group) => group.items.length > 0);
 
   return (

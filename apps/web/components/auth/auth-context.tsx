@@ -14,6 +14,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, api, auth as authApi, property as propertyApi, tokens } from "@/lib/api";
 import { DEFAULT_ROLE_PERMISSIONS, type User, type UserRole } from "@/lib/auth";
@@ -62,6 +63,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY_PERMISSIONS = "vesper_role_permissions";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [backendUser, setBackendUser] = useState<User | null>(null);
   const [backendProperty, setBackendProperty] = useState<Property | null>(null);
   const [properties, setProperties] = useState<PropertyOption[]>([]);
@@ -106,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // An expired or invalid token — clear it so the app reaches a clean state.
           tokens.clear();
+          queryClient.clear();
           if (!cancelled) setSessionExpired(true);
         }
       }
@@ -116,12 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [queryClient]);
 
   const signIn = useCallback(async (email: string, password: string): Promise<User> => {
     setIsLoading(true);
     setError(null);
     try {
+      queryClient.clear();
       const me = await authApi.login(email, password);
       const [departments, branch, branches] = await Promise.all([
         loadDepartments(),
@@ -142,10 +146,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const logout = useCallback(() => {
     void authApi.logout();
+    queryClient.clear();
     // Clear all protected state immediately. Leaving stale data behind risks showing
     // the next user another person's session data during the loading flash.
     setBackendUser(null);
@@ -153,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProperties([]);
     setSessionExpired(false);
     setError(null);
-  }, []);
+  }, [queryClient]);
 
   const updateRolePermissions = useCallback((targetRole: UserRole, newPerms: string[]) => {
     setRolePermissions((prev) => {

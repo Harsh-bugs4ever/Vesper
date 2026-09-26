@@ -33,6 +33,8 @@ import { PeriodSelect } from "@/components/ui/period-select";
 import { StatTile } from "@/components/ui/stat-tile";
 import { useToast } from "@/components/ui/toast";
 import { rooms as roomsApi, type BackendRoom, type BackendRoomBoard } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-context";
+import { MaintenancePanel } from "@/components/connected/maintenance-panel";
 import { cn } from "@/lib/utils";
 
 type HousekeepingStatus =
@@ -123,6 +125,7 @@ const OCCUPANCY_OPTIONS = [
 ];
 
 export default function HousekeepingPage() {
+  const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -144,8 +147,9 @@ export default function HousekeepingPage() {
     refetch,
     isFetching,
   } = useQuery<BackendRoomBoard>({
-    queryKey: ["rooms-board"],
+    queryKey: ["rooms-board", user?.propertyId, user?.id, user?.departmentId],
     queryFn: () => roomsApi.board(),
+    enabled: Boolean(user),
     refetchInterval: 15_000,
   });
 
@@ -323,15 +327,15 @@ export default function HousekeepingPage() {
         <StatTile
           variant="value-first"
           label="Total Inventory"
-          value={isLoading ? "…" : total}
+          value={isLoading || isError ? "—" : total}
           tone="sand"
           icon={ClipboardList}
         />
         <StatTile
           variant="value-first"
           label="Occupied Rooms"
-          value={isLoading ? "…" : occupiedCount}
-          change={`${pct(occupiedCount)}%`}
+          value={board ? occupiedCount : "—"}
+          change={board ? `${pct(occupiedCount)}%` : "Unavailable"}
           intent="good"
           comparison="In-house guests"
           tone="sage"
@@ -340,8 +344,8 @@ export default function HousekeepingPage() {
         <StatTile
           variant="value-first"
           label="Ready / Clean"
-          value={isLoading ? "…" : readyCount}
-          change={`${pct(readyCount)}%`}
+          value={board ? readyCount : "—"}
+          change={board ? `${pct(readyCount)}%` : "Unavailable"}
           intent="good"
           comparison="Available for check-in"
           tone="forest"
@@ -350,8 +354,8 @@ export default function HousekeepingPage() {
         <StatTile
           variant="value-first"
           label="Dirty / Turnover"
-          value={isLoading ? "…" : dirtyCount}
-          change={`${pct(dirtyCount)}%`}
+          value={board ? dirtyCount : "—"}
+          change={board ? `${pct(dirtyCount)}%` : "Unavailable"}
           intent="bad"
           comparison="Awaiting cleaning"
           tone="rose"
@@ -360,8 +364,8 @@ export default function HousekeepingPage() {
         <StatTile
           variant="value-first"
           label="Cleaning in Progress"
-          value={isLoading ? "…" : cleaningCount}
-          change={`${pct(cleaningCount)}%`}
+          value={board ? cleaningCount : "—"}
+          change={board ? `${pct(cleaningCount)}%` : "Unavailable"}
           intent="neutral"
           comparison="Attendant assigned"
           tone="sand"
@@ -370,8 +374,8 @@ export default function HousekeepingPage() {
         <StatTile
           variant="value-first"
           label="Out of Order"
-          value={isLoading ? "…" : blockedCount}
-          change={`${pct(blockedCount)}%`}
+          value={board ? blockedCount : "—"}
+          change={board ? `${pct(blockedCount)}%` : "Unavailable"}
           intent="neutral"
           comparison="Maintenance blocked"
           tone="rose"
@@ -654,7 +658,7 @@ export default function HousekeepingPage() {
                 {STATUS_META[selected.status as HousekeepingStatus]?.nextStep && (
                   <Button
                     className="w-full"
-                    disabled={updateStatus.isPending}
+                    disabled={updateStatus.isPending || !hasPermission("rooms:status_write")}
                     onClick={() => {
                       const next =
                         STATUS_META[selected.status as HousekeepingStatus]?.nextStep?.to;
@@ -681,7 +685,7 @@ export default function HousekeepingPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={updateStatus.isPending || selected.status === "ready"}
+                    disabled={updateStatus.isPending || !hasPermission("rooms:status_write") || selected.status === "ready"}
                     onClick={() =>
                       updateStatus.mutate({
                         id: selected.id,
@@ -695,7 +699,7 @@ export default function HousekeepingPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={updateStatus.isPending || selected.status === "dirty"}
+                    disabled={updateStatus.isPending || !hasPermission("rooms:status_write") || selected.status === "dirty"}
                     onClick={() =>
                       updateStatus.mutate({
                         id: selected.id,
@@ -709,7 +713,7 @@ export default function HousekeepingPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={updateStatus.isPending || selected.status === "cleaning"}
+                    disabled={updateStatus.isPending || !hasPermission("rooms:status_write") || selected.status === "cleaning"}
                     onClick={() =>
                       updateStatus.mutate({
                         id: selected.id,
@@ -723,7 +727,7 @@ export default function HousekeepingPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={updateStatus.isPending || selected.status === "out_of_order"}
+                    disabled={updateStatus.isPending || !hasPermission("rooms:status_write") || selected.status === "out_of_order"}
                     onClick={() =>
                       updateStatus.mutate({
                         id: selected.id,
@@ -740,6 +744,7 @@ export default function HousekeepingPage() {
           )}
         </Panel>
       </div>
+      <MaintenancePanel />
     </div>
   );
 }

@@ -1,34 +1,51 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-context";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody } from "@/components/ui/panel";
+import { useToast } from "@/components/ui/toast";
 
-type Task = { id: string; title: string; description: string | null; status: string; priority: string; due_at: string | null; is_overdue: boolean };
-type Attendance = { id: string; work_date: string; checked_in_at: string; checked_out_at: string | null; worked_minutes: number };
+type Task = { id: string; title: string; description: string | null; department_id: string; assignee_id: string | null; status: string; priority: string; due_at: string | null; is_overdue: boolean };
+type TaskBoard = { counts: Record<string, number>; overdue: number; tasks: Task[] };
+type Attendance = { id: string; checked_in_at: string; checked_out_at: string | null; work_date: string; worked_minutes: number };
+type Room = { id: string; number: string; status: string };
+
+function failure(error: unknown) {
+  if (error instanceof ApiError && error.status === 403) return "Access denied by the backend for this department or action.";
+  return error instanceof Error ? error.message : "The request failed.";
+}
 
 export function LiveStaff() {
   const { user, hasPermission } = useAuth();
   const client = useQueryClient();
-  const key = ["staff-tasks", user?.propertyId ?? "", user?.id ?? ""];
-  const tasks = useQuery({ queryKey: key, queryFn: () => api.get<Task[]>("/tasks/mine", { include_done: true }), enabled: Boolean(user), refetchInterval: 30_000 });
-  const attendance = useQuery({ queryKey: ["staff-attendance", user?.id], queryFn: () => api.get<Attendance[]>("/attendance/me", { days: 14 }), enabled: Boolean(user?.id) });
-  const mutation = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "claim" | "in_progress" | "done" }) => action === "claim" ? api.post<Task>(`/tasks/${id}/claim`) : api.put<Task>(`/tasks/${id}/status`, { status: action }),
-    onSuccess: () => client.invalidateQueries({ queryKey: key }),
-  });
-  const current = tasks.data ?? [];
-  const userName = user?.name ? user.name.split(" ")[0] : "Staff";
+  const { showToast } = useToast();
+  const [tab, setTab] = useState<"mine" | "pool" | "attendance" | "report">("mine");
+  const [summary, setSummary] = useState("");
+  const [roomId, setRoomId] = useState("");
+  const scope = [user?.propertyId, user?.id, user?.departmentId];
+  const canRead = Boolean(user && hasPermission("tasks:read"));
+  const mine = useQuery({ queryKey: ["phase3", "mine", ...scope], queryFn: () => api.get<Task[]>("/tasks/mine", { include_done: true }), enabled: canRead });
+  const pool = useQuery({ queryKey: ["phase3", "pool", ...scope], queryFn: () => api.get<TaskBoard>("/tasks", { status: "open" }), enabled: canRead });
+  const attendance = useQuery({ queryKey: ["phase3", "attendance", ...scope], queryFn: () => api.get<Attendance[]>("/attendance/me", { days: 14 }), enabled: Boolean(user) });
+  const rooms = useQuery({ queryKey: ["phase3", "rooms", ...scope], queryFn: () => api.get<Room[]>("/rooms"), enabled: Boolean(user && hasPermission("issues:write")) });
+  const refresh = () => client.invalidateQueries({ queryKey: ["phase3"] });
+  const taskAction = useMutation({ mutationFn: ({ id, action }: { id: string; action: "claim" | "in_progress" | "done" }) => action === "claim" ? api.post<Task>(`/tasks/${id}/claim`) : api.put<Task>(`/tasks/${id}/status`, { status: action }), onSuccess: () => { void refresh(); showToast({ title: "Task updated", description: "The server saved the change.", type: "success" }); }, onError: (error) => showToast({ title: "Task update failed", description: failure(error), type: "error" }) });
+  const attendanceAction = useMutation({ mutationFn: (action: "in" | "out") => action === "in" ? api.post<Attendance>("/attendance/check-in", { method: "qr" }) : api.post<Attendance>("/attendance/check-out", {}), onSuccess: () => { void refresh(); showToast({ title: "Attendance saved", description: "The server recorded your attendance.", type: "success" }); }, onError: (error) => showToast({ title: "Attendance failed", description: failure(error), type: "error" }) });
+  const issueAction = useMutation({ mutationFn: () => api.post("/issues", { summary: summary.trim(), room_id: roomId || null }), onSuccess: () => { setSummary(""); setRoomId(""); void refresh(); showToast({ title: "Defect reported", description: "The server recorded the issue.", type: "success" }); }, onError: (error) => showToast({ title: "Report failed", description: failure(error), type: "error" }) });
+  const onDuty = attendance.data?.some((row) => !row.checked_out_at);
+  const claimable = pool.data?.tasks.filter((task) => !task.assignee_id) ?? [];
 
+  if (!user || !canRead) return <div role="alert" className="m-6 rounded-xl border border-amber-200 bg-amber-50 p-5">Your account does not have access to staff tasks.</div>;
   return <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8">
-    <PageHeader title={`Welcome, ${userName}`} description="Your assigned work and recent attendance from the resort system." actions={<button type="button" onClick={() => { tasks.refetch(); attendance.refetch(); }} className="rounded-lg border border-sand-200 px-4 py-2 text-sm">Refresh</button>} />
-    <div className="grid gap-4 sm:grid-cols-3">{[["Open tasks", current.filter((task) => !["done", "cancelled"].includes(task.status)).length], ["Overdue", current.filter((task) => task.is_overdue && task.status !== "done").length], ["Completed", current.filter((task) => task.status === "done").length]].map(([label, count]) => <div key={label} className="rounded-xl border border-sand-200 bg-white p-5"><p className="text-sm text-sage-700">{label}</p><p className="mt-2 font-serif text-3xl text-sage-950">{count}</p></div>)}</div>
-    <Panel><PanelBody className="p-5 sm:p-6"><h2 className="font-serif text-2xl text-sage-950">My tasks</h2>
-      {tasks.isPending ? <p role="status" className="py-8 text-sm">Loading tasks…</p> : tasks.isError ? <p role="alert" className="py-8 text-sm text-rose-700">{tasks.error instanceof Error ? tasks.error.message : "Could not load tasks."}</p> : current.length === 0 ? <p className="py-8 text-sm text-sage-700">No tasks assigned right now.</p> : <ul className="mt-4 space-y-3">{current.map((task) => <li key={task.id} className={`rounded-xl border p-4 ${task.is_overdue && task.status !== "done" ? "border-rose-200 bg-rose-50" : "border-sand-200"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-sage-950">{task.title}</p>{task.description && <p className="mt-1 text-sm text-sage-700">{task.description}</p>}<p className="mt-2 text-xs capitalize text-sage-600">{task.priority} priority · {task.status.replaceAll("_", " ")}{task.due_at ? ` · Due ${new Date(task.due_at).toLocaleString("en-IN")}` : ""}</p></div><div className="flex gap-2">{["open", "assigned"].includes(task.status) && hasPermission("tasks:complete") && <button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({ id: task.id, action: "in_progress" })} className="rounded-lg bg-sage-700 px-3 py-2 text-xs text-white disabled:opacity-50">Start</button>}{task.status === "in_progress" && hasPermission("tasks:complete") && <button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({ id: task.id, action: "done" })} className="rounded-lg bg-sage-700 px-3 py-2 text-xs text-white disabled:opacity-50">Complete</button>}</div></div></li>)}</ul>}
-      {mutation.isError && <p role="alert" className="mt-4 text-sm text-rose-700">{mutation.error instanceof Error ? mutation.error.message : "Could not update task."}</p>}
-    </PanelBody></Panel>
-    <Panel><PanelBody className="p-5 sm:p-6"><h2 className="font-serif text-2xl text-sage-950">Recent attendance</h2><p className="mt-1 text-xs text-sage-600">Check-in requires the signed wall QR or an approved location fix.</p>{attendance.isPending ? <p role="status" className="py-8 text-sm">Loading attendance…</p> : attendance.isError ? <p role="alert" className="py-8 text-sm text-rose-700">{attendance.error instanceof Error ? attendance.error.message : "Could not load attendance."}</p> : attendance.data?.length ? <ul className="mt-4 divide-y divide-sand-200">{attendance.data.map((record) => <li key={record.id} className="flex flex-wrap justify-between gap-3 py-3 text-sm"><span>{new Date(`${record.work_date}T00:00:00`).toLocaleDateString("en-IN")}</span><span>{new Date(record.checked_in_at).toLocaleTimeString("en-IN")} – {record.checked_out_at ? new Date(record.checked_out_at).toLocaleTimeString("en-IN") : "On shift"}</span><span>{(record.worked_minutes / 60).toFixed(1)} hours</span></li>)}</ul> : <p className="py-8 text-sm text-sage-700">No attendance records in the last 14 days.</p>}</PanelBody></Panel>
+    <PageHeader title={`Welcome, ${user.name}`} description={[user.roleTitle, user.department].filter(Boolean).join(" · ")} />
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Staff workspace">{([ ["mine", "My tasks"], ["pool", "Claimable work"], ["attendance", "Attendance"], ["report", "Report defect"] ] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}>{label}</Button>)}</div>
+    {tab === "mine" && <Panel><PanelBody className="space-y-3 p-5"><h2 className="font-serif text-xl">My tasks</h2>{mine.isPending ? <p role="status">Loading tasks…</p> : mine.isError ? <p role="alert" className="text-rose-700">{failure(mine.error)}</p> : mine.data?.length === 0 ? <p>No tasks assigned.</p> : mine.data?.map((task) => <article key={task.id} className="rounded-xl border border-sand-200 p-4"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold">{task.title}</h3><p className="text-sm text-sand-600">{task.description}</p><p className="text-xs">{task.status} · {task.priority}{task.due_at ? ` · Due ${new Date(task.due_at).toLocaleString()}` : ""}{task.is_overdue ? " · Overdue" : ""}</p></div><div className="flex gap-2">{["open", "assigned"].includes(task.status) && <Button disabled={!hasPermission("tasks:complete") || taskAction.isPending} onClick={() => taskAction.mutate({ id: task.id, action: "in_progress" })}>Start</Button>}{task.status === "in_progress" && <Button disabled={!hasPermission("tasks:complete") || taskAction.isPending} onClick={() => taskAction.mutate({ id: task.id, action: "done" })}>Complete</Button>}</div></div></article>)}</PanelBody></Panel>}
+    {tab === "pool" && <Panel><PanelBody className="space-y-3 p-5"><h2 className="font-serif text-xl">Claimable work</h2>{pool.isPending ? <p role="status">Loading work…</p> : pool.isError ? <p role="alert" className="text-rose-700">{failure(pool.error)}</p> : claimable.length === 0 ? <p>No claimable tasks returned for your department.</p> : claimable.map((task) => <article key={task.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sand-200 p-4"><span>{task.title}</span><Button disabled={taskAction.isPending} onClick={() => taskAction.mutate({ id: task.id, action: "claim" })}>Claim</Button></article>)}</PanelBody></Panel>}
+    {tab === "attendance" && <Panel><PanelBody className="space-y-4 p-5"><h2 className="font-serif text-xl">Attendance</h2>{attendance.isPending ? <p role="status">Loading attendance…</p> : attendance.isError ? <p role="alert" className="text-rose-700">{failure(attendance.error)}</p> : <><p>{attendance.data?.length ? (onDuty ? "On shift" : "Off duty") : "No attendance records returned."}</p><Button disabled={!hasPermission("attendance:mark") || attendanceAction.isPending} onClick={() => attendanceAction.mutate(onDuty ? "out" : "in")}>{onDuty ? "Check out" : "Check in"}</Button><ul>{attendance.data?.map((row) => <li key={row.id} className="border-b py-2 text-sm">{row.work_date}: {new Date(row.checked_in_at).toLocaleTimeString()} – {row.checked_out_at ? new Date(row.checked_out_at).toLocaleTimeString() : "on shift"}</li>)}</ul></>}</PanelBody></Panel>}
+    {tab === "report" && <Panel><PanelBody className="space-y-4 p-5"><h2 className="font-serif text-xl">Report a room defect</h2>{!hasPermission("issues:write") ? <p role="alert">Your role cannot submit issue reports.</p> : <form onSubmit={(event) => { event.preventDefault(); issueAction.mutate(); }} className="space-y-3"><label className="block text-sm">Room<select value={roomId} onChange={(event) => setRoomId(event.target.value)} className="mt-1 block w-full rounded-lg border p-2"><option value="">No room</option>{rooms.data?.map((room) => <option key={room.id} value={room.id}>{room.number} · {room.status}</option>)}</select></label>{rooms.isError && <p role="alert" className="text-rose-700">{failure(rooms.error)}</p>}<label className="block text-sm">Defect summary<input required minLength={3} maxLength={160} value={summary} onChange={(event) => setSummary(event.target.value)} className="mt-1 block w-full rounded-lg border p-2" /></label><Button type="submit" disabled={issueAction.isPending || summary.trim().length < 3 || rooms.isError}>Submit report</Button></form>}<p className="text-sm text-sand-500">Staff report submission is unavailable until the backend provides a staff-report endpoint.</p></PanelBody></Panel>}
   </div>;
 }

@@ -23,6 +23,7 @@ export interface User {
   role: UserRole;
   roleTitle: string;
   department?: string;
+  departmentId?: string;
   propertyId: string;
   propertyName: string;
   avatarUrl?: string;
