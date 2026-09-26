@@ -27,6 +27,8 @@ const PUBLIC_PATHS = [
   "/guest/session",
   "/property/public",
   "/guest/amenities",
+  "/guest/active-rooms",
+  "/guest/menu",
 ];
 
 export interface ApiErrorBody {
@@ -158,7 +160,8 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     (path.startsWith("/guest/") &&
       path !== "/guest/session" &&
       path !== "/guest/active-rooms" &&
-      path !== "/guest/amenities");
+      path !== "/guest/amenities" &&
+      path !== "/guest/menu");
   const token = guestRequest
     ? guestTokens.access()
     : guestTokens.access() || tokens.access();
@@ -187,13 +190,16 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     });
   }
 
-  // One refresh attempt, then give up. Anything else risks a loop.
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
   if (response.status === 401 && !retrying && !anonymous && !isPublic && !guestRequest) {
     if (await refreshAccessToken()) {
       return request<T>(path, options, true);
     }
     tokens.clear();
+  }
+
+  if (response.status === 401 && guestRequest) {
+    guestTokens.clear();
   }
 
   if (response.status === 204) return undefined as T;

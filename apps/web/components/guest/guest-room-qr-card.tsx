@@ -204,13 +204,36 @@ export function GuestRoomQrCard({
           <div className="mt-8 rounded-2xl bg-rose-50 p-4 text-center text-xs text-rose-700">
             <TriangleAlert className="mx-auto mb-1 h-5 w-5" />
             <p>{roomsError}</p>
-            <button
-              type="button"
-              onClick={loadActiveRooms}
-              className="mt-2 font-semibold underline hover:text-rose-900"
-            >
-              Retry
-            </button>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={loadActiveRooms}
+                className="font-semibold underline hover:text-rose-900"
+              >
+                Retry
+              </button>
+              <span className="text-sand-400">·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const demoSession: GuestSession = {
+                    property_id: "demo-vesper-resort",
+                    property_name: "Vesper Beach Resort & Spa",
+                    room_id: "room-405",
+                    room_number: "405",
+                    stay_id: "stay-demo-405",
+                    guest_name: "Rohan Mehta",
+                    token: "demo-token-room-405",
+                  };
+                  guestTokens.set(demoSession.token);
+                  onOpenSession?.(demoSession);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-sage-800 px-3 py-1.5 font-medium text-white hover:bg-sage-900 transition"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                <span>Launch Room 405 (Demo)</span>
+              </button>
+            </div>
           </div>
         ) : activeRooms.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-sand-200 bg-sand-50/60 p-6 text-center">

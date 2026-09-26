@@ -236,7 +236,14 @@ export default function GuestPage() {
     }
 
     let cancelled = false;
+    let interval: NodeJS.Timeout | null = null;
+
     const fetchRequests = async () => {
+      if (!guestTokens.access()) {
+        setActiveRequest(null);
+        if (interval) clearInterval(interval);
+        return;
+      }
       try {
         const list = await guestRequests.list();
         if (cancelled || list.length === 0) return;
@@ -269,16 +276,28 @@ export default function GuestPage() {
               : "new",
           value: Number(first.total_amount) || undefined,
         });
-      } catch {
-        // Handled silently
+      } catch (err: unknown) {
+        // Clear stale/expired guest token and stop polling on auth failures
+        const message = err instanceof Error ? err.message.toLowerCase() : "";
+        const isAuthError =
+          message.includes("401") ||
+          message.includes("403") ||
+          message.includes("invalid token") ||
+          message.includes("unauthorized") ||
+          message.includes("not authenticated");
+        if (isAuthError) {
+          guestTokens.clear();
+          setActiveRequest(null);
+          if (interval) clearInterval(interval);
+        }
       }
     };
 
     void fetchRequests();
-    const interval = setInterval(fetchRequests, 15_000);
+    interval = setInterval(fetchRequests, 15_000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, []);
 
