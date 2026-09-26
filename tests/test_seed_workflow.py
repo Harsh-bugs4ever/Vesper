@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from uuid import uuid4
+from decimal import Decimal
 from contextlib import nullcontext
 from importlib import import_module
 import sys
@@ -23,7 +24,9 @@ class FakeSession:
         self.users = [SimpleNamespace(id=uuid4(), email=email) for email in (
             "gm@vesper.demo", "fom@vesper.demo", "exec@vesper.demo",
             "chef@vesper.demo", "hk1@vesper.demo", "chiefeng@vesper.demo",
-            "store@vesper.demo")]
+            "store@vesper.demo", "fnb1@vesper.demo", "front_office1@vesper.demo")]
+        self.stock_items = [SimpleNamespace(id=uuid4(), sku=sku, unit_cost=Decimal("10"))
+            for sku in ("LN-TOWEL", "TL-DENTAL", "FD-EGGS", "FD-BREAD", "SP-AC")]
         self.stays = [SimpleNamespace(id=uuid4(), room_id=uuid4(), room_number=str(201 + n),
             guest_id=uuid4()) for n in range(3)]
         self.rows = {}
@@ -37,7 +40,7 @@ class FakeSession:
     def scalars(self, statement):
         model = statement.column_descriptions[0]["entity"]
         return iter({"Department": self.departments, "User": self.users,
-            "Stay": self.stays}.get(model.__name__, []))
+            "Stay": self.stays, "StockItem": self.stock_items}.get(model.__name__, []))
 
     def scalar(self, statement):
         model = statement.column_descriptions[0]["entity"]
@@ -76,6 +79,30 @@ def test_non_demo_property_is_rejected():
         seed_workflow(db, db.property_id, apply=True)
     assert not db.rows
     assert db.commits == 0
+
+
+def test_staff_tasks_and_requisitions_are_linked_to_seeded_people_and_stock():
+    from app.api.inventory.models import InventoryRequest, InventoryRequestAudit, InventoryRequestLine
+    from app.api.staff.models import Task, TaskStatus
+
+    db = FakeSession()
+    result = seed_workflow(db, db.property_id, apply=True)
+    assert "task:linen-pool" in result["new_keys"]
+    assert "requisition:housekeeping" in result["new_keys"]
+
+    tasks = [row for (model, _), row in db.rows.items() if model is Task]
+    requests = [row for (model, _), row in db.rows.items() if model is InventoryRequest]
+    lines = [row for (model, _), row in db.rows.items() if model is InventoryRequestLine]
+    audits = [row for (model, _), row in db.rows.items() if model is InventoryRequestAudit]
+    assert any(task.status == TaskStatus.OPEN and task.assignee_id is None for task in tasks)
+    assert any(task.status == TaskStatus.IN_PROGRESS and task.assignee_id for task in tasks)
+    assert len(requests) == 4  # three staff requests plus the existing demo special
+    assert len(lines) == 6
+    assert len(audits) == 3
+    assert all(request.property_id == db.property_id and request.status == "submitted"
+               for request in requests)
+    assert {line.item_id for line in lines}.issubset({item.id for item in db.stock_items}
+            | {scenario_id(db.property_id, "stock:special")})
 
 
 def test_scenario_ids_are_stable_and_property_scoped():

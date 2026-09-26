@@ -56,7 +56,7 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
     departments = {d.key: d for d in db.scalars(select(prop.Department).where(prop.Department.property_id == property_id))}
     users = {u.email: u for u in db.scalars(select(identity.User).where(identity.User.property_id == property_id))}
     required_departments = {"front_office", "housekeeping", "fnb", "maintenance", "store"}
-    required_users = {"gm@vesper.demo", "fom@vesper.demo", "exec@vesper.demo", "chef@vesper.demo", "hk1@vesper.demo", "chiefeng@vesper.demo", "store@vesper.demo"}
+    required_users = {"gm@vesper.demo", "fom@vesper.demo", "exec@vesper.demo", "chef@vesper.demo", "hk1@vesper.demo", "chiefeng@vesper.demo", "store@vesper.demo", "fnb1@vesper.demo", "front_office1@vesper.demo"}
     if required_departments - departments.keys() or required_users - users.keys():
         raise ValueError("Demo property is missing required departments or role accounts")
     stays = list(db.scalars(select(frontdesk.Stay).where(
@@ -65,6 +65,11 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
     ).order_by(frontdesk.Stay.room_number).limit(3)))
     if len(stays) < 3:
         raise ValueError("Seed at least three in-house stays before adding workflow scenarios")
+    stock_items = {item.sku: item for item in db.scalars(select(inventory.StockItem).where(
+        inventory.StockItem.property_id == property_id))}
+    required_stock = {"LN-TOWEL", "TL-DENTAL", "FD-EGGS", "FD-BREAD", "SP-AC"}
+    if required_stock - stock_items.keys():
+        raise ValueError("Demo property is missing stock items needed for staff requisitions")
     now = utcnow()
     today = now.astimezone(ZoneInfo(resort.timezone)).date()
     gm = users["gm@vesper.demo"]
@@ -85,6 +90,18 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
             db.add(model(id=row_id, property_id=property_id, **fields))
             # Several cross-context references are plain UUIDs. Flush in story order
             # so rows with real foreign keys (such as a PO's stock item) exist first.
+            db.flush()
+        return row_id
+
+    def add_related(model, key: str, **fields):
+        """Add a dependent row that has no property_id column."""
+        row_id = scenario_id(property_id, key)
+        if db.get(model, row_id) is not None:
+            existing.append(key)
+            return row_id
+        added.append(key)
+        if apply:
+            db.add(model(id=row_id, **fields))
             db.flush()
         return row_id
 
@@ -159,6 +176,35 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         label="positive", confidence=1.0, method="rating_only",
         themes=["service"], occurred_on=today)
 
+    # Claimable work and active assignments across staff departments. These are
+    # internal tasks, so they do not claim a guest request changed status.
+    add(staff.Task, "task:linen-pool", department_id=dept["housekeeping"].id,
+        room_id=stays[0].room_id, title=f"Deliver fresh linen to room {stays[0].room_number}",
+        description="Collect clean linen and confirm delivery with the room.",
+        status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.HIGH,
+        source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=25))
+    add(staff.Task, "task:fnb-pool", department_id=dept["fnb"].id,
+        room_id=stays[1].room_id, title=f"Refresh minibar in room {stays[1].room_number}",
+        status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.NORMAL,
+        source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=50))
+    add(staff.Task, "task:fnb-active", department_id=dept["fnb"].id,
+        assignee_id=users["fnb1@vesper.demo"].id, title="Prepare afternoon service station",
+        status=staff.TaskStatus.IN_PROGRESS, priority=staff.TaskPriority.NORMAL,
+        source=staff.TaskSource.MANUAL, accepted_at=now - timedelta(minutes=10),
+        due_at=now + timedelta(minutes=40))
+    add(staff.Task, "task:engineering-pool", department_id=dept["maintenance"].id,
+        title="Inspect service lift indicator", description="Check the indicator and report any defect.",
+        status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.HIGH,
+        source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=35))
+    add(staff.Task, "task:front-office-pool", department_id=dept["front_office"].id,
+        title="Prepare arrival handover", description="Review expected arrivals with the next shift.",
+        status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.NORMAL,
+        source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=90))
+    add(staff.Task, "task:store-assigned", department_id=dept["store"].id,
+        assignee_id=users["store@vesper.demo"].id, title="Count linen shelf stock",
+        status=staff.TaskStatus.ASSIGNED, priority=staff.TaskPriority.NORMAL,
+        source=staff.TaskSource.MANUAL, due_at=now + timedelta(hours=2))
+
     # Story 4: a low stock special is visible in the guest menu and in procurement.
     # Existing stock is never edited; its on-hand quantity and ledger stay consistent.
     stock_id = add(inventory.StockItem, "stock:special", department_id=dept["store"].id,
@@ -221,6 +267,40 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
                  "item_id": str(stock_id), "quantity": 12, "editable_fields": ["quantity"]},
         dedupe_key=f"purchase:{stock_id}", expires_at=now + timedelta(days=3))
 
+    # Staff My Requests and managers' approval queues show the same persisted
+    # requisitions. Leave them submitted so a human can decide; never seed an
+    # approved status without the decision and purchase-order transition.
+    def staff_requisition(key: str, department: str, requester: str, reason: str,
+                          lines: list[tuple[str, str, str]]) -> None:
+        requester_id = users[requester].id
+        request_id = add(inventory.InventoryRequest, f"requisition:{key}",
+            department_id=dept[department].id, requested_by=requester_id,
+            responsible_manager_id=dept[department].head_user_id,
+            currency=resort.currency, status="submitted", reason=reason)
+        for sku, quantity, line_reason in lines:
+            item = stock_items[sku]
+            add_related(inventory.InventoryRequestLine, f"requisition-line:{key}:{sku}",
+                request_id=request_id, item_id=item.id, quantity=Decimal(quantity),
+                unit_cost=item.unit_cost, reason=line_reason)
+        add_related(inventory.InventoryRequestAudit, f"requisition-audit:{key}",
+            request_id=request_id, actor_id=requester_id, action="submitted",
+            reason=reason, created_at=now)
+
+    staff_requisition("housekeeping", "housekeeping", "hk1@vesper.demo",
+        "Replenish linen and guest amenity carts for the next shift.", [
+            ("LN-TOWEL", "24", "Replace towels used by occupied rooms."),
+            ("TL-DENTAL", "36", "Refill guest amenity carts."),
+        ])
+    staff_requisition("fnb", "fnb", "fnb1@vesper.demo",
+        "Replenish breakfast station supplies.", [
+            ("FD-EGGS", "6", "Cover the next breakfast service."),
+            ("FD-BREAD", "8", "Cover sandwiches and breakfast service."),
+        ])
+    staff_requisition("maintenance", "maintenance", "chiefeng@vesper.demo",
+        "Keep replacement filters available for room AC work.", [
+            ("SP-AC", "4", "Replace filters during approved maintenance work."),
+        ])
+
     # Staff absence creates a visible staffing constraint without publishing a roster.
     next_week = today + timedelta(days=(7 - today.weekday()) % 7)
     add(workforce.LeaveRequest, "leave:housekeeping", user_id=hk.id,
@@ -241,7 +321,7 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
             "already_present": len(existing), "new_keys": added,
             "stories": ["overdue housekeeping", "AC issue to work order",
                         "completed request with feedback", "out of stock menu to procurement",
-                        "leave to roster gap"]}
+                        "leave to roster gap", "staff tasks and requisitions"]}
 
 
 def main() -> int:
