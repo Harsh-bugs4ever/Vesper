@@ -23,6 +23,7 @@ WATCHED = {
     Event.REQUEST_RAISED.value,
     Event.ISSUE_REPORTED.value,
     Event.CARD_EXECUTED.value,
+    Event.STOCK_LOW.value,
 }
 
 # Guest-facing request kinds map onto the departments that actually do the work.
@@ -46,6 +47,8 @@ def handle(envelope: Envelope) -> None:
             _task_from_issue(db, envelope)
         elif envelope.name == Event.CARD_EXECUTED.value:
             _task_from_card(db, envelope)
+        elif envelope.name == Event.STOCK_LOW.value:
+            _task_from_stockout(db, envelope)
     except VesperError as exc:
         log.warning("could not turn %s into a task: %s", envelope.name, exc)
     except Exception:
@@ -159,6 +162,34 @@ def _task_from_card(db, envelope: Envelope) -> None:
             source_ref=UUID(payload["card_id"]) if payload.get("card_id") else None,
             due_in_minutes=task_spec.get("due_in_minutes"),
             meta={"card_kind": payload.get("kind")},
+        ),
+        actor_id=envelope.actor_id,
+    )
+
+
+def _task_from_stockout(db, envelope: Envelope) -> None:
+    """A zero balance needs a physical runner, in the stock item's own department."""
+    from app.api.inventory.models import StockItem
+
+    payload = envelope.payload
+    if float(payload.get("on_hand", 1)) > 0 or not payload.get("item_id"):
+        return
+    item = db.scalars(select(StockItem).where(
+        StockItem.id == UUID(payload["item_id"]),
+        StockItem.property_id == UUID(envelope.property_id),
+    )).first()
+    if item is None or item.department_id is None:
+        return
+    service.create_task(
+        db, UUID(envelope.property_id),
+        _draft(
+            title=f"Restock: {item.name}",
+            description="Locate replacement stock and report availability to your department.",
+            department_id=item.department_id,
+            priority=TaskPriority.URGENT,
+            source=TaskSource.MANUAL,
+            source_ref=UUID(payload["purchase_order_id"]) if payload.get("purchase_order_id") else item.id,
+            meta={"item_id": str(item.id), "kind": "stockout_runner"},
         ),
         actor_id=envelope.actor_id,
     )
