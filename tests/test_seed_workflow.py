@@ -45,6 +45,9 @@ class FakeSession:
     def add(self, row):
         self.rows[(type(row), row.id)] = row
 
+    def flush(self):
+        pass
+
     def commit(self):
         self.commits += 1
 

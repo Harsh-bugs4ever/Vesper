@@ -83,6 +83,9 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         added.append(key)
         if apply:
             db.add(model(id=row_id, property_id=property_id, **fields))
+            # Several cross-context references are plain UUIDs. Flush in story order
+            # so rows with real foreign keys (such as a PO's stock item) exist first.
+            db.flush()
         return row_id
 
     # Story 1: an overdue guest request remains visible to the guest, a housekeeper,
