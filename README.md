@@ -367,6 +367,12 @@ make dev                         # uvicorn app.main:app --reload on :8000
 | Guest QR page | http://localhost:3000/r/<room-token> |
 | API and docs | http://localhost:8000/docs |
 
+For a phone or another computer on the same network, open the web app at
+`http://YOUR-PC-LAN-IP:3000`. The web server forwards `/backend/*` to FastAPI, so
+the backend can remain on `127.0.0.1:8000` in local development. If FastAPI runs
+on a different machine, set `API_PROXY_TARGET` for the web server to its reachable
+origin. QR links use the web origin on which they were generated.
+
 `make help` lists the rest — `make backend` (backend only), `make frontend` (web app only), `make test`, `make contracts`, `make simulate`, `make reseed`.
 
 ---

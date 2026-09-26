@@ -11,10 +11,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/web ./
 COPY packages/ui-kit ../../packages/ui-kit
-# Baked into the bundle at build time, because NEXT_PUBLIC_ vars are inlined then and
-# cannot be changed by the runtime environment afterwards.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Rewrites are compiled during the build; target the backend's Compose service.
+ARG API_PROXY_TARGET=http://backend:8000
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
 RUN npm run build
 
 FROM node:20-alpine AS runner

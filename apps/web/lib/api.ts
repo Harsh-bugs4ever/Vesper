@@ -12,8 +12,13 @@
  *     is already written for a human.
  */
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+// A loopback URL in a public bundle points at the guest's phone, not the resort PC.
+// Keep explicit non-loopback deployments, otherwise use the same-origin proxy.
+export const API_URL = configuredApiUrl &&
+  !/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(configuredApiUrl)
+  ? configuredApiUrl
+  : "/backend";
 
 const ACCESS_KEY = "vesper_access_token";
 const REFRESH_KEY = "vesper_refresh_token";
@@ -143,7 +148,7 @@ interface RequestOptions {
 async function request<T>(path: string, options: RequestOptions = {}, retrying = false): Promise<T> {
   const { method = "GET", body, params, anonymous = false, guest = false, signal } = options;
 
-  const url = new URL(`${API_URL}${path}`);
+  const url = new URL(`${API_URL}${path}`, typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
@@ -182,7 +187,7 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     // a bare TypeError from fetch.
     throw new ApiError(0, {
       code: "network_error",
-      message: `Could not reach backend at ${API_URL}. Please start the backend server (python -m uvicorn app.main:app --port 8000).`,
+      message: `Could not reach the Vesper API through ${API_URL}. Check that the backend server is running.`,
       details: { cause: String(cause) },
     });
   }

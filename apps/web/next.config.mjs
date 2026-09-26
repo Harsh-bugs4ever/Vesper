@@ -7,6 +7,14 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Browsers on another device cannot reach this computer's 127.0.0.1:8000.
+  // Proxy through the web origin so QR links work on the local network too.
+  async rewrites() {
+    return [{
+      source: "/backend/:path*",
+      destination: `${process.env.API_PROXY_TARGET || (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://127.0.0.1:8000")}/:path*`,
+    }];
+  },
   // Running `next build` while the dev server is open must not replace its chunks.
   distDir: process.env.NODE_ENV === "development" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(__dirname, "../../"),
