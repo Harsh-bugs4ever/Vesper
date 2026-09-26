@@ -130,6 +130,63 @@ def stats(
     return ActionStats(**service.stats_summary(db, UUID(principal.property_id), department_ids=departments))
 
 
+@router.post("/ai-automation/run-all")
+def trigger_all_automations(
+    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    """Runs all 4 AI automation engines and returns created/updated cards."""
+    from . import ai_automation
+    return ai_automation.run_all_ai_automations(db, UUID(principal.property_id))
+
+
+@router.post("/ai-automation/facility-promo")
+def trigger_facility_promo(
+    facility_name: str = Query(default="Badminton Pavilion"),
+    discount_pct: int = Query(default=20, ge=5, le=50),
+    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from . import ai_automation
+    card = ai_automation.run_facility_utilization_check(
+        db, UUID(principal.property_id), facility_name=facility_name, discount_pct=discount_pct
+    )
+    return {"card": _detail(card) if card else None}
+
+
+@router.post("/ai-automation/guest-recovery")
+def trigger_guest_recovery(
+    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from . import ai_automation
+    cards = ai_automation.run_guest_recovery_check(db, UUID(principal.property_id))
+    return {"cards": [_detail(c) for c in cards]}
+
+
+@router.post("/ai-automation/vision-audit")
+def trigger_vision_audit(
+    room_id: UUID | None = None,
+    photo_url: str = Query(default="/landing/login-retreat.png"),
+    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from . import ai_automation
+    return ai_automation.run_vision_room_audit(
+        db, UUID(principal.property_id), room_id=room_id, photo_url=photo_url
+    )
+
+
+@router.post("/ai-automation/kitchen-waste")
+def trigger_kitchen_waste(
+    principal: Principal = Depends(requires(Perm.CARDS_READ)),
+    db: Session = Depends(get_session),
+) -> dict:
+    from . import ai_automation
+    card = ai_automation.run_kitchen_waste_rescue(db, UUID(principal.property_id))
+    return {"card": _detail(card) if card else None}
+
+
 @router.get("/{card_id}", response_model=CardDetail)
 def get_card(
     card_id: UUID,

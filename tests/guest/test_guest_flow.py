@@ -94,7 +94,7 @@ def test_menu_reflects_sold_out_inventory():
     prop = Property(
         id=property_id,
         name="Vesper Resort",
-        slug="vesper-resort",
+        city="Mumbai",
         currency="INR",
         timezone="Asia/Kolkata",
     )
@@ -168,9 +168,11 @@ def test_price_order_rejects_sold_out_item():
         iter([stock_tea]),
     ]
 
+    from app.api.guest.schemas import OrderLine
+
     data = RequestCreate(
         kind=RequestKind.ROOM_SERVICE,
-        items=[SimpleNamespace(menu_item_id=item_id, quantity=2)],
+        items=[OrderLine(menu_item_id=item_id, quantity=2)],
     )
 
     with pytest.raises(Invalid, match="sold out and unavailable"):
@@ -301,9 +303,8 @@ def test_guest_amenities_public_and_authenticated(monkeypatch):
         property_id=property_id,
         key="infinity_pool",
         name="Infinity Pool",
-        category="wellness",
         location="Oceanfront Deck",
-        operating_hours="06:00 - 22:00",
+        opening_hours="06:00 - 22:00",
         is_available=True,
     )
 

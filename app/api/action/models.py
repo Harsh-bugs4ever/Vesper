@@ -26,6 +26,10 @@ class CardKind(StrEnum):
     ROSTER_CHANGE = "roster_change"
     RETENTION_OFFER = "retention_offer"
     STAFFING_GAP = "staffing_gap"
+    FACILITY_PROMO = "facility_promo"
+    GUEST_RECOVERY = "guest_recovery"
+    VISION_AUDIT = "vision_audit"
+    CHEF_SPECIAL = "chef_special"
 
 
 class CardStatus(StrEnum):
