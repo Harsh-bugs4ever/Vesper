@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from alembic import op
+from sqlalchemy import MetaData, String
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
@@ -35,7 +36,56 @@ depends_on = None
 
 def _metadata():
     import_all_models(str(REPO_ROOT / "app" / "api"))
-    return Base.metadata
+    # This revision is a historical baseline. Clone today's model metadata, then
+    # remove objects owned by later revisions so fresh installs and upgrades use
+    # the same path. Never mutate the application's live ORM metadata.
+    later_tables = {
+        "user_assignments", "guest_staff_reviews", "staff_performance_summaries",
+        "room_images", "resort_amenities", "department_budgets",
+        "inventory_requests", "inventory_request_lines", "inventory_request_audit",
+        "purchase_operations",
+    }
+    later_columns = {
+        "property.properties": {"address"},
+        "guest_intel.stay_review_summaries": {
+            "final_score", "engagement_bonus", "guest_sentiment", "possible_retaliation",
+        },
+        "guest.issue_reports": {
+            "reporter_department_id", "responsible_manager_id", "evidence", "work_order_id",
+        },
+        "maintenance.work_orders": {"room_id", "source_issue_id"},
+        "inventory.purchase_orders": {
+            "department_id", "budget_id", "request_line_id", "currency",
+            "received_quantity", "returned_quantity",
+        },
+        "inventory.stock_movements": {"department_id"},
+    }
+    later_indexes = {
+        "uq_frontdesk_one_active_stay_per_room", "uq_frontdesk_one_active_stay_per_booking",
+        "uq_frontdesk_stays_open_room", "uq_frontdesk_stays_booking",
+    }
+    baseline = MetaData(naming_convention=Base.metadata.naming_convention)
+    for table in Base.metadata.sorted_tables:
+        if table.name not in later_tables:
+            table.to_metadata(baseline)
+    for key, table in baseline.tables.items():
+        removed = later_columns.get(key, set())
+        for index in list(table.indexes):
+            if index.name in later_indexes or any(column.name in removed for column in index.columns):
+                table.indexes.remove(index)
+        for constraint in list(table.constraints):
+            if any(column.name in removed for column in constraint.columns):
+                table.constraints.remove(constraint)
+            if key == "maintenance.work_orders" and constraint.name == "ck_work_order_location":
+                table.constraints.remove(constraint)
+        for name in removed:
+            column = table.c[name]
+            for foreign_key in list(column.foreign_keys):
+                table.foreign_keys.discard(foreign_key)
+            table._columns.remove(column)
+    baseline.tables["maintenance.work_orders"].c.asset_id.nullable = False
+    baseline.tables["inventory.purchase_orders"].c.status.type = String(16)
+    return baseline
 
 
 def upgrade() -> None:
@@ -44,10 +94,8 @@ def upgrade() -> None:
         op.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     # Keep the baseline stable as later model tables are added. Their migrations own
     # creation; otherwise a fresh upgrade attempts to create them twice.
-    baseline_tables = [table for table in _metadata().sorted_tables if table.name not in {
-        "user_assignments", "guest_staff_reviews", "staff_performance_summaries",
-    }]
-    _metadata().create_all(bind=bind, tables=baseline_tables)
+    baseline = _metadata()
+    baseline.create_all(bind=bind)
 
 
 def downgrade() -> None:

@@ -59,6 +59,12 @@ class Perm(StrEnum):
     STOCK_READ = "stock:read"
     STOCK_WRITE = "stock:write"
     PURCHASE_APPROVE = "purchase:approve"
+    PURCHASE_READ = "purchase:read"
+    REQUISITION_WRITE = "requisition:write"
+    REQUISITION_READ = "requisition:read"
+    REQUISITION_APPROVE = "requisition:approve"
+    BUDGET_READ = "budget:read"
+    BUDGET_MANAGE = "budget:manage"
 
     # Front desk
     BOOKINGS_READ = "bookings:read"
@@ -90,6 +96,7 @@ STAFF_PERMS: set[str] = {
     Perm.TASKS_READ,
     Perm.TASKS_COMPLETE,
     Perm.REPORTS_WRITE,
+    Perm.REQUISITION_WRITE,
     Perm.STAFF_REVIEW_READ_OWN,
 }
 
@@ -120,6 +127,10 @@ MANAGER_PERMS: set[str] = {
     Perm.MAINTENANCE_RUN,
     Perm.ROSTER_APPROVE,
     Perm.PURCHASE_APPROVE,
+    Perm.PURCHASE_READ,
+    Perm.REQUISITION_READ,
+    Perm.REQUISITION_APPROVE,
+    Perm.BUDGET_READ,
     Perm.FORECAST_READ,
     Perm.CONCIERGE_USE,
     Perm.DASHBOARD_READ,
@@ -152,6 +163,10 @@ GM_PERMS: set[str] = {
     Perm.MAINTENANCE_RUN,
     Perm.ROSTER_APPROVE,
     Perm.PURCHASE_APPROVE,
+    Perm.PURCHASE_READ,
+    Perm.REQUISITION_READ,
+    Perm.BUDGET_READ,
+    Perm.BUDGET_MANAGE,
     Perm.CONCIERGE_USE,
     Perm.RATES_APPROVE,
     Perm.OFFERS_APPROVE,

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 from vesper_common.clock import local_today, utcnow
 from vesper_common.errors import Conflict, Invalid, NotFound
 from vesper_common.events import Event, bus
+from app.api.property.models import Property
 
-from .models import MovementReason, PurchaseOrder, PurchaseStatus, StockItem, StockMovement
+from .models import MovementReason, PurchaseOperation, PurchaseOrder, PurchaseStatus, StockItem, StockMovement
+from .procurement import active_budget, budget_totals, money
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +71,8 @@ def move_stock(
     actor_id: UUID | None = None,
     note: str | None = None,
     source_ref: UUID | None = None,
+    department_id: UUID | None = None,
+    commit: bool = True,
 ) -> StockMovement:
     """Record one in/out movement and recompute the item's balance.
 
@@ -79,7 +83,11 @@ def move_stock(
     if quantity == 0:
         raise Invalid("A stock movement of zero changes nothing")
 
-    item = get_item(db, property_id, item_id)
+    item = db.scalars(select(StockItem).where(
+        StockItem.id == item_id, StockItem.property_id == property_id
+    ).with_for_update()).first()
+    if item is None:
+        raise NotFound("Stock item not found")
     new_balance = Decimal(item.quantity) + Decimal(quantity)
     if new_balance < 0:
         raise Conflict(
@@ -90,6 +98,7 @@ def move_stock(
     item.quantity = new_balance
     movement = StockMovement(
         property_id=property_id,
+        department_id=department_id if department_id is not None else item.department_id,
         item_id=item.id,
         quantity=Decimal(quantity),
         reason=reason,
@@ -99,25 +108,32 @@ def move_stock(
         balance_after=new_balance,
     )
     db.add(movement)
+    if not commit:
+        db.flush()
+        return movement
     db.commit()
     db.refresh(movement)
     db.refresh(item)
+    publish_movement(property_id, item, movement, actor_id)
+    maybe_flag_low(db, property_id, item)
+    return movement
 
+
+def publish_movement(property_id: UUID, item: StockItem, movement: StockMovement,
+                     actor_id: UUID | None) -> None:
     bus.publish(
         Event.STOCK_MOVED,
         {
             "item_id": str(item.id),
             "sku": item.sku,
             "name": item.name,
-            "quantity": float(quantity),
-            "reason": reason,
-            "balance": float(new_balance),
+            "quantity": float(movement.quantity),
+            "reason": movement.reason,
+            "balance": float(movement.balance_after),
         },
         property_id=str(property_id),
         actor_id=str(actor_id) if actor_id else None,
     )
-    maybe_flag_low(db, property_id, item)
-    return movement
 
 
 def maybe_flag_low(db: Session, property_id: UUID, item: StockItem) -> PurchaseOrder | None:
@@ -136,6 +152,8 @@ def maybe_flag_low(db: Session, property_id: UUID, item: StockItem) -> PurchaseO
     quantity = Decimal(item.reorder_quantity) or (Decimal(item.minimum_quantity) * 2)
     order = PurchaseOrder(
         property_id=property_id,
+        department_id=item.department_id,
+        currency=db.get(Property, property_id).currency,
         item_id=item.id,
         quantity=quantity,
         unit_cost=item.unit_cost,
@@ -263,14 +281,20 @@ def approve_purchase_order(
     db: Session, property_id: UUID, order_id: UUID, *, actor_id: UUID, quantity: Decimal | None = None
 ) -> PurchaseOrder:
     """Approve, optionally adjusting the quantity the engine suggested."""
-    order = get_purchase_order(db, property_id, order_id)
+    order = _locked_order(db, property_id, order_id)
     if order.status != PurchaseStatus.SUGGESTED:
         raise Conflict(f"That order is already {order.status}")
+    if order.department_id is None:
+        raise Conflict("Order has no responsible department")
+    budget = active_budget(db, property_id, order.department_id, order.currency, lock=True)
     if quantity is not None:
         if quantity <= 0:
             raise Invalid("Order quantity must be greater than zero")
         order.quantity = quantity
-        order.total_cost = quantity * Decimal(order.unit_cost)
+        order.total_cost = money(quantity * Decimal(order.unit_cost))
+    if order.total_cost > budget_totals(db, budget)["remaining"]:
+        raise Conflict("Department budget has insufficient remaining funds")
+    order.budget_id = budget.id
     order.status = PurchaseStatus.APPROVED
     order.approved_by = actor_id
     order.approved_at = utcnow()
@@ -279,33 +303,89 @@ def approve_purchase_order(
     return order
 
 
-def receive_purchase_order(db: Session, property_id: UUID, order_id: UUID, *, actor_id: UUID) -> PurchaseOrder:
-    """Goods in: the stock movement and the order close together or not at all."""
-    order = get_purchase_order(db, property_id, order_id)
-    if order.status not in {PurchaseStatus.APPROVED, PurchaseStatus.ORDERED}:
-        raise Conflict("Only an approved order can be received")
+def _locked_order(db: Session, property_id: UUID, order_id: UUID) -> PurchaseOrder:
+    # All budget mutations take the budget lock before the PO lock.
+    snapshot = get_purchase_order(db, property_id, order_id)
+    if snapshot.budget_id is not None:
+        from .models import DepartmentBudget
+        db.scalars(select(DepartmentBudget).where(
+            DepartmentBudget.id == snapshot.budget_id
+        ).with_for_update()).first()
+    return db.scalars(select(PurchaseOrder).where(
+        PurchaseOrder.id == order_id, PurchaseOrder.property_id == property_id
+    ).with_for_update().execution_options(populate_existing=True)).first()
 
-    move_stock(
-        db,
-        property_id,
-        order.item_id,
-        Decimal(order.quantity),
-        MovementReason.PURCHASE,
-        actor_id=actor_id,
-        note="Purchase order received",
-        source_ref=order.id,
-    )
-    order.status = PurchaseStatus.RECEIVED
-    order.received_at = utcnow()
+
+def receive_purchase_order(db: Session, property_id: UUID, order_id: UUID, *, actor_id: UUID,
+                           quantity: Decimal | None = None, operation_id: UUID | None = None) -> PurchaseOrder:
+    """Part receipts are serialized with the PO and stock item in one transaction."""
+    order = _locked_order(db, property_id, order_id)
+    if quantity is not None and operation_id is None:
+        raise Invalid("Partial receipts require an operation_id")
+    operation_id = operation_id or uuid5(NAMESPACE_URL, f"vesper:full-receipt:{order_id}")
+    existing = db.scalars(select(PurchaseOperation).where(
+        PurchaseOperation.order_id == order_id,
+        PurchaseOperation.operation_id == operation_id
+    )).first()
+    if existing:
+        if existing.kind != "receipt" or (quantity is not None and existing.quantity != quantity):
+            raise Conflict("Operation ID was already used for a different receipt")
+        return order
+    if order.status not in {PurchaseStatus.APPROVED, PurchaseStatus.ORDERED,
+                            PurchaseStatus.PARTIALLY_RECEIVED}:
+        raise Conflict("Only an open approved order can be received")
+    remaining = Decimal(order.quantity) - Decimal(order.received_quantity)
+    quantity = quantity if quantity is not None else remaining
+    if quantity <= 0 or quantity > remaining:
+        raise Conflict("Receipt exceeds the unreceived order quantity")
+    movement = move_stock(db, property_id, order.item_id, quantity, MovementReason.PURCHASE,
+        actor_id=actor_id, note="Purchase order received", source_ref=order.id,
+        department_id=order.department_id, commit=False)
+    order.received_quantity = Decimal(order.received_quantity) + quantity
+    order.status = (PurchaseStatus.RECEIVED if order.received_quantity == order.quantity
+                    else PurchaseStatus.PARTIALLY_RECEIVED)
+    order.received_at = utcnow() if order.status == PurchaseStatus.RECEIVED else None
+    db.add(PurchaseOperation(order_id=order.id, operation_id=operation_id,
+        kind="receipt", quantity=quantity, movement_id=movement.id, created_at=utcnow()))
     db.commit()
     db.refresh(order)
+    publish_movement(property_id, movement.item, movement, actor_id)
+    maybe_flag_low(db, property_id, movement.item)
+    return order
+
+
+def return_purchase_order(db: Session, property_id: UUID, order_id: UUID, *, actor_id: UUID,
+                          quantity: Decimal, operation_id: UUID, reason: str) -> PurchaseOrder:
+    order = _locked_order(db, property_id, order_id)
+    existing = db.scalars(select(PurchaseOperation).where(
+        PurchaseOperation.order_id == order_id,
+        PurchaseOperation.operation_id == operation_id
+    )).first()
+    if existing:
+        if existing.kind != "return" or existing.quantity != quantity:
+            raise Conflict("Operation ID was already used for a different return")
+        return order
+    if quantity <= 0 or quantity > Decimal(order.received_quantity) - Decimal(order.returned_quantity):
+        raise Conflict("Return exceeds the net received quantity")
+    movement = move_stock(db, property_id, order.item_id, -quantity, MovementReason.RETURN,
+        actor_id=actor_id, note=reason, source_ref=order.id,
+        department_id=order.department_id, commit=False)
+    order.returned_quantity = Decimal(order.returned_quantity) + quantity
+    db.add(PurchaseOperation(order_id=order.id, operation_id=operation_id,
+        kind="return", quantity=quantity, movement_id=movement.id, created_at=utcnow()))
+    db.commit()
+    db.refresh(order)
+    publish_movement(property_id, movement.item, movement, actor_id)
+    maybe_flag_low(db, property_id, movement.item)
     return order
 
 
 def cancel_purchase_order(db: Session, property_id: UUID, order_id: UUID) -> PurchaseOrder:
-    order = get_purchase_order(db, property_id, order_id)
+    order = _locked_order(db, property_id, order_id)
     if order.status == PurchaseStatus.RECEIVED:
         raise Conflict("That order has already been received")
+    if order.status == PurchaseStatus.CANCELLED:
+        return order
     order.status = PurchaseStatus.CANCELLED
     db.commit()
     db.refresh(order)

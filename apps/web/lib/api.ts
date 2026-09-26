@@ -690,3 +690,166 @@ export const staffTasks = {
     api.put<StaffTask>(`/tasks/${id}/status`, { status }),
 };
 
+export interface StockItemOut {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  minimum_quantity: number;
+  reorder_quantity: number;
+  unit_cost: number;
+  expires_on?: string | null;
+  supplier?: string | null;
+  lead_time_days: number;
+  is_low?: boolean;
+  days_to_expiry?: number | null;
+}
+
+export interface StockMovementOut {
+  id: string;
+  item_id: string;
+  quantity: number;
+  reason: string;
+  note?: string | null;
+  balance_after: number;
+  created_at: string;
+}
+
+export interface RequisitionLineOut {
+  id: string;
+  item_id: string;
+  quantity: number;
+  unit_cost: number;
+  reason: string;
+}
+
+export interface RequisitionAuditOut {
+  actor_id: string;
+  action: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface RequisitionOut {
+  id: string;
+  property_id: string;
+  department_id: string;
+  requested_by: string;
+  responsible_manager_id: string;
+  currency: string;
+  status: "submitted" | "approved" | "rejected" | "cancelled" | string;
+  reason: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_reason: string | null;
+  lines: RequisitionLineOut[];
+  history: RequisitionAuditOut[];
+  created_at: string;
+}
+
+export interface BudgetOut {
+  id: string;
+  property_id: string;
+  department_id: string;
+  period_start: string;
+  period_end: string;
+  currency: string;
+  allocated: number;
+  committed: number;
+  spent: number;
+  remaining: number;
+}
+
+export interface PurchaseOrderOut {
+  id: string;
+  department_id: string | null;
+  budget_id: string | null;
+  request_line_id: string | null;
+  currency: string;
+  item_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  received_quantity: number;
+  returned_quantity: number;
+  supplier: string | null;
+  status: "suggested" | "approved" | "ordered" | "partially_received" | "received" | "cancelled" | string;
+  expected_on: string | null;
+  approved_at: string | null;
+  received_at: string | null;
+  rationale: Record<string, unknown>;
+  created_at: string;
+}
+
+export const requisitions = {
+  submit: (body: { reason?: string; items: Array<{ item_id: string; quantity: number; reason: string }> }) =>
+    api.post<RequisitionOut>("/inventory/requisitions", body),
+  mine: () => api.get<RequisitionOut[]>("/inventory/requisitions/mine"),
+  list: (params?: { department_id?: string }) =>
+    api.get<RequisitionOut[]>("/inventory/requisitions", params),
+  get: (id: string) => api.get<RequisitionOut>(`/inventory/requisitions/${id}`),
+  approve: (id: string, reason: string) =>
+    api.post<RequisitionOut>(`/inventory/requisitions/${id}/approve`, { reason }),
+  reject: (id: string, reason: string) =>
+    api.post<RequisitionOut>(`/inventory/requisitions/${id}/reject`, { reason }),
+  cancel: (id: string, reason: string) =>
+    api.post<RequisitionOut>(`/inventory/requisitions/${id}/cancel`, { reason }),
+};
+
+export const budgets = {
+  list: (params?: { department_id?: string }) =>
+    api.get<BudgetOut[]>("/inventory/budgets", params),
+  create: (body: { department_id: string; period_start: string; period_end: string; currency: string; allocated: number }) =>
+    api.post<BudgetOut>("/inventory/budgets", body),
+  updateAllocation: (budgetId: string, allocated: number) =>
+    api.put<BudgetOut>(`/inventory/budgets/${budgetId}/allocation`, { allocated }),
+};
+
+export const purchaseOrders = {
+  list: (params?: { status?: string }) =>
+    api.get<PurchaseOrderOut[]>("/purchase-orders", params),
+  get: (id: string) => api.get<PurchaseOrderOut>(`/purchase-orders/${id}`),
+  approve: (id: string, quantity?: number) =>
+    api.post<PurchaseOrderOut>(`/purchase-orders/${id}/approve`, quantity ? { quantity } : {}),
+  receive: (id: string, body?: { quantity?: number; operation_id?: string }) =>
+    api.post<PurchaseOrderOut>(`/purchase-orders/${id}/receive`, body ?? {}),
+  returnOrder: (id: string, body: { quantity: number; operation_id: string; reason: string }) =>
+    api.post<PurchaseOrderOut>(`/purchase-orders/${id}/return`, body),
+  cancel: (id: string) => api.post<PurchaseOrderOut>(`/purchase-orders/${id}/cancel`),
+};
+
+export const inventory = {
+  items: (params?: { category?: string; low_only?: boolean; expiring_only?: boolean; search?: string }) =>
+    api.get<StockItemOut[]>("/inventory/items", params),
+  getItem: (id: string) => api.get<StockItemOut>(`/inventory/items/${id}`),
+  createItem: (body: {
+    sku: string;
+    name: string;
+    category: string;
+    unit?: string;
+    quantity?: number;
+    minimum_quantity?: number;
+    reorder_quantity?: number;
+    unit_cost?: number;
+    supplier?: string;
+    lead_time_days?: number;
+    expires_on?: string | null;
+    department_id?: string | null;
+  }) => api.post<StockItemOut>("/inventory/items", body),
+  updateItem: (id: string, body: Partial<StockItemOut>) =>
+    api.patch<StockItemOut>(`/inventory/items/${id}`, body),
+  moveStock: (id: string, body: { quantity: number; reason: string; note?: string }) =>
+    api.post<StockMovementOut>(`/inventory/items/${id}/movements`, body),
+  summary: () =>
+    api.get<{
+      total_items: number;
+      low_stock_items: number;
+      expiring_items: number;
+      stock_value: number;
+      pending_suggestions: number;
+    }>("/inventory/summary"),
+};
+
+

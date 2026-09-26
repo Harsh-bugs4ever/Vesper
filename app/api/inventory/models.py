@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,12 +35,14 @@ class MovementReason(StrEnum):
     EXPIRY = "expiry"
     CORRECTION = "correction"
     TRANSFER = "transfer"
+    RETURN = "return"
 
 
 class PurchaseStatus(StrEnum):
     SUGGESTED = "suggested"
     APPROVED = "approved"
     ORDERED = "ordered"
+    PARTIALLY_RECEIVED = "partially_received"
     RECEIVED = "received"
     CANCELLED = "cancelled"
 
@@ -93,6 +95,7 @@ class StockMovement(Base, TimestampMixin):
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    department_id: Mapped[UUID | None] = uuid_ref()
     item_id: Mapped[UUID] = mapped_column(
         ForeignKey(f"{SCHEMA}.stock_items.id"), nullable=False, index=True
     )
@@ -115,15 +118,24 @@ class PurchaseOrder(Base, TimestampMixin):
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    # Snapshots, never inferred from the item's current assignment.
+    department_id: Mapped[UUID | None] = uuid_ref()
+    budget_id: Mapped[UUID | None] = mapped_column(ForeignKey(f"{SCHEMA}.department_budgets.id"))
+    request_line_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(f"{SCHEMA}.inventory_request_lines.id"), unique=True
+    )
+    currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     item_id: Mapped[UUID] = mapped_column(
         ForeignKey(f"{SCHEMA}.stock_items.id"), nullable=False, index=True
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     total_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    received_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    returned_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0, nullable=False)
     supplier: Mapped[str | None] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(
-        String(16), default=PurchaseStatus.SUGGESTED, nullable=False, index=True
+        String(20), default=PurchaseStatus.SUGGESTED, nullable=False, index=True
     )
     expected_on: Mapped[date | None] = mapped_column(Date)
     approved_by: Mapped[UUID | None] = uuid_ref()
@@ -131,3 +143,87 @@ class PurchaseOrder(Base, TimestampMixin):
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Why the engine thought this was needed — shown on the action card.
     rationale: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class InventoryRequest(Base, TimestampMixin):
+    __tablename__ = "inventory_requests"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    department_id: Mapped[UUID] = uuid_ref(nullable=False)
+    requested_by: Mapped[UUID] = uuid_ref(nullable=False)
+    responsible_manager_id: Mapped[UUID] = uuid_ref(nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="submitted", nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    decided_by: Mapped[UUID | None] = uuid_ref()
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    lines: Mapped[list["InventoryRequestLine"]] = relationship(
+        back_populates="request", cascade="all, delete-orphan", order_by="InventoryRequestLine.id"
+    )
+    history: Mapped[list["InventoryRequestAudit"]] = relationship(
+        back_populates="request", order_by="InventoryRequestAudit.created_at"
+    )
+
+
+class InventoryRequestLine(Base, TimestampMixin):
+    __tablename__ = "inventory_request_lines"
+    __table_args__ = (CheckConstraint("quantity > 0", name="positive_quantity"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    request_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.inventory_requests.id"), nullable=False)
+    item_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.stock_items.id"), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    request: Mapped[InventoryRequest] = relationship(back_populates="lines")
+
+
+class InventoryRequestAudit(Base):
+    __tablename__ = "inventory_request_audit"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[UUID] = uuid_pk()
+    request_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.inventory_requests.id"), nullable=False)
+    actor_id: Mapped[UUID] = uuid_ref(nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    request: Mapped[InventoryRequest] = relationship(back_populates="history")
+
+
+class DepartmentBudget(Base, TimestampMixin):
+    __tablename__ = "department_budgets"
+    __table_args__ = (
+        UniqueConstraint("property_id", "department_id", "period_start", "period_end", "currency"),
+        CheckConstraint("period_end >= period_start", name="valid_period"),
+        CheckConstraint("allocated >= 0", name="nonnegative_allocation"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    department_id: Mapped[UUID] = uuid_ref(nullable=False)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    allocated: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+
+
+class PurchaseOperation(Base):
+    __tablename__ = "purchase_operations"
+    __table_args__ = (
+        UniqueConstraint("order_id", "operation_id"),
+        CheckConstraint("quantity > 0", name="positive_quantity"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = uuid_pk()
+    order_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.purchase_orders.id"), nullable=False)
+    operation_id: Mapped[UUID] = uuid_ref(nullable=False)
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    movement_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.stock_movements.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

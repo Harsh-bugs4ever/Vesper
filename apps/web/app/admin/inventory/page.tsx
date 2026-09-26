@@ -42,6 +42,8 @@ import {
   type StockStatus,
 } from "@/lib/demo/inventory";
 import { cn } from "@/lib/utils";
+import { AdminDepartmentRequisitions } from "@/components/connected/admin-department-requisitions";
+import { AdminDepartmentBudgets } from "@/components/connected/admin-department-budgets";
 
 type CategoryFilter = StockCategory | "all";
 const STATUS_OPTIONS = ["All Statuses", "In Stock", "Low Stock", "Expiring Soon", "Out of Stock"];
@@ -64,6 +66,7 @@ export default function InventoryPage() {
 
   const [movement, setMovement] = useState<{ item: StockItem; direction: "in" | "out" } | null>(null);
   const [quantity, setQuantity] = useState("");
+  const [activeTab, setActiveTab] = useState<"stock" | "requisitions" | "budgets">("stock");
 
   // One "today" for the whole render, so every expiry is judged against the same instant.
   const today = useMemo(() => new Date(), []);
@@ -250,7 +253,29 @@ export default function InventoryPage() {
         }
       />
 
-      {/* 4 Value-First Stat Tiles */}
+      {/* Operations Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-sand-200/80 pb-3" role="tablist" aria-label="Inventory operations">
+        {[
+          ["stock", "Stock Levels & Ledger"],
+          ["requisitions", "Department Requisitions"],
+          ["budgets", "Department Budgets & Caps"],
+        ].map(([key, label]) => (
+          <Button
+            key={key}
+            variant={activeTab === key ? "default" : "outline"}
+            role="tab"
+            aria-selected={activeTab === key}
+            onClick={() => setActiveTab(key as "stock" | "requisitions" | "budgets")}
+            className="text-xs"
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {activeTab === "stock" && (
+        <>
+          {/* 4 Value-First Stat Tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           variant="value-first"
@@ -658,6 +683,11 @@ export default function InventoryPage() {
           </div>
         )}
       </Drawer>
+        </>
+      )}
+
+      {activeTab === "requisitions" && <AdminDepartmentRequisitions />}
+      {activeTab === "budgets" && <AdminDepartmentBudgets />}
     </div>
   );
 }
