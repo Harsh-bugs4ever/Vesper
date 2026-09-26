@@ -6,7 +6,7 @@ from sqlalchemy import Integer, case, func, select
 from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
-from vesper_common.errors import Forbidden
+from vesper_common.errors import Forbidden, NotFound
 from vesper_common.permissions import Role
 from vesper_common.security import Principal
 
@@ -36,6 +36,24 @@ def scope(
     branch = branch_id or UUID(principal.property_id)
     principal.require_property(branch)
 
+    def checked_employee(department: UUID | None) -> None:
+        if employee_id is None or str(employee_id) == principal.id:
+            return
+        assignment = User.assignments.any(
+            (UserAssignment.property_id == branch)
+            & (UserAssignment.department_id == department)
+        ) if department is not None else User.assignments.any(
+            UserAssignment.property_id == branch
+        )
+        found = db.scalar(select(User.id).where(
+            User.id == employee_id,
+            User.property_id == branch,
+            User.is_active.is_(True),
+            assignment,
+        ))
+        if found is None:
+            raise NotFound("Employee not found in the selected scope")
+
     if self_only or (principal.role == Role.STAFF and employee_id is None):
         user = db.get(User, UUID(principal.id))
         dept = user.department_id if user else (UUID(principal.department_id) if principal.department_id else None)
@@ -51,12 +69,19 @@ def scope(
     if department_id is not None:
         if not principal.can_see_department(department_id):
             raise Forbidden("Not authorized for this department")
+        checked_employee(department_id)
         return branch, department_id
 
     if principal.role == Role.MANAGER:
-        dept = UUID(principal.department_id) if principal.department_id else None
+        dept = UUID(principal.department_id) if principal.department_id else (
+            UUID(next(iter(principal.department_ids))) if len(principal.department_ids) == 1 else None
+        )
+        if dept is None:
+            raise Forbidden("Select an assigned department")
+        checked_employee(dept)
         return branch, dept
 
+    checked_employee(None)
     return branch, None
 
 
@@ -74,7 +99,10 @@ def employees(
     if department is not None:
         query = query.where(
             (User.department_id == department)
-            | User.assignments.any(UserAssignment.department_id == department)
+            | User.assignments.any(
+                (UserAssignment.property_id == branch)
+                & (UserAssignment.department_id == department)
+            )
         )
     if principal and principal.role == Role.STAFF:
         query = query.where(User.id == UUID(principal.id))
@@ -161,7 +189,7 @@ def employee_metrics(
             dept_id = emp.department_id
 
     min_reviews = 4
-    data_state = "sufficient" if distinct_reviews >= min_reviews else "provisional"
+    data_state = "sufficient" if distinct_reviews >= min_reviews else "insufficient_data"
 
     return {
         "employee_id": employee_id,
@@ -176,7 +204,7 @@ def employee_metrics(
         "completed_tasks": int(completed_tasks),
         "guest_reviews": int(reviews_count),
         "distinct_guest_reviews": int(distinct_reviews),
-        "rating_mean": round(mean_rating, 2) if mean_rating is not None else None,
+        "rating_mean": round(mean_rating, 2) if mean_rating is not None and distinct_reviews >= min_reviews else None,
         "minimum_guest_reviews_for_rating": min_reviews,
         "data_state": data_state,
         "generated_at": utcnow(),

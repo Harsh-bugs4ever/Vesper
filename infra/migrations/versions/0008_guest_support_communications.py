@@ -8,7 +8,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0008"
-down_revision = "0007"
+down_revision = "0007_manager_areas"
 branch_labels = None
 depends_on = None
 
