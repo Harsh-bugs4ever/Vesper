@@ -35,7 +35,9 @@ type Forecast = { stay_date: string; predicted_occupancy: number; lower_bound: n
 
 export function LiveDashboard() {
   const { user } = useAuth();
-  const scope = [user.propertyId, user.id];
+  const scope = [user?.propertyId ?? "", user?.id ?? ""];
+  const userName = user?.name ? user.name.split(" ")[0] : "Staff";
+  const propertyName = user?.propertyName ?? "the Resort";
 
   const occupancy = useQuery({
     queryKey: ["dashboard-occupancy", ...scope],
@@ -88,8 +90,8 @@ export function LiveDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome, ${user.name.split(" ")[0]}`}
-        description={`Executive governance cockpit for ${user.propertyName}.`}
+        title={`Welcome, ${userName}`}
+        description={`Executive governance cockpit for ${propertyName}.`}
         meta={new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
         actions={
           <div className="flex items-center gap-2">

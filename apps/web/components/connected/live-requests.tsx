@@ -26,8 +26,8 @@ export function LiveRequests() {
   const { user, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("open");
-  const key = ["requests", user.propertyId, user.id];
-  const query = useQuery({ queryKey: key, queryFn: () => api.get<Request[]>("/requests"), refetchInterval: 30_000 });
+  const key = ["requests", user?.propertyId ?? "", user?.id ?? ""];
+  const query = useQuery({ queryKey: key, queryFn: () => api.get<Request[]>("/requests"), enabled: Boolean(user), refetchInterval: 30_000 });
   const mutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "accept" | "in_progress" | "delivered" }) =>
       action === "accept" ? api.post<Request>(`/requests/${id}/accept`) : api.put<Request>(`/requests/${id}/status`, { status: action }),

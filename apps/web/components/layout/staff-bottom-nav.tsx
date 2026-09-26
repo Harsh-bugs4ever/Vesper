@@ -39,8 +39,8 @@ export function StaffBottomNav({
 }: StaffBottomNavProps) {
   const { user } = useAuth();
   const isFb =
-    user.department?.toLowerCase().includes("beverage") ||
-    user.department?.toLowerCase().includes("f&b");
+    user?.department?.toLowerCase().includes("beverage") ||
+    user?.department?.toLowerCase().includes("f&b");
 
   const tabs: NavTab[] = [
     {

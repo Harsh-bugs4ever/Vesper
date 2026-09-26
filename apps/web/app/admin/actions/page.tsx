@@ -192,8 +192,8 @@ function LiveActionQueue() {
   // Snooze dropdown
   const [activeSnoozeId, setActiveSnoozeId] = useState<string | null>(null);
 
-  const key = ["cards", user.propertyId, user.id];
-  const statsKey = ["cards-stats", user.propertyId];
+  const key = ["cards", user?.propertyId ?? "", user?.id ?? ""];
+  const statsKey = ["cards-stats", user?.propertyId ?? ""];
 
   const cardsQuery = useQuery({
     queryKey: [...key, includeDecided],
@@ -748,7 +748,7 @@ function LiveActionQueue() {
                 placeholder="Enter revised quantity…"
               />
               <p className="mt-1 text-xs text-sand-500">
-                The engine suggested {adjustingCard.payload?.quantity ?? "—"} units. You can override this.
+                The engine suggested {String(adjustingCard.payload?.quantity ?? "—")} units. You can override this.
               </p>
             </div>
 

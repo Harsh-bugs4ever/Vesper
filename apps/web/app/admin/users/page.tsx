@@ -7,7 +7,6 @@ import {
   User,
   PERMISSIONS_LIST,
   PERMISSION_DOMAINS,
-  RESORT_STAFF_DIRECTORY,
   DEFAULT_ROLE_PERMISSIONS,
 } from "@/lib/auth";
 import {
@@ -22,7 +21,6 @@ import {
   X,
   AlertTriangle,
   Lock,
-  ArrowRightLeft,
   Mail,
   Building2,
   Clock,
@@ -43,13 +41,13 @@ import { AccessDeniedCard } from "@/components/auth/role-guard";
 import { cn } from "@/lib/utils";
 
 export default function UsersAndPermissionsPage() {
-  const { user, role, rolePermissions, updateRolePermissions, resetPermissions, switchRole } = useAuth();
+  const { user, role, rolePermissions, updateRolePermissions, resetPermissions } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<"directory" | "roles" | "matrix">("directory");
 
   // User Directory State
-  const [usersList, setUsersList] = useState<User[]>(RESORT_STAFF_DIRECTORY);
+  const [usersList, setUsersList] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -75,8 +73,8 @@ export default function UsersAndPermissionsPage() {
     setMatrixState(rolePermissions);
   }, [rolePermissions]);
 
-  // Check access: Only General Manager and System Admin can manage permissions
-  const isAuthorizedAdmin = ["general_manager", "system_admin"].includes(role);
+  // Check access: Only General Manager can manage permissions
+  const isAuthorizedAdmin = role === "general_manager";
 
   // Filtered Users Directory
   const filteredUsers = useMemo(() => {
@@ -114,8 +112,6 @@ export default function UsersAndPermissionsPage() {
           ? "F&B Manager"
           : newUserRole === "dept_manager_hk"
           ? "Executive Housekeeper"
-          : newUserRole === "system_admin"
-          ? "Systems Administrator"
           : "General Manager",
       department: newUserDept,
       propertyId: "prop_mumbai_01",
@@ -153,8 +149,6 @@ export default function UsersAndPermissionsPage() {
                   ? "F&B Manager"
                   : newRole === "dept_manager_hk"
                   ? "Executive Housekeeper"
-                  : newRole === "system_admin"
-                  ? "System Administrator"
                   : "General Manager",
               permissions: matrixState[newRole] || [],
             }
@@ -169,15 +163,6 @@ export default function UsersAndPermissionsPage() {
     });
 
     setEditingUser(null);
-  };
-
-  const handleSimulateLoginAs = (targetUser: User) => {
-    switchRole(targetUser.role);
-    showToast({
-      title: `Simulated Login: ${targetUser.name}`,
-      description: `Active session flipped to ${targetUser.roleTitle} (${targetUser.role}).`,
-      type: "default",
-    });
   };
 
   // Handlers for Permission Matrix
@@ -244,7 +229,6 @@ export default function UsersAndPermissionsPage() {
   }, [matrixCategoryFilter, matrixSearch]);
 
   const rolesColumnList: { role: UserRole; label: string; badge: string; variant: "gold" | "sage" | "sand" | "outline" }[] = [
-    { role: "system_admin", label: "Admin", badge: "IT Systems", variant: "outline" },
     { role: "general_manager", label: "General Mgr", badge: "Executive", variant: "gold" },
     { role: "dept_manager_fb", label: "F&B Mgr", badge: "Dining/Kitchen", variant: "sage" },
     { role: "dept_manager_hk", label: "Housekeeping", badge: "Rooms", variant: "sage" },
@@ -257,8 +241,8 @@ export default function UsersAndPermissionsPage() {
       <div className="space-y-6">
         <AccessDeniedCard
           title="Governance Deck Restricted"
-          message="User account provisioning and permission matrix editing are restricted to General Managers and System Administrators."
-          currentRole={user.roleTitle}
+          message="User account provisioning and permission matrix editing are restricted to General Managers."
+          currentRole={user?.roleTitle ?? "User"}
           requiredPermission="roles:manage or users:manage"
         />
       </div>
@@ -483,7 +467,7 @@ export default function UsersAndPermissionsPage() {
                   </thead>
                   <tbody className="divide-y divide-sand-100">
                     {filteredUsers.map((u) => {
-                      const isCurrentActive = user.email === u.email;
+                      const isCurrentActive = user?.email === u.email;
 
                       return (
                         <tr
@@ -536,8 +520,6 @@ export default function UsersAndPermissionsPage() {
                                 variant={
                                   u.role === "general_manager"
                                     ? "gold"
-                                    : u.role === "system_admin"
-                                    ? "outline"
                                     : u.role === "employee"
                                     ? "sand"
                                     : "sage"
@@ -593,17 +575,6 @@ export default function UsersAndPermissionsPage() {
                                 className="h-7 px-2 text-[11px]"
                               >
                                 Edit Role
-                              </Button>
-
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleSimulateLoginAs(u)}
-                                className="h-7 px-2 text-[11px] bg-sand-100 hover:bg-sage-100 text-sage-900"
-                                title="Switch session to this user to view resort from their perspective"
-                              >
-                                <ArrowRightLeft className="w-3 h-3 mr-1 text-sage-600" />
-                                Login As
                               </Button>
                             </div>
                           </td>

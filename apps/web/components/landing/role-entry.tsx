@@ -4,55 +4,16 @@ import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, QrCode, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
+import { ArrowRight, QrCode, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { type UserRole } from "@/lib/auth";
-
-const views: {
-  role: UserRole;
-  destination: string;
-  title: string;
-  description: string;
-  Icon: typeof ShieldCheck;
-}[] = [
-  {
-    role: "general_manager",
-    destination: "/admin",
-    title: "Owner & manager",
-    description: "See the resort, your team, and the decisions ahead.",
-    Icon: ShieldCheck,
-  },
-  {
-    role: "employee",
-    destination: "/staff",
-    title: "Staff",
-    description: "See your tasks and care for each stay.",
-    Icon: Smartphone,
-  },
-  {
-    role: "guest",
-    destination: "/guest",
-    title: "Guest",
-    description: "Explore services from the comfort of your room.",
-    Icon: QrCode,
-  },
-];
 
 export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
-  const { login, signIn } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
-  const [showCredentials, setShowCredentials] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [signInError, setSignInError] = useState("");
-
-  const enter = (role: UserRole, destination: string) => {
-    login(role);
-    // A full navigation restores the chosen role before protected dashboard routes
-    // render, so their guards never see the previous user's role.
-    window.location.assign(destination);
-  };
 
   const submitCredentials = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -109,79 +70,67 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
           )}
           <div className="text-center lg:text-left">
             <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-gold-800">
-              Welcome to Vesper
+              Sign In
             </p>
             <h2 id="role-entry-title" className="mt-4 font-serif text-4xl text-sage-950 sm:text-5xl">
-              Choose your view.
+              Access your workspace.
             </h2>
             <p className="mt-4 text-sm leading-7 text-sage-700">
-              Select where you would like to begin.
+              Enter your work email and password to connect to the backend system.
             </p>
           </div>
 
-          <div className="mt-9 space-y-3">
-            {views.map(({ role, destination, title, description, Icon }) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => enter(role, destination)}
-                className="group flex w-full items-center gap-4 rounded-xl border border-sand-200 bg-sand-50/60 px-4 py-4 text-left transition-colors hover:border-sage-500 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600 focus-visible:ring-offset-2 sm:px-5"
-              >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sage-100 text-sage-700">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-serif text-xl text-sage-950">{title}</span>
-                  <span className="mt-1 block text-xs leading-5 text-sage-700">{description}</span>
-                </span>
-                <ArrowRight className="h-5 w-5 shrink-0 text-sage-700 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
+          <form onSubmit={submitCredentials} className="mt-8 space-y-4">
+            <label className="block text-xs font-medium text-sage-800">
+              Work email
+              <input
+                type="email"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="gm@vesper.internal"
+                className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm text-sand-900 focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
+              />
+            </label>
+            <label className="block text-xs font-medium text-sage-800">
+              Password
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm text-sand-900 focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
+              />
+            </label>
+            {signInError && <p role="alert" className="text-sm text-rose-700">{signInError}</p>}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-lg bg-sage-700 px-4 py-3 text-sm font-medium text-white hover:bg-sage-800 transition-colors disabled:opacity-50"
+            >
+              {submitting ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
 
           <div className="mt-8 border-t border-sand-200 pt-6">
-            <button
-              type="button"
-              onClick={() => setShowCredentials((value) => !value)}
-              aria-expanded={showCredentials}
-              className="text-sm font-medium text-sage-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
+            <p className="text-xs text-sand-500 mb-3">Staying with us as a guest?</p>
+            <Link
+              href="/guest"
+              className="group flex w-full items-center gap-4 rounded-xl border border-sand-200 bg-sand-50/60 px-4 py-3 text-left transition-colors hover:border-sage-500 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
             >
-              {showCredentials ? "Hide account sign in" : "Have a staff account? Sign in"}
-            </button>
-            {showCredentials && (
-              <form onSubmit={submitCredentials} className="mt-5 space-y-4">
-                <label className="block text-xs font-medium text-sage-800">
-                  Work email
-                  <input
-                    type="email"
-                    autoComplete="username"
-                    required
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
-                  />
-                </label>
-                <label className="block text-xs font-medium text-sage-800">
-                  Password
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="mt-2 block w-full rounded-lg border border-sand-200 bg-white px-3 py-3 text-sm focus:border-sage-600 focus:outline-none focus:ring-1 focus:ring-sage-600"
-                  />
-                </label>
-                {signInError && <p role="alert" className="text-sm text-rose-700">{signInError}</p>}
-                <button type="submit" disabled={submitting} className="w-full rounded-lg bg-sage-700 px-4 py-3 text-sm font-medium text-white hover:bg-sage-800 disabled:opacity-50">
-                  {submitting ? "Signing in…" : "Sign in to live data"}
-                </button>
-              </form>
-            )}
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sage-100 text-sage-700">
+                <QrCode className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-serif text-base text-sage-950">Guest Portal</span>
+                <span className="block text-xs text-sage-700">Explore resort services and request amenities</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-sage-700 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
           </div>
-          <p className="mt-6 text-center text-xs leading-5 text-sage-600 lg:text-left">
-            Role previews use simulated data. Account sign in connects to the resort API.
-          </p>
         </div>
       </div>
     </section>

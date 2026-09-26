@@ -70,8 +70,8 @@ export function useRateStaff() {
 export function useDepartingStays() {
   const { isConnected, user } = useAuth();
   const query = useQuery({
-    queryKey: ["departing-stays", user.propertyId, user.id],
-    enabled: isConnected,
+    queryKey: ["departing-stays", user?.propertyId, user?.id],
+    enabled: isConnected && Boolean(user),
     queryFn: guestReviewApi.departing,
     retry: false,
   });

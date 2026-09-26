@@ -38,7 +38,6 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
-import { RoleSwitcherModal } from "@/components/layout/role-switcher-modal";
 import { VesperMark } from "@/components/layout/vesper-mark";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +54,7 @@ interface NavItem {
   roles?: string[];
 }
 
-const MANAGEMENT = ["system_admin", "general_manager"];
+const MANAGEMENT = ["general_manager"];
 
 interface NavGroup {
   /** Omitted for the ungrouped first entry (Dashboard). */
@@ -142,12 +141,11 @@ const NAV: NavGroup[] = [
 
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
-  const { user, role } = useAuth();
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  const { role } = useAuth();
 
   const groups = NAV.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.roles || item.roles.includes(role)),
+    items: group.items.filter((item) => !item.roles || Boolean(role && item.roles.includes(role))),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -235,7 +233,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           ))}
         </nav>
 
-        {/* House note, and the demo role switch tucked under it. */}
+        {/* House note */}
         <div className="space-y-3 px-4 pb-5">
           <div className="flex items-start gap-3 rounded-2xl bg-sage-50/70 p-4">
             <Sprout className="mt-0.5 h-4 w-4 shrink-0 text-sage-600" />
@@ -244,18 +242,8 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
               <span className="mt-1.5 block text-sand-400">—</span>
             </p>
           </div>
-
-          <button
-            onClick={() => setShowRoleModal(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-sand-200 py-2 text-xs font-medium text-sand-600 transition-colors hover:bg-sand-50 hover:text-sand-900"
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5" />
-            Viewing as {user.roleTitle}
-          </button>
         </div>
       </aside>
-
-      <RoleSwitcherModal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} />
     </>
   );
 }

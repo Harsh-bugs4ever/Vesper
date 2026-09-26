@@ -29,7 +29,7 @@ xgboost==2.1.3
 scikit-learn==1.6.0
 
 # CP-SAT for rostering (workforce).
-ortools==9.11.4210
+ortools>=9.12.4544
 
 # --- optional local models --------------------------------------------------------
 # Off unless VESPER_SENTIMENT_USE_TRANSFORMER / VESPER_CONCIERGE_USE_EMBEDDINGS say

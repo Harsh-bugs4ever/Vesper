@@ -274,7 +274,7 @@ function DemoStaffPage() {
     setShowAttendanceModal(false);
     showToast({
       title: `Checked In (${method === "qr" ? "Entrance QR Verified" : "GPS Geofence Verified"})`,
-      description: `Shift active at ${timeNow}. Welcome back, ${user.name}!`,
+      description: `Shift active at ${timeNow}. Welcome back, ${user?.name ?? "Staff"}!`,
       type: "success",
     });
   };
@@ -409,7 +409,7 @@ function DemoStaffPage() {
     updateGuestRequest(request.id, (r) => ({
       ...r,
       state: "accepted",
-      assignee: user.name || "Floor Attendant",
+      assignee: user?.name || "Floor Attendant",
     }));
     showToast({
       title: `Accepted: ${request.id}`,
@@ -483,12 +483,12 @@ function DemoStaffPage() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-sage-700 text-gold-300 flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-              {user.name.split(" ").map((n) => n[0]).join("")}
+              {(user?.name ?? "Staff").split(" ").map((n) => n[0]).join("")}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-sand-950 font-serif leading-tight">
-                  {user.name}
+                  {user?.name ?? "Staff"}
                 </h2>
                 <Badge
                   variant={
@@ -508,7 +508,7 @@ function DemoStaffPage() {
                 </Badge>
               </div>
               <p className="text-xs text-sand-500 mt-0.5">
-                {user.roleTitle || "Housekeeping Floor Attendant"} · Floor 4 (Ocean Wing)
+                {user?.roleTitle || "Housekeeping Floor Attendant"} · Floor 4 (Ocean Wing)
               </p>
             </div>
           </div>
