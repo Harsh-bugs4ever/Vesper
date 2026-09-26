@@ -45,6 +45,9 @@ db-reset: ## Drop and recreate the database. Destroys all data.
 seed: ## Load the demo resort (355 rooms, ~180 staff, a year of bookings)
 	$(PY) scripts/seed.py
 
+seed-fnb: ## Seed Food & Beverage order book and spend history
+	$(PY) scripts/seed_fnb.py
+
 reseed: ## Wipe and reseed from scratch
 	$(PY) scripts/seed.py --reset
 

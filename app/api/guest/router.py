@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
 from vesper_common.security import Principal, current_guest, current_user, requires
+from app.api.property import service as property_service
+from app.api.property.schemas import AmenityOut, GuestRoomOut, RoomImageOut
 
 from . import service
 from .schemas import (
@@ -49,6 +51,12 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
+def active_guest(principal: Principal = Depends(current_guest)) -> Principal:
+    service.assert_stay_open(principal.stay_id, principal.property_id,
+                             room_id=principal.room_id, guest_id=principal.guest_id)
+    return principal
+
+
 def _detail(request) -> RequestDetail:
     return RequestDetail(
         **RequestOut.model_validate(request).model_dump(),
@@ -68,7 +76,7 @@ def open_session(
 
 @guest_router.get("/menu", response_model=MenuOut)
 def guest_menu(
-    principal: Principal = Depends(current_guest), db: Session = Depends(get_session)
+    principal: Principal = Depends(active_guest), db: Session = Depends(get_session)
 ) -> MenuOut:
     data = service.menu(db, UUID(principal.property_id))
     return MenuOut(
@@ -80,10 +88,27 @@ def guest_menu(
     )
 
 
+@guest_router.get("/amenities", response_model=list[AmenityOut])
+def guest_amenities(principal: Principal = Depends(active_guest),
+                    db: Session = Depends(get_session)) -> list[AmenityOut]:
+    return [AmenityOut.model_validate(a) for a in
+            property_service.list_amenities(db, UUID(principal.property_id))]
+
+
+@guest_router.get("/room", response_model=GuestRoomOut)
+def guest_room(principal: Principal = Depends(active_guest),
+               db: Session = Depends(get_session)) -> GuestRoomOut:
+    room = property_service.get_room(db, UUID(principal.property_id), UUID(principal.room_id))
+    return GuestRoomOut(id=room.id, number=room.number, floor=room.floor,
+                        category_name=room.category.name,
+                        category_amenities=room.category.amenities,
+                        images=[RoomImageOut.model_validate(i) for i in room.images])
+
+
 @guest_router.post("/requests", response_model=RequestDetail, status_code=status.HTTP_201_CREATED)
 def raise_request(
     body: RequestCreate,
-    principal: Principal = Depends(current_guest),
+    principal: Principal = Depends(active_guest),
     db: Session = Depends(get_session),
 ) -> RequestDetail:
     stay = service.assert_stay_open(principal.stay_id, principal.property_id)
@@ -102,7 +127,7 @@ def raise_request(
 
 @guest_router.get("/requests", response_model=list[RequestDetail])
 def my_requests(
-    principal: Principal = Depends(current_guest), db: Session = Depends(get_session)
+    principal: Principal = Depends(active_guest), db: Session = Depends(get_session)
 ) -> list[RequestDetail]:
     """The live tracker on the guest's phone."""
     rows = service.list_stay_requests(
@@ -113,7 +138,7 @@ def my_requests(
 
 @guest_router.get("/served-by", response_model=list[dict])
 def served_by(
-    principal: Principal = Depends(current_guest), db: Session = Depends(get_session)
+    principal: Principal = Depends(active_guest), db: Session = Depends(get_session)
 ) -> list[dict]:
     """The staff who attended to this stay.
 
@@ -128,7 +153,7 @@ def served_by(
 def rate(
     request_id: UUID,
     body: RatingCreate,
-    principal: Principal = Depends(current_guest),
+    principal: Principal = Depends(active_guest),
     db: Session = Depends(get_session),
 ) -> RequestDetail:
     """One tap, five stars, no survey."""
@@ -141,7 +166,7 @@ def rate(
 @guest_router.post("/issues", response_model=IssueOut, status_code=status.HTTP_201_CREATED)
 def guest_report_issue(
     body: IssueCreate,
-    principal: Principal = Depends(current_guest),
+    principal: Principal = Depends(active_guest),
     db: Session = Depends(get_session),
 ) -> IssueOut:
     service.assert_stay_open(principal.stay_id, principal.property_id)
@@ -233,7 +258,7 @@ def list_issues(
 def set_issue_status(
     issue_id: UUID,
     body: IssueStatusUpdate,
-    principal: Principal = Depends(requires(Perm.ISSUES_WRITE)),
+    principal: Principal = Depends(requires(Perm.REPORTS_APPROVE)),
     db: Session = Depends(get_session),
 ) -> IssueOut:
     from .models import IssueReport

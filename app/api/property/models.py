@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,10 +18,18 @@ SCHEMA = "property"
 
 
 class RoomStatus(StrEnum):
-    """The housekeeping loop. A check-out flips OCCUPIED → DIRTY automatically."""
+    """Housekeeping/serviceability, independent of an active stay."""
 
     READY = "ready"
     OCCUPIED = "occupied"
+    DIRTY = "dirty"
+    CLEANING = "cleaning"
+    INSPECTION = "inspection"
+    OUT_OF_ORDER = "out_of_order"
+
+
+class HousekeepingStatus(StrEnum):
+    READY = "ready"
     DIRTY = "dirty"
     CLEANING = "cleaning"
     INSPECTION = "inspection"
@@ -90,6 +98,10 @@ class RoomCategory(Base, TimestampMixin):
     amenities: Mapped[list[str]] = mapped_column(ARRAY(String(48)), default=list, nullable=False)
 
     rooms: Mapped[list["Room"]] = relationship(back_populates="category")
+    images: Mapped[list["RoomImage"]] = relationship(
+        primaryjoin="RoomCategory.id == foreign(RoomImage.category_id)",
+        order_by="(RoomImage.position, RoomImage.id)", viewonly=True,
+    )
 
 
 class Room(Base, TimestampMixin):
@@ -112,6 +124,60 @@ class Room(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text)
 
     category: Mapped[RoomCategory] = relationship(back_populates="rooms")
+    images: Mapped[list["RoomImage"]] = relationship(
+        primaryjoin="Room.id == foreign(RoomImage.room_id)",
+        order_by="(RoomImage.position, RoomImage.id)", viewonly=True,
+    )
+
+    @property
+    def housekeeping_status(self) -> str:
+        return self.status
+
+    @property
+    def occupied(self) -> bool:
+        return getattr(self, "_occupied", False)
+
+
+class RoomImage(Base, TimestampMixin):
+    __tablename__ = "room_images"
+    __table_args__ = (
+        CheckConstraint("(room_id IS NULL) <> (category_id IS NULL)", name="one_image_subject"),
+        Index("uq_room_images_primary_room", "room_id", unique=True,
+              postgresql_where=text("is_primary AND room_id IS NOT NULL")),
+        Index("uq_room_images_primary_category", "category_id", unique=True,
+              postgresql_where=text("is_primary AND category_id IS NOT NULL")),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.properties.id"), nullable=False, index=True)
+    room_id: Mapped[UUID | None] = mapped_column(ForeignKey(f"{SCHEMA}.rooms.id"), index=True)
+    category_id: Mapped[UUID | None] = mapped_column(ForeignKey(f"{SCHEMA}.room_categories.id"), index=True)
+    url: Mapped[str] = mapped_column(String(255), nullable=False)
+    alt_text: Mapped[str] = mapped_column(String(240), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ResortAmenity(Base, TimestampMixin):
+    __tablename__ = "resort_amenities"
+    __table_args__ = (UniqueConstraint("property_id", "key"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    property_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.properties.id"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(160))
+    opening_hours: Mapped[str | None] = mapped_column(String(240))
+    is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    closure_reason: Mapped[str | None] = mapped_column(String(240))
+    closed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def available_now(self) -> bool:
+        from vesper_common.clock import utcnow
+        return self.is_available and (self.closed_until is None or self.closed_until <= utcnow())
 
 
 class Asset(Base, TimestampMixin):

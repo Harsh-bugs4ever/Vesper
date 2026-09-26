@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -75,7 +75,13 @@ class Stay(Base, TimestampMixin):
     """One guest, one room, one occupied period. The guest QR token points here."""
 
     __tablename__ = "stays"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index("uq_frontdesk_one_active_stay_per_room", "room_id", unique=True,
+              postgresql_where=text("status = 'in_house'")),
+        Index("uq_frontdesk_one_active_stay_per_booking", "booking_id", unique=True,
+              postgresql_where=text("status = 'in_house'")),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)

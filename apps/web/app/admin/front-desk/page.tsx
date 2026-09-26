@@ -2,6 +2,9 @@
 
 import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-context";
 import {
   BedDouble,
   CalendarRange,
@@ -11,14 +14,13 @@ import {
   LogIn,
   LogOut,
   MoreHorizontal,
-  Pencil,
   Plus,
-  Printer,
-  Users,
+  RefreshCw,
+  User,
   X,
 } from "lucide-react";
 
-import { RoomCalendar } from "@/components/front-desk/room-calendar";
+import { RoomCalendar, type CalendarBooking, type CalendarRoom } from "@/components/front-desk/room-calendar";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody } from "@/components/ui/panel";
@@ -27,18 +29,7 @@ import { SectionTabs } from "@/components/ui/section-tabs";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import {
-  CALENDAR_LEGEND,
-  DEMO_TODAY,
-  ROOM_TYPE_FILTERS,
-  bookingStateMeta,
-  bookings as seedBookings,
-  calendarRooms,
-  calendarWindow,
-  visitHistory,
-  type Booking,
-  type BookingState,
-} from "@/lib/demo/frontdesk";
+import { bookingStateMeta, CALENDAR_LEGEND } from "@/lib/config/frontdesk-ui";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -52,95 +43,228 @@ const TABS = [
 type Tab = (typeof TABS)[number]["value"];
 
 const PANEL_TABS = [
-  { value: "check-in", label: "Check-in" },
-  { value: "stay", label: "Stay Details" },
+  { value: "check-in", label: "Check-in / Status" },
   { value: "profile", label: "Guest Profile" },
-  { value: "notes", label: "Notes" },
 ] as const;
 
 type PanelTab = (typeof PANEL_TABS)[number]["value"];
 
-const STATUS_FILTERS = ["All Statuses", ...CALENDAR_LEGEND.map((s) => bookingStateMeta[s].label)];
+interface BookingOut {
+  id: string;
+  reference: string;
+  guest_id: string;
+  room_category_id: string;
+  room_id: string | null;
+  check_in_date: string;
+  check_out_date: string;
+  adults: number;
+  children: number;
+  rate: number;
+  total_amount: number;
+  source: string;
+  status: string;
+  special_requests?: string | null;
+  guest_name?: string;
+}
 
-/** Pre-arrival steps the desk works through before handing over a key. */
-const PRE_CHECKIN = [
-  { id: "id", label: "ID proof verified", done: true },
-  { id: "payment", label: "Payment method confirmed", done: true },
-  { id: "room", label: "Room assigned", done: true },
-  { id: "requests", label: "Special requests noted", done: false },
-];
+interface StayOut {
+  id: string;
+  booking_id: string;
+  guest_id: string;
+  room_id: string;
+  room_number: string;
+  check_out_date: string;
+  checked_in_at: string;
+  checked_out_at: string | null;
+  status: string;
+  folio_total: number;
+}
+
+interface FrontDeskDay {
+  date: string;
+  arrivals: BookingOut[];
+  departures: StayOut[];
+  in_house_count: number;
+}
+
+interface RoomDetail {
+  id: string;
+  number: string;
+  floor: number;
+  status: string;
+  category_id: string;
+  category_name?: string;
+}
+
+interface GuestProfileOut {
+  guest_id: string;
+  total_visits: number;
+  total_stays: number;
+  total_spend: number;
+  average_spend: number;
+}
+
+interface GuestOut {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+}
 
 export default function FrontDeskPage() {
-  const { showToast, showUndoToast } = useToast();
+  const { showToast } = useToast();
+  const { isConnected, hasPermission, user } = useAuth();
+  const queryClient = useQueryClient();
+  const scope = [user?.propertyId, user?.id];
+  const canRead = isConnected && hasPermission("bookings:read");
+  const [search, setSearch] = useState("");
 
-  const [bookings, setBookings] = useState<Booking[]>(seedBookings);
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [tab, setTab] = useState<Tab>("calendar");
   const [panelTab, setPanelTab] = useState<PanelTab>("check-in");
-  const [roomType, setRoomType] = useState<string>(ROOM_TYPE_FILTERS[0]);
-  const [status, setStatus] = useState<string>(STATUS_FILTERS[0]);
-  const [selectedId, setSelectedId] = useState<string | null>("#VM26Q7843");
-  const [checklist, setChecklist] = useState(PRE_CHECKIN);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedRoomForCheckIn, setSelectedRoomForCheckIn] = useState<string>("");
 
-  const counts = useMemo(() => {
-    const tally = {
-      arrivals: bookings.filter((b) => b.state === "checkin_today").length,
-      departures: bookings.filter((b) => b.state === "checkout_today").length,
-      inHouse: bookings.filter((b) => b.state === "in_house").length,
-    };
-    return tally;
-  }, [bookings]);
+  // Queries
+  const todaySummary = useQuery({
+    queryKey: ["frontdesk-today", ...scope, selectedDate],
+    queryFn: () => api.get<FrontDeskDay>("/bookings/today", { day: selectedDate }),
+    enabled: canRead,
+  });
 
-  const filtered = useMemo(
-    () =>
-      bookings
-        .filter((b) => roomType === "All Room Types" || b.category === roomType)
-        .filter((b) => status === "All Statuses" || bookingStateMeta[b.state].label === status),
-    [bookings, roomType, status]
-  );
+  const allBookings = useQuery({
+    queryKey: ["frontdesk-bookings", ...scope],
+    queryFn: () => api.get<BookingOut[]>("/bookings"),
+    enabled: canRead,
+  });
 
-  const visibleRooms = useMemo(
-    () =>
-      calendarRooms.filter((room) => roomType === "All Room Types" || room.category === roomType),
-    [roomType]
-  );
+  const allStays = useQuery({
+    queryKey: ["frontdesk-stays", ...scope],
+    queryFn: () => api.get<StayOut[]>("/stays", { status: "in_house" }),
+    enabled: canRead,
+  });
 
-  const selected = bookings.find((b) => b.id === selectedId) ?? null;
-  const history = selected ? (visitHistory[selected.guest] ?? []) : [];
+  const roomsList = useQuery({
+    queryKey: ["frontdesk-rooms", ...scope],
+    queryFn: () => api.get<RoomDetail[]>("/rooms"),
+    enabled: canRead,
+  });
 
-  const listFor = (kind: Tab): Booking[] => {
-    if (kind === "arrivals") return bookings.filter((b) => b.state === "checkin_today");
-    if (kind === "departures") return bookings.filter((b) => b.state === "checkout_today");
-    if (kind === "in-house") return bookings.filter((b) => b.state === "in_house");
-    return filtered;
+  // Check-in Mutation
+  const checkInMutation = useMutation({
+    mutationFn: ({ bookingId, roomId }: { bookingId: string; roomId: string }) =>
+      api.post<StayOut>(`/bookings/${bookingId}/check-in`, { room_id: roomId }),
+    onSuccess: (stay) => {
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-today"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-stays"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-rooms"] });
+      showToast({
+        title: "Check-in Completed",
+        description: `Room ${stay.room_number} assigned and checked in successfully.`,
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Check-in Failed",
+        description: err instanceof Error ? err.message : "Could not complete check-in.",
+        type: "warning",
+      });
+    },
+  });
+
+  // Check-out Mutation
+  const checkOutMutation = useMutation({
+    mutationFn: (stayId: string) => api.post<StayOut>(`/stays/${stayId}/check-out`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-today"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-stays"] });
+      queryClient.invalidateQueries({ queryKey: ["frontdesk-rooms"] });
+      showToast({
+        title: "Check-out Completed",
+        description: "Guest checked out and folio finalized.",
+        type: "success",
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        title: "Check-out Failed",
+        description: err instanceof Error ? err.message : "Could not complete check-out.",
+        type: "warning",
+      });
+    },
+  });
+
+  // Selected Booking
+  const selectedBooking = useMemo(() => {
+    return (allBookings.data ?? []).find((b) => b.id === selectedBookingId) ?? null;
+  }, [allBookings.data, selectedBookingId]);
+
+  // Selected Guest Profile
+  const guestProfileQuery = useQuery({
+    queryKey: ["guest-profile-summary", ...scope, selectedBooking?.guest_id],
+    queryFn: () => api.get<GuestProfileOut>(`/visits/${selectedBooking!.guest_id}/profile`),
+    enabled: canRead && Boolean(selectedBooking?.guest_id),
+  });
+  const guestQuery = useQuery({
+    queryKey: ["frontdesk-guest", ...scope, selectedBooking?.guest_id],
+    queryFn: () => api.get<GuestOut>(`/guests/${selectedBooking!.guest_id}`),
+    enabled: canRead && hasPermission("guests:read") && Boolean(selectedBooking?.guest_id),
+  });
+
+  // Computed counts
+  const arrivalsCount = todaySummary.data?.arrivals.length;
+  const departuresCount = todaySummary.data?.departures.length;
+  const inHouseCount = todaySummary.data?.in_house_count;
+
+  // Calendar Rooms & Bookings
+  const calendarRooms: CalendarRoom[] = useMemo(() => {
+    return (roomsList.data ?? []).map((r) => ({
+      room: r.number,
+      category: r.category_name || "Category unavailable",
+    }));
+  }, [roomsList.data]);
+
+  const calendarBookings: CalendarBooking[] = useMemo(() => {
+    const roomMap = new Map((roomsList.data ?? []).map((r) => [r.id, r.number]));
+    return (allBookings.data ?? []).map((b) => ({
+      id: b.id,
+      guest: b.reference,
+      room: b.room_id ? roomMap.get(b.room_id) || "Unassigned" : "Unassigned",
+      category: (roomsList.data ?? []).find((r) => r.id === b.room_id)?.category_name ?? "Category unavailable",
+      checkIn: b.check_in_date,
+      checkOut: b.check_out_date,
+      state: b.status,
+    }));
+  }, [allBookings.data, roomsList.data]);
+
+  const handleDateShift = (days: number) => {
+    const current = new Date(`${selectedDate}T00:00:00`);
+    current.setDate(current.getDate() + days);
+    setSelectedDate(format(current, "yyyy-MM-dd"));
   };
 
-  const completeCheckIn = (booking: Booking) => {
-    const previous = booking.state;
-    setBookings((current) =>
-      current.map((item) => (item.id === booking.id ? { ...item, state: "in_house" } : item))
-    );
+  const matchesSearch = (value: string) => value.toLowerCase().includes(search.trim().toLowerCase());
+  const visibleArrivals = todaySummary.data?.arrivals.filter((b) => matchesSearch(`${b.reference} ${b.guest_name ?? ""}`));
+  const visibleDepartures = todaySummary.data?.departures.filter((s) => matchesSearch(`${s.room_number} ${s.booking_id}`));
+  const visibleBookings = allBookings.data?.filter((b) => {
+    const matchesTab = tab !== "in-house" || b.status === "checked_in";
+    return matchesTab && matchesSearch(`${b.reference} ${b.guest_name ?? ""}`);
+  });
 
-    showUndoToast(
-      `${booking.guest} checked in`,
-      `Room ${booking.room} released. Key issued and the in-room QR is live.`,
-      () =>
-        setBookings((current) =>
-          current.map((item) => (item.id === booking.id ? { ...item, state: previous } : item))
-        ),
-      10
-    );
-  };
-
-  const pending = checklist.filter((item) => !item.done).length;
+  if (!canRead) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-6">Front-desk access requires the bookings:read permission and a signed-in staff session.</div>;
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Front Desk"
-        description="Today's arrivals, departures and room calendar"
+        title="Front Desk & Reservations"
+        description="Live arrivals, departures, stays, and room assignments"
         actions={
           <div className="flex items-center gap-2">
             <button
+              onClick={() => handleDateShift(-1)}
               className="rounded-xl border border-sand-200 bg-white p-2 text-sand-500 transition-colors hover:bg-sand-50"
               aria-label="Previous day"
             >
@@ -148,68 +272,69 @@ export default function FrontDeskPage() {
             </button>
             <span className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm font-medium text-sand-800">
               <CalendarRange className="h-4 w-4 text-sand-500" />
-              {format(new Date(`${DEMO_TODAY}T00:00:00`), "EEE, d MMM yyyy")}
+              {format(new Date(`${selectedDate}T00:00:00`), "EEE, d MMM yyyy")}
             </span>
+            <label className="sr-only" htmlFor="frontdesk-date">Front-desk date</label>
+            <input id="frontdesk-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="rounded-xl border border-sand-200 bg-white px-2 py-2 text-sm" />
             <button
+              onClick={() => handleDateShift(1)}
               className="rounded-xl border border-sand-200 bg-white p-2 text-sand-500 transition-colors hover:bg-sand-50"
               aria-label="Next day"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
-            <Button
-              size="sm"
-              onClick={() =>
-                showToast({
-                  title: "New booking",
-                  description: "Opening a blank booking for tonight.",
-                  type: "default",
-                })
-              }
+            <button
+              onClick={() => {
+                todaySummary.refetch();
+                allBookings.refetch();
+                allStays.refetch();
+              }}
+              className="rounded-xl border border-sand-200 bg-white p-2 text-sand-500 transition-colors hover:bg-sand-50"
+              title="Refresh data"
             >
-              <Plus className="h-3.5 w-3.5" />
-              New Booking
-            </Button>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
         }
       />
 
+      <label className="block text-sm text-sand-700">Search bookings, guests or rooms
+        <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1 block w-full rounded-xl border border-sand-200 bg-white px-3 py-2" />
+      </label>
+      {(todaySummary.isError || allBookings.isError || allStays.isError || roomsList.isError) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{[todaySummary.error, allBookings.error, allStays.error, roomsList.error].find(Boolean) instanceof Error ? String(([todaySummary.error, allBookings.error, allStays.error, roomsList.error].find(Boolean) as Error).message) : "Front-desk data is unavailable."}</div>}
+
+      {/* Overview Stat Tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           variant="value-first"
           label="Arrivals Today"
-          value={counts.arrivals}
-          change="3"
-          comparison="vs. yesterday"
+          value={arrivalsCount ?? "—"}
+          change={todaySummary.isPending ? "Loading…" : todaySummary.isError ? "Unavailable" : `${arrivalsCount} expected`}
           tone="sage"
           icon={LogIn}
         />
         <StatTile
           variant="value-first"
           label="Departures Today"
-          value={counts.departures}
-          change="2"
-          comparison="vs. yesterday"
+          value={departuresCount ?? "—"}
+          change={todaySummary.isPending ? "Loading…" : todaySummary.isError ? "Unavailable" : `${departuresCount} leaving`}
           tone="sand"
           icon={LogOut}
         />
         <StatTile
           variant="value-first"
-          label="In-House Guests"
-          value={298}
-          change="85% occupancy"
-          intent="neutral"
-          comparison=""
+          label="In-House Stays"
+          value={inHouseCount ?? "—"}
+          change="Live Occupancy"
           tone="forest"
           icon={BedDouble}
         />
         <StatTile
           variant="value-first"
-          label="Pending Check-ins"
-          value={6}
-          change="Requires attention"
-          intent="bad"
-          comparison=""
-          tone="rose"
+          label="Total Bookings"
+          value={allBookings.data?.length ?? "—"}
+          change="Active Ledger"
+          tone="gold"
           icon={ClipboardList}
         />
       </div>
@@ -221,23 +346,6 @@ export default function FrontDeskPage() {
           </div>
 
           <PanelBody className="space-y-4 pt-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <PeriodSelect
-                value={roomType}
-                onChange={setRoomType}
-                options={ROOM_TYPE_FILTERS}
-              />
-              <PeriodSelect value={status} onChange={setStatus} options={STATUS_FILTERS} />
-
-              {tab === "calendar" && (
-                <span className="ml-auto flex items-center gap-2 rounded-lg border border-sand-200 bg-white px-3 py-1.5 text-xs font-medium text-sand-700">
-                  <CalendarRange className="h-3.5 w-3.5 text-sand-500" />
-                  {format(calendarWindow[0], "d MMM yyyy")} –{" "}
-                  {format(calendarWindow[calendarWindow.length - 1], "d MMM yyyy")}
-                </span>
-              )}
-            </div>
-
             {tab === "calendar" && (
               <>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-sand-200/80 pb-3">
@@ -246,125 +354,202 @@ export default function FrontDeskPage() {
                       <span
                         className={cn(
                           "h-2.5 w-2.5 rounded-full border",
-                          bookingStateMeta[key].bar
+                          bookingStateMeta[key]?.bar ?? "bg-sand-100"
                         )}
                       />
-                      {bookingStateMeta[key].label}
+                      {bookingStateMeta[key]?.label ?? key}
                     </span>
                   ))}
                 </div>
 
                 <RoomCalendar
-                  rooms={visibleRooms}
-                  bookings={filtered}
-                  today={DEMO_TODAY}
-                  selectedId={selectedId}
-                  onSelect={(booking) => {
-                    setSelectedId(booking.id);
+                  rooms={calendarRooms}
+                  bookings={calendarBookings}
+                  today={selectedDate}
+                  selectedId={selectedBookingId}
+                  onSelect={(b) => {
+                    setSelectedBookingId(b.id);
                     setPanelTab("check-in");
                   }}
                 />
               </>
             )}
 
-            {tab !== "calendar" && (
+            {tab === "arrivals" && (
               <Table>
                 <THead>
                   <tr>
-                    <TH>Guest</TH>
-                    <TH>Room</TH>
-                    <TH>Stay</TH>
+                    <TH>Guest / Reference</TH>
+                    <TH>Stay Dates</TH>
+                    <TH>Guests</TH>
+                    <TH align="right">Amount</TH>
+                    <TH align="right">Action</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {todaySummary.isPending ? (
+                    <TR><TD colSpan={5} className="py-8 text-center text-xs text-sand-500">Loading arrivals…</TD></TR>
+                  ) : todaySummary.isError ? (
+                    <TR><TD colSpan={5}>Arrivals unavailable.</TD></TR>
+                  ) : visibleArrivals?.length === 0 ? (
+                    <TR><TD colSpan={5} className="py-8 text-center text-xs text-sand-500">No arrivals scheduled for this date.</TD></TR>
+                  ) : (
+                    visibleArrivals?.map((b) => (
+                      <TR key={b.id}>
+                        <TD>
+                          <button
+                            onClick={() => setSelectedBookingId(b.id)}
+                            className="font-bold text-sand-950 hover:text-sage-700 hover:underline block text-left"
+                          >
+                            {b.guest_name ?? b.reference}
+                          </button>
+                          <span className="text-[10px] font-mono text-sand-400">{b.reference}</span>
+                        </TD>
+                        <TD className="text-sand-600">
+                          {b.check_in_date} → {b.check_out_date}
+                        </TD>
+                        <TD className="text-sand-600">{b.adults} Adults, {b.children} Children</TD>
+                        <TD align="right" className="font-semibold text-sand-900">₹{b.total_amount}</TD>
+                        <TD align="right">
+                          <Button
+                            size="sm"
+                            disabled={!hasPermission("bookings:write") || checkInMutation.isPending}
+                            onClick={() => {
+                              setSelectedBookingId(b.id);
+                              setPanelTab("check-in");
+                            }}
+                          >
+                            Assign Room & Check-in
+                          </Button>
+                        </TD>
+                      </TR>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            )}
+
+            {tab === "departures" && (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Stay / Room</TH>
+                    <TH>Check Out Date</TH>
+                    <TH align="right">Folio Total</TH>
+                    <TH align="right">Action</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {todaySummary.isPending ? (
+                    <TR><TD colSpan={4} className="py-8 text-center text-xs text-sand-500">Loading departures…</TD></TR>
+                  ) : todaySummary.isError ? (
+                    <TR><TD colSpan={4}>Departures unavailable.</TD></TR>
+                  ) : visibleDepartures?.length === 0 ? (
+                    <TR><TD colSpan={4} className="py-8 text-center text-xs text-sand-500">No departures scheduled for this date.</TD></TR>
+                  ) : (
+                    visibleDepartures?.map((s) => (
+                      <TR key={s.id}>
+                        <TD>
+                          <span className="font-bold text-sand-950 block">Room {s.room_number}</span>
+                          <span className="text-[10px] font-mono text-sand-400">Stay {s.id.slice(0, 8)}</span>
+                        </TD>
+                        <TD className="text-sand-600">{s.check_out_date}</TD>
+                        <TD align="right" className="font-semibold text-sand-900">₹{s.folio_total}</TD>
+                        <TD align="right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!hasPermission("bookings:write") || checkOutMutation.isPending}
+                            onClick={() => checkOutMutation.mutate(s.id)}
+                          >
+                            Check Out
+                          </Button>
+                        </TD>
+                      </TR>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            )}
+
+            {tab === "in-house" && (
+              <Table>
+                <THead><tr><TH>Room</TH><TH>Booking</TH><TH>Check-out date</TH><TH align="right">Action</TH></tr></THead>
+                <TBody>
+                  {allStays.isPending ? <TR><TD colSpan={4}>Loading in-house stays…</TD></TR> : allStays.isError ? <TR><TD colSpan={4} role="alert">{allStays.error instanceof Error ? allStays.error.message : "Stays unavailable."}</TD></TR> : allStays.data?.filter((stay) => matchesSearch(`${stay.room_number} ${stay.booking_id}`)).length === 0 ? <TR><TD colSpan={4}>No in-house stays match this search.</TD></TR> : allStays.data?.filter((stay) => matchesSearch(`${stay.room_number} ${stay.booking_id}`)).map((stay) => <TR key={stay.id}><TD>Room {stay.room_number}</TD><TD><button className="underline" onClick={() => { setSelectedBookingId(stay.booking_id); setPanelTab("profile"); }}>{stay.booking_id.slice(0, 8)}</button></TD><TD>{stay.check_out_date}</TD><TD align="right"><Button size="sm" variant="outline" disabled={!hasPermission("bookings:write") || checkOutMutation.isPending} onClick={() => checkOutMutation.mutate(stay.id)}>Check out</Button></TD></TR>)}
+                </TBody>
+              </Table>
+            )}
+
+            {tab === "list" && (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Booking Ref</TH>
+                    <TH>Stay Dates</TH>
                     <TH>Source</TH>
                     <TH align="right">Amount</TH>
                     <TH align="right">Status</TH>
                   </tr>
                 </THead>
                 <TBody>
-                  {listFor(tab).map((booking) => (
-                    <TR key={booking.id}>
-                      <TD>
-                        <button
-                          onClick={() => setSelectedId(booking.id)}
-                          className="text-left font-medium text-sand-900 hover:text-sage-700 hover:underline"
-                        >
-                          {booking.guest}
-                        </button>
-                        <span className="block text-xs text-sand-500">{booking.id}</span>
-                      </TD>
-                      <TD>
-                        <span className="block tabular-nums text-sand-800">{booking.room}</span>
-                        <span className="block text-xs text-sand-500">{booking.category}</span>
-                      </TD>
-                      <TD className="text-sand-600">
-                        {format(new Date(`${booking.checkIn}T00:00:00`), "d MMM")} –{" "}
-                        {format(new Date(`${booking.checkOut}T00:00:00`), "d MMM")}
-                      </TD>
-                      <TD className="text-sand-600">{booking.source}</TD>
-                      <TD align="right" className="font-medium text-sand-900">
-                        {booking.amount === 0
-                          ? "—"
-                          : `₹${booking.amount.toLocaleString("en-IN")}`}
-                      </TD>
-                      <TD align="right">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                            bookingStateMeta[booking.state].chip
-                          )}
-                        >
-                          {bookingStateMeta[booking.state].label}
-                        </span>
-                      </TD>
-                    </TR>
-                  ))}
+                  {allBookings.isPending ? (
+                    <TR><TD colSpan={5} className="py-8 text-center text-xs text-sand-500">Loading bookings…</TD></TR>
+                  ) : allBookings.isError ? (
+                    <TR><TD colSpan={5}>Bookings unavailable.</TD></TR>
+                  ) : visibleBookings?.length === 0 ? (
+                    <TR><TD colSpan={5} className="py-8 text-center text-xs text-sand-500">No bookings on record.</TD></TR>
+                  ) : (
+                    visibleBookings?.map((b) => (
+                      <TR key={b.id}>
+                        <TD>
+                          <button
+                            onClick={() => setSelectedBookingId(b.id)}
+                            className="font-bold text-sand-950 hover:text-sage-700 hover:underline block text-left"
+                          >
+                            {b.reference}
+                          </button>
+                          <span className="text-[10px] text-sand-400 font-mono">{b.id.slice(0, 8)}</span>
+                        </TD>
+                        <TD className="text-sand-600">{b.check_in_date} → {b.check_out_date}</TD>
+                        <TD className="text-sand-600">{b.source}</TD>
+                        <TD align="right" className="font-semibold text-sand-900">₹{b.total_amount}</TD>
+                        <TD align="right">
+                          <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", bookingStateMeta[b.status]?.chip ?? "bg-sand-100")}>
+                            {bookingStateMeta[b.status]?.label ?? b.status}
+                          </span>
+                        </TD>
+                      </TR>
+                    ))
+                  )}
                 </TBody>
               </Table>
             )}
           </PanelBody>
         </Panel>
 
-        {/* Booking detail */}
+        {/* Selected Booking Panel */}
         <Panel className="h-fit xl:sticky xl:top-24">
-          {selected === null ? (
+          {selectedBooking === null ? (
             <PanelBody className="py-14 text-center text-sm text-sand-500">
-              Select a booking to see its detail.
+              Select a booking to view stay details or complete check-in.
             </PanelBody>
           ) : (
             <>
               <div className="flex items-start justify-between gap-2 px-5 pt-5">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-serif text-2xl font-semibold leading-tight text-sand-950">
-                      {selected.guest}
-                    </h2>
-                    <span
-                      className={cn(
-                        "rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                        bookingStateMeta[selected.state].chip
-                      )}
-                    >
-                      {selected.state === "checkin_today"
-                        ? "Arriving Today"
-                        : bookingStateMeta[selected.state].label}
-                    </span>
-                  </div>
+                  <h2 className="font-serif text-xl font-bold text-sand-950">
+                    Ref: {selectedBooking.reference}
+                  </h2>
+                  <p className="text-xs text-sand-500 font-mono">ID: {selectedBooking.id}</p>
                 </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    className="rounded-lg p-1.5 text-sand-400 transition-colors hover:bg-sand-100 hover:text-sand-700"
-                    aria-label="More options"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="rounded-lg p-1.5 text-sand-400 transition-colors hover:bg-sand-100 hover:text-sand-700"
-                    aria-label="Close panel"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setSelectedBookingId(null)}
+                  className="rounded-lg p-1.5 text-sand-400 hover:bg-sand-100"
+                  aria-label="Close panel"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
               <div className="px-5 pt-3">
@@ -372,215 +557,106 @@ export default function FrontDeskPage() {
               </div>
 
               {panelTab === "check-in" && (
-                <PanelBody className="space-y-4 pt-4">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sage-50 text-sm font-semibold text-sage-800">
-                      {selected.guest
-                        .split(" ")
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-sand-950">{selected.guest}</p>
-                        {selected.tier && (
-                          <span className="rounded-full border border-gold-200 bg-gold-50 px-2 py-0.5 text-xs font-medium text-gold-800">
-                            {selected.tier}
-                          </span>
-                        )}
-                      </div>
-                      {selected.phone && <p className="text-xs text-sand-500">{selected.phone}</p>}
-                      {selected.email && (
-                        <p className="truncate text-xs text-sand-500">{selected.email}</p>
-                      )}
+                <PanelBody className="space-y-4 pt-4 text-xs">
+                  <div className="rounded-xl bg-sand-50 p-3 space-y-2">
+                    <p className="text-sand-500">Room images are unavailable: the room API does not return image URLs.</p>
+                    <div className="flex justify-between">
+                      <span className="text-sand-600">Check In:</span>
+                      <span className="font-semibold text-sand-900">{selectedBooking.check_in_date}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sand-600">Check Out:</span>
+                      <span className="font-semibold text-sand-900">{selectedBooking.check_out_date}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sand-600">Guests:</span>
+                      <span className="font-semibold text-sand-900">{selectedBooking.adults} Adults, {selectedBooking.children} Children</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sand-600">Total Rate:</span>
+                      <span className="font-semibold text-sand-900">₹{selectedBooking.total_amount}</span>
                     </div>
                   </div>
 
-                  <dl className="grid grid-cols-3 gap-3 rounded-xl bg-sand-50/70 p-3.5">
-                    <div>
-                      <dt className="text-xs text-sand-500">Room</dt>
-                      <dd className="font-serif text-lg font-semibold text-sand-950">
-                        {selected.room}
-                      </dd>
-                      <dd className="text-xs text-sand-500">{selected.category} Room</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-sand-500">Nights</dt>
-                      <dd className="font-serif text-lg font-semibold text-sand-950">
-                        {selected.nights}
-                      </dd>
-                      <dd className="text-xs text-sand-500">
-                        {format(new Date(`${selected.checkIn}T00:00:00`), "d")} –{" "}
-                        {format(new Date(`${selected.checkOut}T00:00:00`), "d MMM yyyy")}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-sand-500">Rate (per night)</dt>
-                      <dd className="font-serif text-lg font-semibold text-sand-950">
-                        ₹{Math.round(selected.amount / Math.max(1, selected.nights)).toLocaleString("en-IN")}
-                      </dd>
-                      <dd className="text-xs text-sand-500">{selected.ratePlan}</dd>
-                    </div>
-                  </dl>
+                  {selectedBooking.status === "confirmed" && (
+                    <div className="space-y-3 pt-2">
+                      <label className="block text-xs font-semibold text-sand-800">
+                        Select Room for Check-in:
+                        <select
+                          value={selectedRoomForCheckIn}
+                          onChange={(e) => setSelectedRoomForCheckIn(e.target.value)}
+                          className="mt-1.5 block w-full rounded-lg border border-sand-200 bg-white p-2 text-xs text-sand-900 focus:border-sage-600"
+                        >
+                          <option value="">-- Choose an available room --</option>
+                          {(roomsList.data ?? []).filter((room) => room.status === "ready" && room.category_id === selectedBooking.room_category_id).map((room) => (
+                            <option key={room.id} value={room.id}>
+                              Room {room.number} ({room.category_name ?? "Category unavailable"}) - {room.status}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
 
-                  <div className="border-t border-sand-200/80 pt-4">
-                    <p className="font-serif text-base font-semibold text-sand-950">
-                      Booking Details
-                    </p>
-                    <dl className="mt-2 space-y-2 text-sm">
-                      <div className="flex items-start justify-between gap-4">
-                        <dt className="text-sand-600">Booking ID</dt>
-                        <dd className="font-medium tabular-nums text-sand-900">{selected.id}</dd>
-                      </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <dt className="text-sand-600">Source</dt>
-                        <dd className="font-medium text-sand-900">{selected.source}</dd>
-                      </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <dt className="text-sand-600">Guests</dt>
-                        <dd className="font-medium text-sand-900">
-                          {selected.adults} Adult{selected.adults === 1 ? "" : "s"}
-                          {selected.children > 0 && `, ${selected.children} Child`}
-                        </dd>
-                      </div>
-                      {selected.specialRequests && (
-                        <div className="flex items-start justify-between gap-4">
-                          <dt className="shrink-0 text-sand-600">Special Requests</dt>
-                          <dd className="text-right text-sand-900">
-                            {selected.specialRequests.map((request) => (
-                              <span key={request} className="block text-sm">
-                                {request}
-                              </span>
-                            ))}
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
-                  </div>
-
-                  <div className="border-t border-sand-200/80 pt-4">
-                    <p className="font-serif text-base font-semibold text-sand-950">Pre Check-in</p>
-                    <ul className="mt-2 space-y-1">
-                      {checklist.map((item) => (
-                        <li key={item.id}>
-                          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg py-1.5 text-sm text-sand-800 transition-colors hover:bg-sand-50">
-                            <input
-                              type="checkbox"
-                              checked={item.done}
-                              onChange={() =>
-                                setChecklist((current) =>
-                                  current.map((row) =>
-                                    row.id === item.id ? { ...row, done: !row.done } : row
-                                  )
-                                )
-                              }
-                              className="h-4 w-4 shrink-0 rounded border-sand-300 text-sage-600 focus:ring-sage-500"
-                            />
-                            {item.label}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2 border-t border-sand-200/80 pt-4">
-                    {selected.state === "checkin_today" ? (
-                      <Button className="w-full" onClick={() => completeCheckIn(selected)}>
-                        Complete Check-in
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <p className="rounded-xl bg-sand-50 p-3 text-center text-xs text-sand-600">
-                        {selected.state === "in_house"
-                          ? "This guest is already in house."
-                          : `Nothing to check in — this booking is ${bookingStateMeta[selected.state].label.toLowerCase()}.`}
-                      </p>
-                    )}
-
-                    {pending > 0 && selected.state === "checkin_today" && (
-                      <p className="text-center text-xs text-gold-700">
-                        {pending} pre-check-in step{pending === 1 ? "" : "s"} still open.
-                      </p>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm">
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edit Booking
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Printer className="h-3.5 w-3.5" />
-                        Registration Card
+                      <Button
+                        className="w-full"
+                        disabled={!selectedRoomForCheckIn || checkInMutation.isPending || !hasPermission("bookings:write")}
+                        onClick={() =>
+                          checkInMutation.mutate({
+                            bookingId: selectedBooking.id,
+                            roomId: selectedRoomForCheckIn,
+                          })
+                        }
+                      >
+                        {checkInMutation.isPending ? "Processing Check-in…" : "Confirm Check-In"}
                       </Button>
                     </div>
-                  </div>
-                </PanelBody>
-              )}
+                  )}
 
-              {panelTab === "stay" && (
-                <PanelBody className="space-y-3 pt-4 text-sm">
-                  {[
-                    ["Check-in", format(new Date(`${selected.checkIn}T00:00:00`), "EEE, d MMM yyyy")],
-                    ["Check-out", format(new Date(`${selected.checkOut}T00:00:00`), "EEE, d MMM yyyy")],
-                    ["Nights", String(selected.nights)],
-                    ["Rate plan", selected.ratePlan],
-                    [
-                      "Total charge",
-                      selected.amount === 0 ? "—" : `₹${selected.amount.toLocaleString("en-IN")}`,
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex items-center justify-between gap-4">
-                      <span className="text-sand-600">{label}</span>
-                      <span className="font-medium text-sand-900">{value}</span>
+                  {selectedBooking.status === "checked_in" && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-center font-medium">
+                      Guest is currently in house.
                     </div>
-                  ))}
+                  )}
                 </PanelBody>
               )}
 
               {panelTab === "profile" && (
-                <PanelBody className="space-y-4 pt-4">
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="text-sand-600">Previous stays</span>
-                    <span className="font-medium text-sand-900">
-                      {selected.previousStays ?? 0}
-                      {selected.previousStays ? " · returning guest" : " · first visit"}
-                    </span>
+                <PanelBody className="space-y-3 pt-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-sage-100 flex items-center justify-center text-sage-800 font-bold">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="block font-bold text-sand-950">Guest DNA Summary</span>
+                      {guestQuery.data && <span className="block text-sm text-sand-800">{guestQuery.data.full_name}</span>}
+                      <span className="block text-[10px] text-sand-500 font-mono">{selectedBooking.guest_id}</span>
+                    </div>
                   </div>
 
-                  {history.length === 0 ? (
-                    <p className="text-sm text-sand-500">No earlier visits on record.</p>
-                  ) : (
-                    <ul className="divide-y divide-sand-100">
-                      {history.map((visit) => (
-                        <li
-                          key={visit.date}
-                          className="flex items-baseline justify-between gap-3 py-2.5"
-                        >
-                          <span className="min-w-0">
-                            <span className="block text-sm text-sand-900">{visit.detail}</span>
-                            <span className="block text-xs text-sand-500">{visit.date}</span>
-                          </span>
-                          <span className="shrink-0 text-sm tabular-nums text-sand-700">
-                            ₹{visit.amount.toLocaleString("en-IN")}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </PanelBody>
-              )}
-
-              {panelTab === "notes" && (
-                <PanelBody className="pt-4">
-                  {selected.notes ? (
-                    <div className="rounded-xl border border-gold-200 bg-gold-50/50 p-4">
-                      <p className="text-xs font-medium text-gold-900">Note for the desk</p>
-                      <p className="mt-1 text-sm text-sand-800">{selected.notes}</p>
+                  {guestProfileQuery.isPending ? (
+                    <p className="text-sand-500 italic">Loading guest history profile…</p>
+                  ) : guestProfileQuery.isError ? (
+                    <p role="alert" className="text-rose-700">{guestProfileQuery.error instanceof Error ? guestProfileQuery.error.message : "Guest profile unavailable."}</p>
+                  ) : guestProfileQuery.data ? (
+                    <div className="space-y-2 rounded-xl bg-sand-50 p-3">
+                      <div className="flex justify-between">
+                        <span className="text-sand-600">Total Visits:</span>
+                        <span className="font-semibold text-sand-900">{guestProfileQuery.data.total_visits}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sand-600">Total Stays:</span>
+                        <span className="font-semibold text-sand-900">{guestProfileQuery.data.total_stays}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sand-600">Total Spend:</span>
+                        <span className="font-semibold text-sand-900">₹{guestProfileQuery.data.total_spend}</span>
+                      </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-sand-500">No notes on this booking.</p>
+                    <p className="text-sand-500 italic">No previous visit profile on record.</p>
                   )}
+                  {guestQuery.isError && <p role="alert" className="text-rose-700">Guest details unavailable: {guestQuery.error instanceof Error ? guestQuery.error.message : "Request failed"}</p>}
+                  {!hasPermission("guests:read") && <p className="text-sand-500">Contact details require guests:read permission.</p>}
+                  {guestQuery.data && <p className="text-sand-600">{guestQuery.data.email ?? "No email on record"}{guestQuery.data.phone ? ` · ${guestQuery.data.phone}` : ""}</p>}
                 </PanelBody>
               )}
             </>

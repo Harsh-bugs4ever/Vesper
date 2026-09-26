@@ -8,6 +8,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from vesper_common.clients import guest as guest_client
@@ -15,6 +16,7 @@ from vesper_common.clients import property_client
 from vesper_common.clock import local_today, utcnow
 from vesper_common.errors import Conflict, Invalid, NotFound
 from vesper_common.events import Event, bus
+from app.api.property.models import Room, RoomStatus
 
 from .models import Booking, BookingStatus, GuestVisit, Stay, StayStatus, VisitKind
 
@@ -127,10 +129,32 @@ def check_in(
     The room must be ready and free. A double-allocated room is the one front-desk bug
     that a guest notices immediately, so both checks happen before anything is written.
     """
-    booking = get_booking(db, property_id, booking_id)
+    from app.api.property.models import Room, RoomStatus
+
+    # Serialize allocations for a room and booking in the same database transaction.
+    booking = db.scalars(select(Booking).where(
+        Booking.id == booking_id, Booking.property_id == property_id
+    ).with_for_update()).first()
+    if booking is None:
+        raise NotFound("Booking not found")
     if booking.status != BookingStatus.CONFIRMED:
         raise Conflict(f"That booking is {booking.status}, not confirmed")
 
+    today = local_today()
+    if not booking.check_in_date <= today < booking.check_out_date:
+        raise Conflict("Booking is outside its check-in window")
+
+    # Serialize allocation for this door. The partial unique index on active stays is
+    # the final guard if another writer bypasses this service.
+    room = db.scalars(select(Room).where(
+        Room.id == room_id, Room.property_id == property_id,
+    ).with_for_update()).first()
+    if room is None:
+        raise NotFound("Room not found")
+    if room.category_id != booking.room_category_id:
+        raise Conflict("Room is not in the booked category")
+    if room.status != RoomStatus.READY:
+        raise Conflict(f"Room {room.number} is {room.status} — it is not ready for a guest")
     occupied = db.scalars(
         select(Stay).where(
             Stay.property_id == property_id,
@@ -141,28 +165,29 @@ def check_in(
     if occupied is not None:
         raise Conflict("That room is already occupied")
 
-    room = property_client.get(f"/rooms/{room_id}", property_id=property_id)
-    if room is None:
-        raise NotFound("Room not found")
-    if room["status"] not in {"ready", "inspection"}:
-        raise Conflict(f"Room {room['number']} is {room['status']} — it is not ready for a guest")
-
     stay = Stay(
         property_id=property_id,
         booking_id=booking.id,
         guest_id=booking.guest_id,
         room_id=room_id,
-        room_number=room["number"],
+        room_number=room.number,
         checked_in_at=utcnow(),
         folio_total=booking.total_amount,
     )
     booking.status = BookingStatus.CHECKED_IN
     booking.room_id = room_id
+    previous_room_status = room.status
+    room.status = RoomStatus.OCCUPIED
+    room.status_changed_at = utcnow()
     db.add(stay)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise Conflict("That room or booking already has an active stay") from exc
     db.refresh(stay)
 
-    # property-service flips the room to occupied off this event.
+    # Readers derive occupancy from the active stay; the event informs subscribers.
     bus.publish(
         Event.GUEST_CHECKED_IN,
         {
@@ -170,7 +195,7 @@ def check_in(
             "booking_id": str(booking.id),
             "guest_id": str(booking.guest_id),
             "room_id": str(room_id),
-            "room_number": room["number"],
+            "room_number": room.number,
             "nights": booking.nights,
         },
         property_id=str(property_id),
@@ -180,13 +205,30 @@ def check_in(
 
 
 def check_out(db: Session, property_id: UUID, stay_id: UUID, *, actor_id: str) -> Stay:
-    stay = get_stay(db, property_id, stay_id)
+    stay = db.scalars(select(Stay).where(Stay.id == stay_id,
+        Stay.property_id == property_id).with_for_update()).first()
+    if stay is None:
+        raise NotFound("Stay not found")
     if stay.status != StayStatus.IN_HOUSE:
         raise Conflict("That stay is already closed")
+    if stay.booking.status != BookingStatus.CHECKED_IN:
+        raise Conflict("The booking is not checked in")
+
+    room = db.scalars(select(Room).where(
+        Room.id == stay.room_id, Room.property_id == property_id
+    ).with_for_update()).first()
+    if room is None:
+        raise NotFound("Room not found")
 
     stay.status = StayStatus.CHECKED_OUT
     stay.checked_out_at = utcnow()
     stay.booking.status = BookingStatus.CHECKED_OUT
+    # Room turnover and access revocation commit with the stay. A delayed event must
+    # never leave a checked-out guest's QR usable or housekeeping falsely ready.
+    previous_room_status = room.status
+    room.status = RoomStatus.DIRTY
+    room.status_changed_at = utcnow()
+    room.qr_secret = secrets.token_urlsafe(24)
 
     # The stay itself is a visit — this is the row Guest DNA counts.
     record_visit(
@@ -202,7 +244,13 @@ def check_out(db: Session, property_id: UUID, stay_id: UUID, *, actor_id: str) -
     db.commit()
     db.refresh(stay)
 
-    # property-service dirties the room and rotates its QR secret off this event.
+    bus.publish(
+        Event.ROOM_STATUS_CHANGED,
+        {"room_id": str(room.id), "room_number": room.number, "floor": room.floor,
+         "from": previous_room_status, "to": RoomStatus.DIRTY.value},
+        property_id=str(property_id), actor_id=actor_id,
+    )
+    # Room turnover was committed above; the event informs subscribers.
     bus.publish(
         Event.GUEST_CHECKED_OUT,
         {
@@ -263,6 +311,15 @@ def record_visit(
     meta: dict | None = None,
     commit: bool = True,
 ) -> GuestVisit:
+    from app.api.guest.models import Guest
+
+    guest = db.get(Guest, guest_id)
+    if guest is None or guest.property_id != property_id:
+        raise NotFound("Guest not found at this property")
+    if stay_id is not None:
+        stay = get_stay(db, property_id, stay_id)
+        if stay.guest_id != guest_id:
+            raise NotFound("Stay not found for this guest")
     visit = GuestVisit(
         property_id=property_id,
         guest_id=guest_id,
@@ -316,14 +373,13 @@ def arrivals_and_departures(db: Session, property_id: UUID, day: date | None = N
     """The front desk's morning screen."""
     target = day or local_today()
     arriving = list_bookings(db, property_id, status=BookingStatus.CONFIRMED, arriving_on=target)
-    departing = [
-        s for s in list_stays(db, property_id) if s.booking.check_out_date == target
-    ]
     in_house = list_stays(db, property_id)
+    departing = [s for s in in_house if s.booking.check_out_date == target]
     return {
         "date": target,
         "arrivals": arriving,
         "departures": departing,
+        "in_house": in_house,
         "in_house_count": len(in_house),
     }
 
@@ -377,7 +433,9 @@ def occupancy_history(db: Session, property_id: UUID, *, days: int = 180) -> lis
 def enrich_stay(db: Session, property_id: UUID, stay: Stay) -> dict:
     """The payload guest-service needs to open a QR session in one call."""
     guest_row = guest_client.get(f"/guests/{stay.guest_id}", property_id=property_id) or {}
-    property_row = property_client.get("/property", property_id=property_id) or {}
+    property_row = property_client.get("/property", property_id=property_id)
+    if property_row is None:
+        raise NotFound("Property not found")
     return {
         "id": str(stay.id),
         "property_id": str(stay.property_id),
@@ -387,6 +445,6 @@ def enrich_stay(db: Session, property_id: UUID, stay: Stay) -> dict:
         "check_out_date": stay.check_out_date.isoformat(),
         "guest_id": str(stay.guest_id),
         "guest_name": guest_row.get("full_name"),
-        "property_name": property_row.get("name", "Vesper"),
+        "property_name": property_row["name"],
         "checked_in_at": stay.checked_in_at.isoformat(),
     }

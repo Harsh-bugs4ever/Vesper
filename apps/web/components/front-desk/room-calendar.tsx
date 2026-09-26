@@ -3,24 +3,8 @@
 import * as React from "react";
 import { format, isSameDay } from "date-fns";
 import { ArrowRight } from "lucide-react";
-
-import {
-  bookingStateMeta,
-  calendarWindow,
-  type Booking,
-  type CalendarRoom,
-} from "@/lib/demo/frontdesk";
+import { bookingStateMeta } from "@/lib/config/frontdesk-ui";
 import { cn } from "@/lib/utils";
-
-/**
- * The room-by-night timeline.
- *
- * A CSS grid rather than absolute positioning: each booking is placed by column start
- * and span, so the bars stay aligned to the day headers at any width and the browser
- * does the arithmetic. Bookings that begin before the window or end after it are
- * clipped, and the clipped edge is drawn square so it reads as "continues" rather than
- * as a stay that happens to start on Monday.
- */
 
 const DAY_MS = 86_400_000;
 
@@ -30,17 +14,30 @@ function midnight(value: string | Date): Date {
   return date;
 }
 
+export interface CalendarBooking {
+  id: string;
+  guest: string;
+  room: string;
+  category: string;
+  checkIn: string;
+  checkOut: string;
+  state: string;
+}
+
+export interface CalendarRoom {
+  room: string;
+  category: string;
+}
+
 interface Placement {
-  booking: Booking;
-  /** 1-based grid column. */
+  booking: CalendarBooking;
   start: number;
   span: number;
   clippedStart: boolean;
   clippedEnd: boolean;
 }
 
-/** Where a booking sits in the visible window, or null when it falls entirely outside. */
-function place(booking: Booking, windowStart: Date, days: number): Placement | null {
+function place(booking: CalendarBooking, windowStart: Date, days: number): Placement | null {
   const checkIn = midnight(booking.checkIn);
   const checkOut = midnight(booking.checkOut);
 
@@ -65,17 +62,29 @@ export function RoomCalendar({
   rooms,
   bookings,
   today,
+  calendarDays,
   selectedId,
   onSelect,
 }: {
   rooms: CalendarRoom[];
-  bookings: Booking[];
+  bookings: CalendarBooking[];
   today: string;
+  calendarDays?: Date[];
   selectedId: string | null;
-  onSelect: (booking: Booking) => void;
+  onSelect: (booking: CalendarBooking) => void;
 }) {
-  const windowStart = midnight(calendarWindow[0]);
-  const days = calendarWindow.length;
+  const defaultWindow = React.useMemo(() => {
+    const start = new Date(today);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, [today]);
+
+  const window = calendarDays || defaultWindow;
+  const windowStart = midnight(window[0]);
+  const daysCount = window.length;
   const todayDate = midnight(today);
 
   return (
@@ -84,11 +93,11 @@ export function RoomCalendar({
         {/* Day headers */}
         <div
           className="grid border-b border-sand-200/80"
-          style={{ gridTemplateColumns: `100px 110px repeat(${days}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `100px 110px repeat(${daysCount}, minmax(0, 1fr))` }}
         >
           <div className="px-3 pb-2 text-xs font-medium text-sand-500">Room</div>
           <div className="px-3 pb-2 text-xs font-medium text-sand-500">Type</div>
-          {calendarWindow.map((day) => {
+          {window.map((day) => {
             const isToday = isSameDay(day, todayDate);
             return (
               <div
@@ -108,22 +117,22 @@ export function RoomCalendar({
         {rooms.map((room) => {
           const placements = bookings
             .filter((booking) => booking.room === room.room)
-            .map((booking) => place(booking, windowStart, days))
+            .map((booking) => place(booking, windowStart, daysCount))
             .filter((item): item is Placement => item !== null);
 
           return (
             <div
               key={room.room}
               className="grid items-center border-b border-sand-100 last:border-b-0"
-              style={{ gridTemplateColumns: `100px 110px repeat(${days}, minmax(0, 1fr))` }}
+              style={{ gridTemplateColumns: `100px 110px repeat(${daysCount}, minmax(0, 1fr))` }}
             >
               <div className="px-3 py-2 text-sm font-medium tabular-nums text-sand-900">
                 {room.room}
               </div>
               <div className="px-3 py-2 text-sm text-sand-600">{room.category}</div>
 
-              {/* The day cells sit underneath as the grid background. */}
-              {calendarWindow.map((day) => (
+              {/* Grid background */}
+              {window.map((day) => (
                 <div
                   key={day.toISOString()}
                   className={cn(
@@ -133,9 +142,13 @@ export function RoomCalendar({
                 />
               ))}
 
-              {/* Bars are placed into the same row, over the cells. */}
+              {/* Bars */}
               {placements.map((placement) => {
-                const meta = bookingStateMeta[placement.booking.state];
+                const meta = bookingStateMeta[placement.booking.state] ?? {
+                  label: placement.booking.state,
+                  bar: "bg-sage-100 border-sage-300 text-sage-900",
+                  chip: "border-sage-200 bg-sage-50 text-sage-800",
+                };
                 const isSelected = placement.booking.id === selectedId;
 
                 return (

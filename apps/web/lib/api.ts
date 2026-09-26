@@ -151,7 +151,8 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
   }
 
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const multipart = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   const guestRequest = guest || (path.startsWith("/guest/") && path !== "/guest/session");
   const token = guestRequest ? guestTokens.access() : tokens.access();
   if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
@@ -166,7 +167,7 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     response = await fetch(url.toString(), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? (body as FormData) : JSON.stringify(body),
       signal: effectiveSignal,
     });
   } catch (cause) {
@@ -221,6 +222,7 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
+  upload: <T>(path: string, body: FormData) => request<T>(path, { method: "POST", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   /** Unauthenticated — the room QR is the credential. */
   anonymous: <T>(path: string, body?: unknown) =>
@@ -327,13 +329,12 @@ export const property = {
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
-  /** Public property summary, safe for landing/orientation without staff credentials. */
-  public: (propertyId?: string) =>
+  /** Public summary for the landing page. */
+  publicSummary: (propertyId?: string) =>
     api.get<BackendPropertySummary>(
       "/property/public",
       propertyId ? { property_id: propertyId } : undefined
     ),
-  /** Room categories belonging to this property (calls public endpoint first, falls back to authenticated). */
   roomCategories: async (propertyId?: string): Promise<BackendRoomCategory[]> => {
     try {
       return await api.get<BackendRoomCategory[]>(
@@ -341,10 +342,9 @@ export const property = {
         propertyId ? { property_id: propertyId } : undefined
       );
     } catch {
-      return await api.get<BackendRoomCategory[]>("/property/room-categories");
+      return api.get<BackendRoomCategory[]>("/property/room-categories");
     }
   },
-  /** Occupancy count and percentage from backend. */
   occupancy: () =>
     api.get<{
       total_rooms: number;
@@ -353,6 +353,73 @@ export const property = {
       as_of: string;
     }>("/property/occupancy"),
   departments: () => api.get<DepartmentOut[]>("/property/departments"),
+  amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
+  public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
+  saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
+  uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
+  uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
+  updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
+    api.patch<RoomImage>(`/property/images/${imageId}`, data),
+};
+
+export interface RoomImage {
+  id: string;
+  url: string;
+  alt_text: string;
+  position: number;
+  is_primary: boolean;
+}
+
+export interface RoomCategory {
+  id: string;
+  key: string;
+  name: string;
+  base_rate: string;
+  max_occupancy: number;
+  amenities: string[];
+  images: RoomImage[];
+}
+
+export interface ResortAmenity {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  opening_hours: string | null;
+  is_available: boolean;
+  closure_reason: string | null;
+  closed_until: string | null;
+  available_now: boolean;
+}
+
+export type AmenityWrite = Omit<ResortAmenity, "id" | "available_now">;
+
+export interface GuestRoom {
+  id: string;
+  number: string;
+  floor: number;
+  category_name: string;
+  category_amenities: string[];
+  images: RoomImage[];
+}
+
+export interface PublicProperty {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string;
+  categories: Pick<RoomCategory, "key" | "name" | "amenities" | "images">[];
+  amenities: ResortAmenity[];
+}
+
+export const guestProperty = {
+  room: () => api.guestGet<GuestRoom>("/guest/room"),
+  amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
+};
+
+export const amenities = {
+  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
 export const rooms = {
@@ -362,14 +429,6 @@ export const rooms = {
   get: (id: string) => api.get<BackendRoom>(`/rooms/${id}`),
   setStatus: (id: string, status: string, note?: string) =>
     api.put<BackendRoom>(`/rooms/${id}/status`, { status, note }),
-};
-
-export const amenities = {
-  /**
-   * Persisted guest amenity catalogue.
-   * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
-   */
-  list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
 export interface GuestSession {

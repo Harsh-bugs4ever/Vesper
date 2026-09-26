@@ -17,6 +17,7 @@ from vesper_common.config import settings
 from vesper_common.errors import Conflict, Forbidden, Invalid, NotFound
 from vesper_common.events import Event, bus
 from vesper_common.security import create_guest_token
+from app.api.property.models import Property
 
 from .models import Guest, IssueReport, IssueStatus, MenuItem, QrScan, RequestKind, RequestStatus, ServiceRequest
 
@@ -81,7 +82,7 @@ def open_session(db: Session, scan, *, user_agent: str | None = None) -> dict:
         "token": token,
         "expires_in": settings.guest_token_minutes * 60,
         "room_number": room["number"],
-        "property_name": stay.get("property_name", "Vesper"),
+        "property_name": stay["property_name"],
         "guest_name": stay.get("guest_name"),
         "stay_id": stay["id"],
     }
@@ -103,13 +104,18 @@ def _record_scan(db: Session, room_id, stay_id, property_id, user_agent, *, acce
     db.commit()
 
 
-def assert_stay_open(stay_id: str, property_id: str) -> dict:
+def assert_stay_open(stay_id: str, property_id: str, *, room_id: str | None = None,
+                     guest_id: str | None = None) -> dict:
     """Re-checked on every guest write: a token outliving its stay must stop working."""
     stay = frontdesk.get(f"/stays/{stay_id}", property_id=property_id)
     if stay is None:
         raise Forbidden("Your session has ended")
     if stay.get("status") != "in_house":
         raise Forbidden("This stay has been checked out")
+    if (str(stay.get("property_id")) != str(property_id)
+            or (room_id is not None and str(stay.get("room_id")) != str(room_id))
+            or (guest_id is not None and str(stay.get("guest_id")) != str(guest_id))):
+        raise Forbidden("This session does not belong to the active stay")
     return stay
 
 
@@ -117,6 +123,9 @@ def assert_stay_open(stay_id: str, property_id: str) -> dict:
 
 
 def menu(db: Session, property_id: UUID) -> dict:
+    property_row = db.get(Property, property_id)
+    if property_row is None:
+        raise NotFound("Property not found")
     query = (
         select(MenuItem)
         .where(MenuItem.property_id == property_id, MenuItem.is_available.is_(True))
@@ -125,7 +134,7 @@ def menu(db: Session, property_id: UUID) -> dict:
     grouped: dict[str, list[MenuItem]] = {}
     for item in db.scalars(query):
         grouped.setdefault(item.category, []).append(item)
-    return {"currency": settings.currency, "categories": grouped}
+    return {"currency": property_row.currency, "categories": grouped}
 
 
 # --- requests ---------------------------------------------------------------------
@@ -454,6 +463,10 @@ def report_issue(
     department = _department(property_id, "maintenance")
     if department:
         department_id = UUID(department["id"])
+    if department_id is None:
+        raise Conflict("No maintenance department is configured")
+    from app.api.staff.reporting import _manager
+    manager_id = _manager(db, property_id, department_id)
 
     existing = _find_duplicate(db, property_id, data, room_number)
     if existing is not None:
@@ -469,6 +482,7 @@ def report_issue(
             room_number=room_number,
             asset_id=data.asset_id,
             department_id=department_id,
+            responsible_manager_id=manager_id,
             reported_by=reported_by,
             reported_by_guest=by_guest,
             summary=data.summary,
@@ -476,6 +490,7 @@ def report_issue(
             category=data.category,
             severity=data.severity,
             photo_url=data.photo_url,
+            evidence=[data.photo_url] if data.photo_url else [],
             status=IssueStatus.MERGED,
             merged_into_id=existing.id,
         )
@@ -490,6 +505,7 @@ def report_issue(
         room_number=room_number,
         asset_id=data.asset_id,
         department_id=department_id,
+        responsible_manager_id=manager_id,
         reported_by=reported_by,
         reported_by_guest=by_guest,
         summary=data.summary,
@@ -497,8 +513,25 @@ def report_issue(
         category=data.category,
         severity=data.severity,
         photo_url=data.photo_url,
+        evidence=[data.photo_url] if data.photo_url else [],
     )
     db.add(issue)
+    db.flush()
+    if issue.room_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderKind
+        order = WorkOrder(
+            property_id=property_id,
+            room_id=issue.room_id,
+            source_issue_id=issue.id,
+            department_id=department_id,
+            title=issue.summary,
+            description=issue.description,
+            kind=WorkOrderKind.CORRECTIVE,
+            priority="high" if issue.severity == "high" else "normal",
+        )
+        db.add(order)
+        db.flush()
+        issue.work_order_id = order.id
     db.commit()
     db.refresh(issue)
 
@@ -515,6 +548,7 @@ def report_issue(
             "asset_id": str(issue.asset_id) if issue.asset_id else None,
             "department_id": str(department_id) if department_id else None,
             "photo_url": issue.photo_url,
+            "work_order_id": str(issue.work_order_id) if issue.work_order_id else None,
             "priority": "urgent" if issue.severity == "high" else "normal",
         },
         property_id=str(property_id),
@@ -568,6 +602,23 @@ def set_issue_status(db: Session, property_id: UUID, issue_id: UUID, new_status:
     issue = db.scalars(query).first()
     if issue is None:
         raise NotFound("Issue not found")
+    allowed = {
+        IssueStatus.REPORTED: {IssueStatus.SCHEDULED},
+        IssueStatus.SCHEDULED: {IssueStatus.RESOLVED},
+    }
+    if new_status not in allowed.get(issue.status, set()):
+        raise Conflict("Invalid issue status transition")
+    if new_status == IssueStatus.SCHEDULED and issue.work_order_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderStatus
+        order = db.get(WorkOrder, issue.work_order_id)
+        if order is None or order.property_id != property_id or order.status != WorkOrderStatus.OPEN:
+            raise Conflict("Linked work order is unavailable for approval")
+        order.status = WorkOrderStatus.SCHEDULED
+    if new_status == IssueStatus.RESOLVED and issue.work_order_id:
+        from app.api.maintenance.models import WorkOrder, WorkOrderStatus
+        order = db.get(WorkOrder, issue.work_order_id)
+        if order is None or order.status != WorkOrderStatus.COMPLETED:
+            raise Conflict("Complete the linked work order first")
     issue.status = new_status
     if new_status == IssueStatus.RESOLVED:
         issue.resolved_at = utcnow()

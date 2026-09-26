@@ -294,6 +294,10 @@ def _seed(db) -> dict[str, int]:
             staff_grants |= {"rooms:status_write", "requests:read", "requests:accept"}
         if department in {"fnb", "front_office"}:
             staff_grants |= {"requests:read", "requests:accept"}
+        if department == "front_office":
+            staff_grants |= {"bookings:read", "bookings:write", "guests:read"}
+        if department in {"housekeeping", "maintenance", "fnb", "front_office"}:
+            staff_grants.add("tasks:pool_read")
         if department == "store":
             staff_grants |= {"stock:read"}
         row = ident.User(
@@ -657,6 +661,15 @@ def _seed(db) -> dict[str, int]:
     counts["knowledge_passages"] = len(KNOWLEDGE)
 
     db.commit()
+
+    # --- food & beverage order book and guest spend history -----------------------
+    try:
+        from seed_fnb import seed_fnb_data
+    except ImportError:
+        from scripts.seed_fnb import seed_fnb_data
+    fnb_counts = seed_fnb_data(db)
+    counts.update(fnb_counts)
+
     return counts
 
 
