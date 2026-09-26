@@ -125,6 +125,38 @@ def test_every_demo_staff_member_gets_one_scoped_assigned_task(monkeypatch):
         assert task.title and task.description and task.due_at
 
 
+def test_standalone_staff_seeder_commits_assignments(monkeypatch, capsys):
+    _app_model_aliases(monkeypatch)
+    from scripts import seed_staff_tasks as assignments_module
+
+    property_id = uuid4()
+    calls = []
+
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def scalars(self, statement):
+            return [property_id]
+
+        def commit(self):
+            calls.append("commit")
+
+    monkeypatch.setattr(assignments_module, "import_all_models", lambda root: None)
+    monkeypatch.setattr(assignments_module, "session_scope", Session)
+    monkeypatch.setattr(assignments_module, "seed_staff_tasks",
+                        lambda db, pid: calls.append(pid) or
+                        {"staff_accounts": 184, "tasks_added": 184, "already_present": 0})
+    monkeypatch.setattr(assignments_module.sys, "argv", ["seed_staff_tasks.py"])
+
+    assert assignments_module.main() == 0
+    assert calls == [property_id, "commit"]
+    assert "tasks_added       184" in capsys.readouterr().out
+
+
 def test_existing_demo_enrichment_is_repeatable(monkeypatch):
     _app_model_aliases(monkeypatch)
     today = utcnow().astimezone(property_tz()).date()

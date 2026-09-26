@@ -1,12 +1,23 @@
-"""Assign one repeatable, department-scoped work item to every demo staff account."""
+"""Assign one repeatable, department-scoped work item to every demo staff account.
+
+Run ``python scripts/seed_staff_tasks.py`` after the base demo exists. The command
+writes tasks and commits them; rerunning it skips the same assignments.
+"""
 from __future__ import annotations
 
+import argparse
+import sys
 from datetime import timedelta
+from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
 
 from sqlalchemy import select
 
 from vesper_common.clock import utcnow
+from vesper_common.db import import_all_models, session_scope
 
 
 def staff_assignment_id(property_id: UUID, user_id: UUID) -> UUID:
@@ -92,3 +103,37 @@ def seed_staff_tasks(db, property_id: UUID) -> dict[str, int]:
         ))
         counts["tasks_added"] += 1
     return counts
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Assign demo tasks to every staff account")
+    parser.add_argument("--property-id", type=UUID,
+                        help="Demo property UUID, needed only if multiple demo properties exist")
+    args = parser.parse_args()
+
+    import_all_models(str(REPO_ROOT / "app" / "api"))
+    import vesper_models.property as prop
+
+    with session_scope() as db:
+        property_id = args.property_id
+        if property_id is None:
+            matches = list(db.scalars(select(prop.Property.id).where(
+                prop.Property.name == "JW Marriott Mumbai, Juhu")))
+            if len(matches) != 1:
+                parser.error("Expected one demo resort. Run python scripts/seed.py first "
+                             "or pass --property-id to choose one.")
+            property_id = matches[0]
+        try:
+            counts = seed_staff_tasks(db, property_id)
+        except ValueError as exc:
+            parser.error(str(exc))
+        db.commit()
+
+    print(f"Staff tasks saved for property {property_id}:")
+    for label, count in counts.items():
+        print(f"  {label:<17} {count}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

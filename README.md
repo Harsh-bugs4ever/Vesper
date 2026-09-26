@@ -343,6 +343,8 @@ and workflow examples, and recovers the food-order seed if an earlier run stoppe
 before creating any orders. It also repairs old placeholder room references when exactly
 one historical booking matches; ambiguous rows are reported and left as they are.
 It does not duplicate the base resort or delete data.
+To add only the missing assigned staff tasks to an existing demo, run
+`python scripts/seed_staff_tasks.py`. It writes and commits the tasks directly.
 `--reset --confirm-reset` is destructive and only for a
 disposable database.
 
