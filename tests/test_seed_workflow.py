@@ -7,6 +7,7 @@ from decimal import Decimal
 from contextlib import nullcontext
 from importlib import import_module
 import sys
+import types
 
 import pytest
 
@@ -109,6 +110,22 @@ def test_scenario_ids_are_stable_and_property_scoped():
     property_id = uuid4()
     assert scenario_id(property_id, "guest:housekeeping") == scenario_id(property_id, "guest:housekeeping")
     assert scenario_id(property_id, "guest:housekeeping") != scenario_id(uuid4(), "guest:housekeeping")
+
+
+def test_workflow_reuses_models_loaded_by_base_seed(monkeypatch):
+    package = types.ModuleType("vesper_models")
+    package.__path__ = []
+    monkeypatch.setitem(sys.modules, "vesper_models", package)
+    for name in ("action", "frontdesk", "guest", "guest_intel", "identity",
+                 "inventory", "maintenance", "property", "staff", "workforce"):
+        module = import_module(f"app.api.{name}.models")
+        monkeypatch.setitem(sys.modules, f"vesper_models.{name}", module)
+        setattr(package, name, module)
+
+    db = FakeSession()
+    result = seed_workflow(db, db.property_id)
+    assert result["would_create"] >= 35
+    assert db.rows == {}
 
 
 def test_list_properties_explains_empty_database(monkeypatch, capsys):

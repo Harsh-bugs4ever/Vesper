@@ -23,8 +23,8 @@ UNION ALL SELECT 'guest_intel.knowledge_passages', count(*) FROM guest_intel.kno
 UNION ALL SELECT 'action.action_cards',            count(*) FROM action.action_cards
 ORDER BY 1;
 
--- 2. Seeded twice by mistake? `seed.py` without --reset appends a whole second resort.
---    properties must be 1, and each pair below must match.
+-- 2. Did the seed accidentally duplicate base data? A normal rerun is additive only
+--    for missing workflow rows; properties must be 1 and each pair should match.
 SELECT (SELECT count(*) FROM property.properties)            AS properties,
        (SELECT count(*) FROM identity.users)                 AS users,
        (SELECT count(DISTINCT email) FROM identity.users)    AS distinct_emails,

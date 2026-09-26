@@ -7,10 +7,11 @@ to have something real to fit.
 Everything here is fabricated. No real guest, booking, employee or revenue figure
 appears in this repository.
 
-Run: python scripts/seed.py [--reset]
+Run: python scripts/seed.py [--reset --confirm-reset]
+An ordinary rerun adds any missing connected workflow examples to the existing demo.
 To add future reservations to an existing property, use scripts/seed_reservations.py.
 
-The seed refuses to append a second copy of this resort. --reset remains an explicit
+The seed never appends a second copy of this resort. --reset remains an explicit
 destructive demo-only operation.
 """
 from __future__ import annotations
@@ -27,6 +28,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages" / "py-common"))
+sys.path.insert(0, str(REPO_ROOT))
 
 from sqlalchemy import inspect, select, text  # noqa: E402
 
@@ -126,6 +128,7 @@ STOCK = [
     ("FD-RICE", "Basmati Rice", "food", "kg", 180, 80, 200, 145, "Grain House", 3),
     ("FD-BUTTER", "Butter", "food", "kg", 22, 15, 40, 540, "Aarey Dairy", 2),
     ("FD-FISH", "Kingfish", "food", "kg", 16, 10, 25, 680, "Versova Fisheries", 1),
+    ("FD-LIME", "Fresh Limes", "food", "kg", 18, 8, 25, 95, "Juhu Produce", 2),
     ("BV-COFFEE", "Coffee Beans", "beverage", "kg", 14, 8, 25, 1250, "Coorg Roasters", 4),
     ("BV-TEA", "Tea Leaves", "beverage", "kg", 9, 6, 20, 890, "Assam Direct", 4),
     ("LN-TOWEL", "Bath Towels", "linen", "piece", 620, 400, 500, 340, "Linen Mills", 7),
@@ -195,20 +198,32 @@ def _demo_reference(index: int) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed the Vesper demo resort")
-    parser.add_argument("--reset", action="store_true", help="Drop and recreate everything first")
+    parser.add_argument("--reset", action="store_true", help="DANGEROUS: drop and recreate all Vesper schemas")
+    parser.add_argument("--confirm-reset", action="store_true",
+                        help="Confirm the destructive --reset operation on a disposable database")
     args = parser.parse_args()
+    if args.reset != args.confirm_reset:
+        parser.error("--reset drops every Vesper schema; use --reset --confirm-reset "
+                     "only on a disposable database")
 
     engine = get_engine()
     import_all_models(str(REPO_ROOT / "app" / "api"))
 
-    # Refuse a normal rerun before create_all can change an existing database.
+    # An existing demo gets only the idempotent workflow pack; never duplicate its
+    # rooms, people, bookings or food order history.
     if not args.reset and inspect(engine).has_table("properties", schema="property"):
         import vesper_models.property as prop
         with session_scope() as existing:
-            if existing.scalar(select(prop.Property.id).where(
+            existing_id = existing.scalar(select(prop.Property.id).where(
                 prop.Property.name == "JW Marriott Mumbai, Juhu"
-            ).limit(1)) is not None:
-                raise SystemExit("Demo resort already exists; use --reset only on a disposable demo database")
+            ).limit(1))
+        if existing_id is not None:
+            from scripts.seed_workflow import seed_workflow
+            with session_scope() as db:
+                result = seed_workflow(db, existing_id, apply=True)
+            print(f"Demo resort already exists. Added {result['created']} missing workflow rows; "
+                  f"{result['already_present']} already present. No base data was reset.")
+            return 0
 
     if args.reset:
         with engine.begin() as connection:
@@ -428,19 +443,20 @@ def _seed(db) -> dict[str, int]:
         shifts[key] = shift
     db.flush()
 
-    # A few actual attendance rows drive the scoped team and self summaries. The
-    # performance API computes its metrics from these records; no score is seeded.
+    # Every demo staff account has recent attendance for its own dashboard. The
+    # performance API computes metrics from these records; no score is seeded.
     attendance_count = 0
     now = utcnow()
     local_tz = property_tz()
     for department in departments.values():
-        sample = [u for u in users if u.role_id == roles["staff"].id
-                  and u.department_id == department.id][:3]
-        for member in sample:
+        members = [u for u in users if u.role_id == roles["staff"].id
+                   and u.department_id == department.id]
+        for member in members:
             for days_ago in range(5, -1, -1):
                 work_day = today - timedelta(days=days_ago)
                 local_start = datetime.combine(work_day, time(7, 0), tzinfo=local_tz)
-                checked_in = (local_start + timedelta(minutes=5)).astimezone(timezone.utc)
+                minutes_after_start = random.randint(2, 35)
+                checked_in = (local_start + timedelta(minutes=minutes_after_start)).astimezone(timezone.utc)
                 if checked_in > now:
                     continue
                 completed_at = checked_in + timedelta(hours=8)
@@ -451,6 +467,8 @@ def _seed(db) -> dict[str, int]:
                     work_date=datetime.combine(work_day, time.min),
                     checked_in_at=checked_in, checked_out_at=checked_out,
                     method=staff.AttendanceMethod.MANUAL,
+                    is_late=minutes_after_start > shifts["morning"].grace_minutes,
+                    late_by_minutes=max(0, minutes_after_start - shifts["morning"].grace_minutes),
                     worked_minutes=480 if checked_out else 0,
                 ))
                 attendance_count += 1
@@ -499,12 +517,15 @@ def _seed(db) -> dict[str, int]:
         "Gulab Jamun": {"FD-BUTTER": 0.02},
         "Tiramisu": {"BV-COFFEE": 0.01, "FD-BUTTER": 0.03},
         "Masala Chai": {"BV-TEA": 0.01},
-        "Fresh Lime Soda": {},  # nothing tracked in the store
+        "Fresh Lime Soda": {"FD-LIME": 0.08},
         "Cold Coffee": {"BV-COFFEE": 0.02},
     }
-    missing = [name for _, name, *_ in MENU if name not in recipes]
+    missing = [name for _, name, *_ in MENU if not recipes.get(name)]
     if missing:
-        raise SystemExit(f"menu items without a recipe entry: {missing}")
+        raise SystemExit(f"menu items without a stocked recipe: {missing}")
+    unknown_stock = {sku for recipe in recipes.values() for sku in recipe} - stock_items.keys()
+    if unknown_stock:
+        raise SystemExit(f"menu recipes reference missing stock: {sorted(unknown_stock)}")
 
     menu_count = 0
     for category, name, price, is_veg, prep, description in MENU:
@@ -801,6 +822,12 @@ def _seed(db) -> dict[str, int]:
         from scripts.seed_fnb import seed_fnb_data
     fnb_counts = seed_fnb_data(db, property_id=pid)
     counts.update(fnb_counts)
+
+    # Finish the single-command demo with linked guest, staff and manager stories.
+    # Their stable IDs make the ordinary rerun safe after an interrupted first run.
+    from scripts.seed_workflow import seed_workflow
+    workflow_result = seed_workflow(db, pid, apply=True)
+    counts["workflow_rows"] = workflow_result["created"]
 
     return counts
 

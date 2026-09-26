@@ -10,6 +10,7 @@ deletion is performed. Rows have stable IDs, so a second run reports them as exi
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
 from datetime import timedelta
 from decimal import Decimal
@@ -32,16 +33,23 @@ def scenario_id(property_id: UUID, key: str) -> UUID:
 
 def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, object]:
     """Plan or add connected scenarios. Only the original synthetic property qualifies."""
-    from app.api.action import models as action
-    from app.api.frontdesk import models as frontdesk
-    from app.api.guest import models as guest
-    from app.api.guest_intel import models as guest_intel
-    from app.api.identity import models as identity
-    from app.api.inventory import models as inventory
-    from app.api.maintenance import models as maintenance
-    from app.api.property import models as prop
-    from app.api.staff import models as staff
-    from app.api.workforce import models as workforce
+    # seed.py loads models under vesper_models to avoid starting the FastAPI app.
+    # Reimporting them as app.api.* would register every table twice in one MetaData.
+    prefix = "vesper_models" if "vesper_models.property" in sys.modules else "app.api"
+    models = {name: importlib.import_module(
+        f"{prefix}.{name}" if prefix == "vesper_models" else f"{prefix}.{name}.models"
+    ) for name in ("action", "frontdesk", "guest", "guest_intel", "identity",
+                   "inventory", "maintenance", "property", "staff", "workforce")}
+    action = models["action"]
+    frontdesk = models["frontdesk"]
+    guest = models["guest"]
+    guest_intel = models["guest_intel"]
+    identity = models["identity"]
+    inventory = models["inventory"]
+    maintenance = models["maintenance"]
+    prop = models["property"]
+    staff = models["staff"]
+    workforce = models["workforce"]
 
     resort = db.get(prop.Property, property_id)
     if resort is None:
@@ -185,10 +193,12 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=25))
     add(staff.Task, "task:fnb-pool", department_id=dept["fnb"].id,
         room_id=stays[1].room_id, title=f"Refresh minibar in room {stays[1].room_number}",
+        description="Check the minibar inventory and replace consumed items.",
         status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.NORMAL,
         source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=50))
     add(staff.Task, "task:fnb-active", department_id=dept["fnb"].id,
         assignee_id=users["fnb1@vesper.demo"].id, title="Prepare afternoon service station",
+        description="Set up clean serviceware and confirm supplies for the afternoon shift.",
         status=staff.TaskStatus.IN_PROGRESS, priority=staff.TaskPriority.NORMAL,
         source=staff.TaskSource.MANUAL, accepted_at=now - timedelta(minutes=10),
         due_at=now + timedelta(minutes=40))
@@ -202,6 +212,7 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         source=staff.TaskSource.MANUAL, due_at=now + timedelta(minutes=90))
     add(staff.Task, "task:store-assigned", department_id=dept["store"].id,
         assignee_id=users["store@vesper.demo"].id, title="Count linen shelf stock",
+        description="Count towels and sheets, then report any discrepancy to the store lead.",
         status=staff.TaskStatus.ASSIGNED, priority=staff.TaskPriority.NORMAL,
         source=staff.TaskSource.MANUAL, due_at=now + timedelta(hours=2))
 

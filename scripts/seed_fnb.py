@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import random
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -37,8 +37,8 @@ SAMPLE_NOTES = [
     "Please deliver around 8:30 AM sharply",
     "Gluten free if possible",
     "Extra ice with beverages",
-    "",
-    "",
+    "Please include cutlery for two",
+    "Please call the room before delivery",
 ]
 
 POSITIVE_RATINGS = [
@@ -65,6 +65,7 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
     import vesper_models.guest as guest
     import vesper_models.identity as ident
     import vesper_models.property as prop
+    import vesper_models.staff as staff
 
     property_row = db.get(prop.Property, property_id) if property_id else db.scalars(select(prop.Property)).first()
     if not property_row:
@@ -79,13 +80,17 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
         )
     ).first()
 
-    dept_id = fnb_dept.id if fnb_dept else None
+    if fnb_dept is None:
+        raise SystemExit("F&B department missing. Please run main seed first.")
+    dept_id = fnb_dept.id
 
     # Get F&B staff / chef user for accepted_by
     chef_user = db.scalars(
         select(ident.User).where(ident.User.property_id == pid, ident.User.email == "chef@vesper.demo")
     ).first()
-    chef_id = chef_user.id if chef_user else None
+    if chef_user is None:
+        raise SystemExit("Demo F&B manager missing. Please run main seed first.")
+    chef_id = chef_user.id
 
     # Get available Menu items
     menu_items = list(
@@ -101,7 +106,8 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
 
     now = utcnow()
     today = now.astimezone(property_tz()).date()
-    counts = {"fnb_orders_total": 0, "fnb_orders_active": 0, "fnb_guest_visits": 0}
+    counts = {"fnb_orders_total": 0, "fnb_orders_active": 0,
+              "fnb_tasks": 0, "fnb_historical_stays": 0, "fnb_guest_visits": 0}
 
     # 1. Active Stays (In-House) Orders
     in_house_stays = list(
@@ -125,7 +131,7 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
         ("in_progress", 32, False, "Call when at door"),
         ("delivered", 45, False, "Leave at door"),
         ("delivered", 75, False, "Extra ice with beverages"),
-        ("delivered", 110, False, ""),
+        ("delivered", 110, False, "Please ring the bell on arrival"),
         ("raised", 55, True, "Urgent breakfast order"),  # Overdue (SLA 40m, raised 55m ago)
         ("accepted", 65, True, "Cold drinks & ice"),     # Overdue
     ]
@@ -157,6 +163,7 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
         delivered_at = created_time + timedelta(minutes=random.randint(20, 35)) if status == "delivered" else None
 
         request = guest.ServiceRequest(
+            id=uuid4(),
             property_id=pid,
             stay_id=stay.id,
             room_id=stay.room_id,
@@ -188,25 +195,51 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
                 fd.GuestVisit(
                     property_id=pid,
                     guest_id=stay.guest_id,
+                    stay_id=stay.id,
                     kind=fd.VisitKind.ROOM_SERVICE,
                     occurred_on=today,
                     amount=total_amount,
+                    outlet="In-room dining",
+                    meta={"request_id": str(request.id)},
                 )
             )
             counts["fnb_guest_visits"] += 1
 
         db.add(request)
+        task_status = {
+            "raised": staff.TaskStatus.OPEN,
+            "accepted": staff.TaskStatus.ASSIGNED,
+            "in_progress": staff.TaskStatus.IN_PROGRESS,
+            "delivered": staff.TaskStatus.DONE,
+        }[status]
+        db.add(staff.Task(
+            property_id=pid, department_id=dept_id,
+            assignee_id=chef_id if accepted_at else None, room_id=stay.room_id,
+            title=f"Room service order — Room {stay.room_number}",
+            description=note, status=task_status, priority=staff.TaskPriority.HIGH,
+            source=staff.TaskSource.GUEST_REQUEST, source_ref=request.id,
+            due_at=due_time, accepted_at=accepted_at,
+            completed_at=delivered_at, completed_by=chef_id if delivered_at else None,
+            meta={"kind": "room_service", "items": lines},
+        ))
         counts["fnb_orders_total"] += 1
         counts["fnb_orders_active"] += 1
+        counts["fnb_tasks"] += 1
+
+    # Historical orders need actual stays and rooms, not placeholder UUIDs.
+    rooms_by_category: dict[UUID, list] = {}
+    for room in db.scalars(select(prop.Room).where(prop.Room.property_id == pid)):
+        rooms_by_category.setdefault(room.category_id, []).append(room)
 
     # 2. Historical Past Room-Service Orders (Past 30 days)
-    # Query past checked-out bookings / visits
     past_bookings = list(
         db.scalars(
             select(fd.Booking).where(
                 fd.Booking.property_id == pid,
                 fd.Booking.status == fd.BookingStatus.CHECKED_OUT,
-            ).limit(120)
+                fd.Booking.check_in_date >= today - timedelta(days=30),
+                fd.Booking.check_out_date <= today,
+            ).order_by(fd.Booking.check_in_date.desc()).limit(120)
         )
     )
 
@@ -214,11 +247,25 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
         if random.random() > 0.4:  # 40% of past bookings had room service
             continue
 
-        days_back = (today - booking.check_in_date).days
-        if days_back <= 0:
-            days_back = random.randint(1, 30)
-
-        created_time = now - timedelta(days=days_back, hours=random.randint(7, 22))
+        matching_rooms = rooms_by_category.get(booking.room_category_id, [])
+        if not matching_rooms:
+            raise RuntimeError(f"No room matches booking category {booking.room_category_id}")
+        room = random.choice(matching_rooms)
+        checked_in = datetime.combine(booking.check_in_date, time(14),
+                                      tzinfo=property_tz()).astimezone(timezone.utc)
+        checked_out = datetime.combine(booking.check_out_date, time(11),
+                                       tzinfo=property_tz()).astimezone(timezone.utc)
+        created_time = checked_in + timedelta(hours=random.randint(1, 4))
+        historical_stay = fd.Stay(
+            id=uuid4(), property_id=pid, booking_id=booking.id,
+            guest_id=booking.guest_id, room_id=room.id, room_number=room.number,
+            checked_in_at=checked_in, checked_out_at=checked_out,
+            status=fd.StayStatus.CHECKED_OUT, folio_total=booking.total_amount,
+            notes="Completed demo stay with room service",
+        )
+        booking.room_id = room.id
+        db.add(historical_stay)
+        counts["fnb_historical_stays"] += 1
         sla = 40
         due_time = created_time + timedelta(minutes=sla)
 
@@ -244,10 +291,11 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
         delivered_at = created_time + timedelta(minutes=random.randint(18, 38)) if status == "delivered" else None
 
         request = guest.ServiceRequest(
+            id=uuid4(),
             property_id=pid,
-            stay_id=uuid4(),  # Historical reference
-            room_id=booking.room_category_id,
-            room_number=f"Room-{random.randint(201, 1230)}",
+            stay_id=historical_stay.id,
+            room_id=room.id,
+            room_number=room.number,
             guest_id=booking.guest_id,
             department_id=dept_id,
             kind="room_service",
@@ -274,9 +322,12 @@ def seed_fnb_data(db, *, property_id: UUID | None = None) -> dict[str, int]:
                 fd.GuestVisit(
                     property_id=pid,
                     guest_id=booking.guest_id,
+                    stay_id=historical_stay.id,
                     kind=fd.VisitKind.ROOM_SERVICE,
                     occurred_on=booking.check_in_date,
                     amount=total_amount,
+                    outlet="In-room dining",
+                    meta={"request_id": str(request.id)},
                 )
             )
             counts["fnb_guest_visits"] += 1

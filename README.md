@@ -331,11 +331,18 @@ git clone <repo-url> && cd Vesper
 cp .env.example .env
 docker compose up --build        # redis, the backend, the web app
 make migrate                     # bring the database to head
-make seed                        # the demo resort: 355 rooms, ~180 staff, a year of bookings
+make seed                        # rooms, staff, bookings, orders and connected workflows
 ```
 
-To add the connected guest, staff and manager walkthrough to that synthetic resort,
-find its ID and preview the changes before applying them:
+`python scripts/seed.py` is the single command for the complete demo. It creates
+rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
+staff tasks, requisitions, guest requests, issue reports and manager scenarios.
+Running it again adds any missing workflow examples without duplicating the base
+resort or deleting data. `--reset --confirm-reset` is destructive and only for a
+disposable database.
+
+To preview the connected workflow rows for an existing demo before applying them,
+use the optional workflow command:
 
 ```bash
 python scripts/seed_workflow.py --list-properties
@@ -343,7 +350,7 @@ python scripts/seed_workflow.py --property-id YOUR-PROPERTY-UUID
 python scripts/seed_workflow.py --property-id YOUR-PROPERTY-UUID --apply
 ```
 
-The add-on is repeatable and does not delete existing data. See
+The workflow pack is repeatable and does not delete existing data. See
 [the workflow review and walkthrough](docs/workflow-review-and-demo.md).
 
 Or the backend on the host, with reload, against Postgres and Redis in Docker:
