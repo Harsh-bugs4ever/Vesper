@@ -7,13 +7,9 @@ from sqlalchemy.orm import Session
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from vesper_common.db import get_session
-<<<<<<< Updated upstream
 from vesper_common.permissions import Perm, Role
 from fastapi import HTTPException
-=======
 from vesper_common.errors import Invalid
-from vesper_common.permissions import Perm
->>>>>>> Stashed changes
 from vesper_common.security import Principal, current_user, requires
 
 from . import service

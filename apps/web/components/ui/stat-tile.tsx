@@ -6,7 +6,6 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { chartColors } from "@/lib/chart-theme";
 import { cn } from "@/lib/utils";
 
-<<<<<<< Updated upstream
 export type StatTone =
   | "sage"
   | "sand"
@@ -17,10 +16,6 @@ export type StatTone =
   | "amber"
   | "blue"
   | "purple";
-
-=======
-export type StatTone = "sage" | "sand" | "forest" | "rose" | "emerald" | "purple" | "gold" | "amber" | "blue";
->>>>>>> Stashed changes
 
 const tones: Record<StatTone, { chip: string; line: string }> = {
   sage: { chip: "bg-sage-50 text-sage-700", line: chartColors.forest },

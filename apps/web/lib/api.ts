@@ -319,18 +319,28 @@ export interface GuestAmenity {
   image_url?: string | null;
 }
 
+function getPublicProperty(propertyId: string): Promise<PublicProperty>;
+function getPublicProperty(propertyId?: undefined): Promise<BackendPropertySummary>;
+function getPublicProperty(propertyId?: string): Promise<BackendPropertySummary | PublicProperty>;
+function getPublicProperty(propertyId?: string): Promise<BackendPropertySummary | PublicProperty> {
+  return propertyId
+    ? request<PublicProperty>(`/property/public/${propertyId}`, { anonymous: true })
+    : request<BackendPropertySummary>("/property/public", { anonymous: true });
+}
+
 export const property = {
   /** The signed-in user's own property. */
   current: () => api.get<BackendProperty>("/property"),
   /** Every property this deployment serves. */
   list: () => api.get<BackendPropertySummary[]>("/property/list"),
-<<<<<<< Updated upstream
-  /** Public property summary, safe for landing/orientation without staff credentials. */
-  public: (propertyId?: string) =>
-    api.get<BackendPropertySummary>(
-      "/property/public",
-      propertyId ? { property_id: propertyId } : undefined
-    ),
+  /** Public summary, or full public content when a property ID is supplied. */
+  public: getPublicProperty,
+  amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
+  saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
+  uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
+  uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
+  updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
+    api.patch<RoomImage>(`/property/images/${imageId}`, data),
   /** Room categories belonging to this property (calls public endpoint first, falls back to authenticated). */
   roomCategories: async (propertyId?: string): Promise<BackendRoomCategory[]> => {
     try {
@@ -367,14 +377,6 @@ export const amenities = {
    * If backend endpoint is absent or returns 404, callers display explicit unavailable state.
    */
   list: () => api.get<GuestAmenity[]>("/guest/amenities"),
-=======
-  amenities: () => api.get<ResortAmenity[]>("/property/amenities"),
-  public: (id: string) => request<PublicProperty>(`/property/public/${id}`, { anonymous: true }),
-  saveAmenity: (amenity: AmenityWrite) => api.put<ResortAmenity>(`/property/amenities/${amenity.key}`, amenity),
-  uploadRoomImage: (roomId: string, body: FormData) => api.upload<RoomImage>(`/rooms/${roomId}/images`, body),
-  uploadCategoryImage: (categoryId: string, body: FormData) => api.upload<RoomImage>(`/property/room-categories/${categoryId}/images`, body),
-  updateImage: (imageId: string, data: Pick<RoomImage, "alt_text" | "position" | "is_primary">) =>
-    api.patch<RoomImage>(`/property/images/${imageId}`, data),
 };
 
 export interface RoomImage {
@@ -431,7 +433,6 @@ export interface PublicProperty {
 export const guestProperty = {
   room: () => api.guestGet<GuestRoom>("/guest/room"),
   amenities: () => api.guestGet<ResortAmenity[]>("/guest/amenities"),
->>>>>>> Stashed changes
 };
 
 export interface GuestSession {
