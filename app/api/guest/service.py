@@ -20,7 +20,7 @@ from vesper_common.events import Event, bus
 from vesper_common.security import create_guest_token
 from app.api.frontdesk.models import Stay
 from app.api.inventory.models import StockItem
-from app.api.property.models import Property, Room
+from app.api.property.models import Property, Room, RoomCategory
 
 from .models import Guest, IssueReport, IssueStatus, MenuItem, QrScan, RequestKind, RequestStatus, ServiceRequest
 
@@ -790,32 +790,27 @@ def _department(property_id: UUID, key: str) -> dict | None:
 
 def list_active_checked_in_rooms(db: Session) -> list[dict]:
     """Return real checked-in rooms with valid QR access secrets for guest testing/cards."""
-    stays = list(
-        db.scalars(
-            select(Stay)
-            .where(Stay.status == "in_house")
-            .order_by(Stay.checked_in_at.desc())
-        )
-    )
-    results: list[dict] = []
-    for stay in stays:
-        room = db.get(Room, stay.room_id)
-        if not room:
-            continue
-        guest = db.get(Guest, stay.guest_id) if stay.guest_id else None
-        prop = db.get(Property, stay.property_id)
-        results.append(
-            {
-                "property_id": str(stay.property_id),
-                "property_name": prop.name if prop else "Vesper Luxury Resort",
-                "room_id": str(stay.room_id),
-                "room_number": stay.room_number,
-                "qr_secret": room.qr_secret,
-                "guest_name": guest.full_name if guest else "In-Room Guest",
-                "stay_id": str(stay.id),
-                "category": room.category.name if room.category else "Standard Room",
-                "floor": room.floor,
-            }
-        )
-    return results
+    rows = db.execute(
+        select(Stay, Room, Guest, Property, RoomCategory)
+        .join(Room, Room.id == Stay.room_id)
+        .outerjoin(Guest, Guest.id == Stay.guest_id)
+        .join(Property, Property.id == Stay.property_id)
+        .join(RoomCategory, RoomCategory.id == Room.category_id)
+        .where(Stay.status == "in_house")
+        .order_by(Stay.checked_in_at.desc())
+    ).all()
+    return [
+        {
+            "property_id": str(stay.property_id),
+            "property_name": prop.name,
+            "room_id": str(stay.room_id),
+            "room_number": stay.room_number,
+            "qr_secret": room.qr_secret,
+            "guest_name": guest.full_name if guest else "In-Room Guest",
+            "stay_id": str(stay.id),
+            "category": category.name,
+            "floor": room.floor,
+        }
+        for stay, room, guest, prop, category in rows
+    ]
 

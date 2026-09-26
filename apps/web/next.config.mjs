@@ -12,7 +12,7 @@ const nextConfig = {
   async rewrites() {
     return [{
       source: "/backend/:path*",
-      destination: `${process.env.API_PROXY_TARGET || (process.env.NODE_ENV === "production" ? "http://backend:8000" : "http://127.0.0.1:8000")}/:path*`,
+      destination: `${process.env.API_PROXY_TARGET || "http://127.0.0.1:8000"}/:path*`,
     }];
   },
   // Running `next build` while the dev server is open must not replace its chunks.
