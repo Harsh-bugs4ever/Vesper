@@ -24,6 +24,30 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "cache.marriott.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.marriott.com",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "api.blessingsonthenet.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.gstatic.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

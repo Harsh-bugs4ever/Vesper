@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { amenities as amenitiesApi, type GuestAmenity } from "@/lib/api";
+import { getAmenityImage } from "@/lib/marriott-images";
 
 interface GuestAmenitiesSectionProps {
   className?: string;
@@ -199,28 +200,20 @@ export function GuestAmenitiesSection({
                   amenity.is_available ? "border-sand-200" : "border-rose-200 bg-rose-50/20"
                 }`}
               >
-                {/* Image or Neutral Placeholder */}
+                {/* Facility Image */}
                 <div className="relative h-48 w-full bg-sand-100 overflow-hidden">
-                  {amenity.image_url ? (
-                    <Image
-                      src={amenity.image_url}
-                      alt={`${amenity.name} facility`}
-                      fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-full w-full flex-col items-center justify-center bg-sand-100 p-4 text-center text-sand-500"
-                      role="img"
-                      aria-label={`Neutral placeholder for ${amenity.name}`}
-                    >
-                      <ImageOff className="h-8 w-8 text-sand-400" aria-hidden="true" />
-                      <span className="mt-2 text-[11px] font-medium text-sand-600">
-                        Facility photo pending
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const imgSrc = amenity.image_url || getAmenityImage(amenity.name, amenity.category);
+                    return (
+                      <Image
+                        src={imgSrc}
+                        alt={`${amenity.name} facility at JW Marriott Mumbai Juhu`}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-500 hover:scale-105"
+                      />
+                    );
+                  })()}
 
                   {/* Status badge: Open vs Closed */}
                   <span
