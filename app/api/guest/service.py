@@ -17,6 +17,7 @@ from vesper_common.config import settings
 from vesper_common.errors import Conflict, Forbidden, Invalid, NotFound
 from vesper_common.events import Event, bus
 from vesper_common.security import create_guest_token
+from app.api.property.models import Property
 
 from .models import Guest, IssueReport, IssueStatus, MenuItem, QrScan, RequestKind, RequestStatus, ServiceRequest
 
@@ -81,7 +82,7 @@ def open_session(db: Session, scan, *, user_agent: str | None = None) -> dict:
         "token": token,
         "expires_in": settings.guest_token_minutes * 60,
         "room_number": room["number"],
-        "property_name": stay.get("property_name", "Vesper"),
+        "property_name": stay["property_name"],
         "guest_name": stay.get("guest_name"),
         "stay_id": stay["id"],
     }
@@ -103,13 +104,18 @@ def _record_scan(db: Session, room_id, stay_id, property_id, user_agent, *, acce
     db.commit()
 
 
-def assert_stay_open(stay_id: str, property_id: str) -> dict:
+def assert_stay_open(stay_id: str, property_id: str, *, room_id: str | None = None,
+                     guest_id: str | None = None) -> dict:
     """Re-checked on every guest write: a token outliving its stay must stop working."""
     stay = frontdesk.get(f"/stays/{stay_id}", property_id=property_id)
     if stay is None:
         raise Forbidden("Your session has ended")
     if stay.get("status") != "in_house":
         raise Forbidden("This stay has been checked out")
+    if (str(stay.get("property_id")) != str(property_id)
+            or (room_id is not None and str(stay.get("room_id")) != str(room_id))
+            or (guest_id is not None and str(stay.get("guest_id")) != str(guest_id))):
+        raise Forbidden("This session does not belong to the active stay")
     return stay
 
 
@@ -117,6 +123,9 @@ def assert_stay_open(stay_id: str, property_id: str) -> dict:
 
 
 def menu(db: Session, property_id: UUID) -> dict:
+    property_row = db.get(Property, property_id)
+    if property_row is None:
+        raise NotFound("Property not found")
     query = (
         select(MenuItem)
         .where(MenuItem.property_id == property_id, MenuItem.is_available.is_(True))
@@ -125,7 +134,7 @@ def menu(db: Session, property_id: UUID) -> dict:
     grouped: dict[str, list[MenuItem]] = {}
     for item in db.scalars(query):
         grouped.setdefault(item.category, []).append(item)
-    return {"currency": settings.currency, "categories": grouped}
+    return {"currency": property_row.currency, "categories": grouped}
 
 
 # --- requests ---------------------------------------------------------------------

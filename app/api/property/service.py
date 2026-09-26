@@ -9,11 +9,14 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from vesper_common.clock import utcnow
 from vesper_common.errors import Conflict, Invalid, NotFound
 from vesper_common.events import Event, bus
+
+from app.api.frontdesk.models import Stay, StayStatus
 
 from .models import (
     Asset,
@@ -22,16 +25,17 @@ from .models import (
     Property,
     Room,
     RoomCategory,
+    RoomImage,
     RoomStatus,
+    ResortAmenity,
     SensorReading,
 )
 
-# A room may only move along the housekeeping loop. Anything else is a bug or a typo,
-# and silently accepting it is how a board ends up showing a "ready" room with a guest
-# still in it.
+# Housekeeping moves along its own loop. Occupancy is read from active stays, so
+# cleaning can be requested while a room is still occupied.
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    RoomStatus.READY: {RoomStatus.OCCUPIED, RoomStatus.DIRTY, RoomStatus.OUT_OF_ORDER},
-    RoomStatus.OCCUPIED: {RoomStatus.DIRTY, RoomStatus.OUT_OF_ORDER},
+    RoomStatus.READY: {RoomStatus.DIRTY, RoomStatus.CLEANING, RoomStatus.OUT_OF_ORDER},
+    RoomStatus.OCCUPIED: {RoomStatus.DIRTY, RoomStatus.CLEANING, RoomStatus.READY, RoomStatus.OUT_OF_ORDER},
     RoomStatus.DIRTY: {RoomStatus.CLEANING, RoomStatus.OUT_OF_ORDER},
     RoomStatus.CLEANING: {RoomStatus.INSPECTION, RoomStatus.READY, RoomStatus.OUT_OF_ORDER},
     RoomStatus.INSPECTION: {RoomStatus.READY, RoomStatus.CLEANING, RoomStatus.OUT_OF_ORDER},
@@ -91,6 +95,7 @@ def list_departments(db: Session, property_id: UUID) -> list[Department]:
 def list_categories(db: Session, property_id: UUID) -> list[RoomCategory]:
     query = (
         select(RoomCategory)
+        .options(selectinload(RoomCategory.images))
         .where(RoomCategory.property_id == property_id)
         .order_by(RoomCategory.base_rate)
     )
@@ -107,29 +112,46 @@ def list_rooms(
 ) -> list[Room]:
     query = (
         select(Room)
-        .options(joinedload(Room.category))
+        .options(joinedload(Room.category), selectinload(Room.images))
         .where(Room.property_id == property_id)
         .order_by(Room.floor, Room.number)
     )
-    if status:
+    if status == RoomStatus.OCCUPIED:
+        query = query.where(Room.id.in_(select(Stay.room_id).where(
+            Stay.property_id == property_id, Stay.status == StayStatus.IN_HOUSE,
+        )))
+    elif status:
         query = query.where(Room.status == status)
     if floor is not None:
         query = query.where(Room.floor == floor)
     if category_id:
         query = query.where(Room.category_id == category_id)
-    return list(db.scalars(query))
+    rooms = list(db.scalars(query))
+    _mark_occupancy(db, rooms)
+    return rooms
 
 
 def get_room(db: Session, property_id: UUID, room_id: UUID) -> Room:
     query = (
         select(Room)
-        .options(joinedload(Room.category))
+        .options(joinedload(Room.category), selectinload(Room.images))
         .where(Room.id == room_id, Room.property_id == property_id)
     )
     room = db.scalars(query).first()
     if room is None:
         raise NotFound("Room not found")
+    _mark_occupancy(db, [room])
     return room
+
+
+def _mark_occupancy(db: Session, rooms: list[Room]) -> None:
+    if not rooms:
+        return
+    occupied = set(db.scalars(select(Stay.room_id).where(
+        Stay.room_id.in_([r.id for r in rooms]), Stay.status == StayStatus.IN_HOUSE,
+    )))
+    for room in rooms:
+        room._occupied = room.id in occupied
 
 
 def room_board(db: Session, property_id: UUID) -> dict:
@@ -138,6 +160,8 @@ def room_board(db: Session, property_id: UUID) -> dict:
     by_floor: dict[int, list[Room]] = defaultdict(list)
     for room in rooms:
         counts[room.status] += 1
+        if room.occupied:
+            counts[RoomStatus.OCCUPIED] += 1
         by_floor[room.floor].append(room)
     return {
         "counts": {status.value: counts.get(status.value, 0) for status in RoomStatus},
@@ -157,6 +181,8 @@ def set_room_status(
 ) -> Room:
     room = get_room(db, property_id, room_id)
     previous = room.status
+    if new_status == RoomStatus.OCCUPIED:
+        raise Invalid("Occupancy is determined by active stays")
     if previous == new_status:
         return room
     if not force and new_status not in ALLOWED_TRANSITIONS.get(previous, set()):
@@ -172,11 +198,9 @@ def set_room_status(
     room.status_changed_at = utcnow()
     if note:
         room.notes = note
-    if new_status == RoomStatus.DIRTY:
-        # A departing guest's QR must stop working the moment they leave.
-        room.qr_secret = secrets.token_urlsafe(24)
     db.commit()
     db.refresh(room)
+    _mark_occupancy(db, [room])
 
     bus.publish(
         Event.ROOM_STATUS_CHANGED,
@@ -402,7 +426,7 @@ def _room_row(db: Session, property_id: UUID, row: dict) -> Room:
     if category is None:
         raise Invalid("Unknown room category", details={"field": "category_key"})
     status = (row.get("status") or RoomStatus.READY.value).strip()
-    if status not in {s.value for s in RoomStatus}:
+    if status == RoomStatus.OCCUPIED or status not in {s.value for s in RoomStatus}:
         raise Invalid("Unknown room status " + status, details={"field": "status"})
     return Room(
         property_id=property_id,
@@ -449,8 +473,8 @@ def occupancy_snapshot(db: Session, property_id: UUID) -> dict:
     occupied = (
         db.scalar(
             select(func.count())
-            .select_from(Room)
-            .where(Room.property_id == property_id, Room.status == RoomStatus.OCCUPIED)
+            .select_from(Stay)
+            .where(Stay.property_id == property_id, Stay.status == StayStatus.IN_HOUSE)
         )
         or 0
     )
@@ -460,3 +484,80 @@ def occupancy_snapshot(db: Session, property_id: UUID) -> dict:
         "occupancy_rate": round(occupied / total, 4) if total else 0.0,
         "as_of": utcnow().isoformat(),
     }
+
+
+def list_amenities(db: Session, property_id: UUID) -> list[ResortAmenity]:
+    get_property(db, property_id)
+    return list(db.scalars(select(ResortAmenity).where(
+        ResortAmenity.property_id == property_id,
+    ).order_by(ResortAmenity.name)))
+
+
+def save_amenity(db: Session, property_id: UUID, data) -> ResortAmenity:
+    get_property(db, property_id)
+    row = db.scalars(select(ResortAmenity).where(
+        ResortAmenity.property_id == property_id, ResortAmenity.key == data.key,
+    )).first()
+    if row is None:
+        row = ResortAmenity(property_id=property_id, key=data.key)
+        db.add(row)
+    for key, value in data.model_dump().items():
+        setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def save_image(db: Session, property_id: UUID, *, room_id: UUID | None,
+               category_id: UUID | None, url: str, data) -> RoomImage:
+    if room_id is not None:
+        get_room(db, property_id, room_id)
+        subject = RoomImage.room_id == room_id
+    else:
+        category = db.scalars(select(RoomCategory).where(
+            RoomCategory.id == category_id, RoomCategory.property_id == property_id,
+        )).first()
+        if category is None:
+            raise NotFound("Room category not found")
+        subject = RoomImage.category_id == category_id
+    if data.is_primary:
+        for image in db.scalars(select(RoomImage).where(
+            RoomImage.property_id == property_id, subject, RoomImage.is_primary.is_(True),
+        )):
+            image.is_primary = False
+        db.flush()
+    image = RoomImage(property_id=property_id, room_id=room_id, category_id=category_id,
+                      url=url, **data.model_dump())
+    db.add(image)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise Conflict("Image order or primary selection changed; please retry") from exc
+    db.refresh(image)
+    return image
+
+
+def update_image(db: Session, property_id: UUID, image_id: UUID, data) -> RoomImage:
+    image = db.scalars(select(RoomImage).where(
+        RoomImage.id == image_id, RoomImage.property_id == property_id,
+    )).first()
+    if image is None:
+        raise NotFound("Image not found")
+    if data.is_primary:
+        subject = (RoomImage.room_id == image.room_id if image.room_id else
+                   RoomImage.category_id == image.category_id)
+        for other in db.scalars(select(RoomImage).where(
+            RoomImage.property_id == property_id, subject, RoomImage.is_primary.is_(True),
+        )):
+            other.is_primary = False
+        db.flush()
+    for key, value in data.model_dump().items():
+        setattr(image, key, value)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise Conflict("Image order or primary selection changed; please retry") from exc
+    db.refresh(image)
+    return image

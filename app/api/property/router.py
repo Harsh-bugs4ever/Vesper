@@ -1,11 +1,19 @@
-from uuid import UUID
+from pathlib import Path
+from io import BytesIO
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from vesper_common.db import get_session
+<<<<<<< Updated upstream
 from vesper_common.permissions import Perm, Role
 from fastapi import HTTPException
+=======
+from vesper_common.errors import Invalid
+from vesper_common.permissions import Perm
+>>>>>>> Stashed changes
 from vesper_common.security import Principal, current_user, requires
 
 from . import service
@@ -13,14 +21,21 @@ from .schemas import (
     AssetCreate,
     AssetOut,
     AssetServiced,
+    AmenityOut,
+    AmenityWrite,
     DepartmentOut,
     ImportResult,
+    GuestRoomOut,
+    PublicCategoryOut,
+    PublicPropertyOut,
     PropertyOut,
     PropertySummary,
     PropertyUpdate,
     RoomBoardOut,
     RoomCategoryOut,
     RoomDetail,
+    RoomImageOut,
+    RoomImageUpdate,
     RoomOut,
     RoomStatusUpdate,
     SensorReadingIn,
@@ -43,6 +58,7 @@ def _room_access(principal: Principal = Depends(current_user), db: Session = Dep
 
 rooms_router = APIRouter(prefix="/rooms", tags=["rooms"], dependencies=[Depends(_room_access)])
 assets_router = APIRouter(prefix="/assets", tags=["assets"])
+UPLOAD_DIR = Path("/data/uploads")
 
 
 def _room_detail(room) -> RoomDetail:
@@ -158,6 +174,33 @@ def list_categories(
     return [RoomCategoryOut.model_validate(r) for r in rows]
 
 
+@router.get("/public/{property_id}", response_model=PublicPropertyOut)
+def public_property(property_id: UUID, db: Session = Depends(get_session)) -> PublicPropertyOut:
+    row = service.get_property(db, property_id)
+    return PublicPropertyOut(
+        id=row.id, name=row.name, address=row.address, city=row.city,
+        categories=[PublicCategoryOut(key=c.key, name=c.name, amenities=c.amenities,
+            images=[RoomImageOut.model_validate(i) for i in c.images])
+            for c in service.list_categories(db, property_id)],
+        amenities=[AmenityOut.model_validate(a) for a in service.list_amenities(db, property_id)],
+    )
+
+
+@router.get("/amenities", response_model=list[AmenityOut])
+def list_amenities(principal: Principal = Depends(current_user),
+                   db: Session = Depends(get_session)) -> list[AmenityOut]:
+    return [AmenityOut.model_validate(a) for a in service.list_amenities(db, UUID(principal.property_id))]
+
+
+@router.put("/amenities/{key}", response_model=AmenityOut)
+def save_amenity(key: str, body: AmenityWrite,
+                 principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+                 db: Session = Depends(get_session)) -> AmenityOut:
+    if key != body.key:
+        raise Invalid("Amenity key does not match path")
+    return AmenityOut.model_validate(service.save_amenity(db, UUID(principal.property_id), body))
+
+
 @router.get("/occupancy", response_model=dict)
 def occupancy(
     principal: Principal = Depends(current_user), db: Session = Depends(get_session)
@@ -242,6 +285,98 @@ def get_room(
     db: Session = Depends(get_session),
 ) -> RoomDetail:
     return _room_detail(service.get_room(db, UUID(principal.property_id), room_id))
+
+
+@rooms_router.get("/{room_id}/guest", response_model=GuestRoomOut)
+def guest_room(room_id: UUID, principal: Principal = Depends(current_user),
+               db: Session = Depends(get_session)) -> GuestRoomOut:
+    room = service.get_room(db, UUID(principal.property_id), room_id)
+    return GuestRoomOut(id=room.id, number=room.number, floor=room.floor,
+                        category_name=room.category.name,
+                        category_amenities=room.category.amenities,
+                        images=[RoomImageOut.model_validate(i) for i in room.images])
+
+
+async def _upload_image(file: UploadFile) -> tuple[str, Path]:
+    if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise Invalid("Upload must be a JPEG, PNG or WebP image")
+    content = await file.read(8 * 1024 * 1024 + 1)
+    if not content or len(content) > 8 * 1024 * 1024:
+        raise Invalid("Image must be between 1 byte and 8 MB")
+    formats = {"JPEG": (".jpg", "image/jpeg"), "PNG": (".png", "image/png"),
+               "WEBP": (".webp", "image/webp")}
+    try:
+        with Image.open(BytesIO(content)) as source:
+            kind = source.format
+            if kind not in formats or formats[kind][1] != file.content_type:
+                raise Invalid("Image content does not match its media type")
+            if source.width * source.height > 20_000_000:
+                raise Invalid("Image dimensions are too large")
+            source.verify()
+        with Image.open(BytesIO(content)) as source:
+            clean = ImageOps.exif_transpose(source)
+            if kind == "JPEG":
+                clean = clean.convert("RGB")
+            output = BytesIO()
+            clean.save(output, format=kind)
+            content = output.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise Invalid("Upload must be a valid JPEG, PNG or WebP image") from exc
+    if len(content) > 8 * 1024 * 1024:
+        raise Invalid("Processed image is larger than 8 MB")
+    suffix = formats[kind][0]
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = UPLOAD_DIR / f"{uuid4().hex}{suffix}"
+    path.write_bytes(content)
+    return f"/uploads/{path.name}", path
+
+
+@rooms_router.post("/{room_id}/images", response_model=RoomImageOut, status_code=status.HTTP_201_CREATED)
+async def upload_room_image(room_id: UUID, file: UploadFile = File(...),
+                            alt_text: str = Form(...), position: int = Form(0),
+                            is_primary: bool = Form(False),
+                            principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+                            db: Session = Depends(get_session)) -> RoomImageOut:
+    service.get_room(db, UUID(principal.property_id), room_id)
+    data = RoomImageUpdate(alt_text=alt_text, position=position, is_primary=is_primary)
+    url, path = await _upload_image(file)
+    try:
+        return RoomImageOut.model_validate(service.save_image(db, UUID(principal.property_id),
+            room_id=room_id, category_id=None, url=url, data=data))
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+@router.post("/room-categories/{category_id}/images", response_model=RoomImageOut,
+             status_code=status.HTTP_201_CREATED)
+async def upload_category_image(category_id: UUID, file: UploadFile = File(...),
+                                alt_text: str = Form(...), position: int = Form(0),
+                                is_primary: bool = Form(False),
+                                principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+                                db: Session = Depends(get_session)) -> RoomImageOut:
+    data = RoomImageUpdate(alt_text=alt_text, position=position, is_primary=is_primary)
+    # Validate the subject before writing a file.
+    from sqlalchemy import select
+    from .models import RoomCategory
+    if db.scalars(select(RoomCategory.id).where(RoomCategory.id == category_id,
+                   RoomCategory.property_id == UUID(principal.property_id))).first() is None:
+        from vesper_common.errors import NotFound
+        raise NotFound("Room category not found")
+    url, path = await _upload_image(file)
+    try:
+        return RoomImageOut.model_validate(service.save_image(db, UUID(principal.property_id),
+            room_id=None, category_id=category_id, url=url, data=data))
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+@router.patch("/images/{image_id}", response_model=RoomImageOut)
+def update_image(image_id: UUID, body: RoomImageUpdate,
+                 principal: Principal = Depends(requires(Perm.PROPERTY_WRITE)),
+                 db: Session = Depends(get_session)) -> RoomImageOut:
+    return RoomImageOut.model_validate(service.update_image(db, UUID(principal.property_id), image_id, body))
 
 
 @rooms_router.put("/{room_id}/status", response_model=RoomDetail)

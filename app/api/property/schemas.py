@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import RoomStatus
+from .models import HousekeepingStatus
 
 
 class ORMModel(BaseModel):
@@ -63,6 +63,7 @@ class RoomCategoryOut(ORMModel):
     base_rate: Decimal
     max_occupancy: int
     amenities: list[str]
+    images: list["RoomImageOut"] = Field(default_factory=list)
 
 
 class RoomOut(ORMModel):
@@ -70,9 +71,12 @@ class RoomOut(ORMModel):
     number: str
     floor: int
     status: str
+    housekeeping_status: str
+    occupied: bool
     category_id: UUID
     status_changed_at: datetime | None = None
     notes: str | None = None
+    images: list["RoomImageOut"] = Field(default_factory=list)
 
 
 class RoomDetail(RoomOut):
@@ -81,8 +85,63 @@ class RoomDetail(RoomOut):
 
 
 class RoomStatusUpdate(BaseModel):
-    status: RoomStatus
+    status: HousekeepingStatus
     note: str | None = None
+
+
+class RoomImageOut(ORMModel):
+    id: UUID
+    url: str
+    alt_text: str
+    position: int
+    is_primary: bool
+
+
+class RoomImageUpdate(BaseModel):
+    alt_text: str = Field(min_length=1, max_length=240)
+    position: int = Field(ge=0)
+    is_primary: bool = False
+
+
+class AmenityWrite(BaseModel):
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = None
+    location: str | None = Field(default=None, max_length=160)
+    opening_hours: str | None = Field(default=None, max_length=240)
+    is_available: bool = True
+    closure_reason: str | None = Field(default=None, max_length=240)
+    closed_until: datetime | None = None
+
+
+class AmenityOut(AmenityWrite, ORMModel):
+    id: UUID
+    available_now: bool
+
+
+class GuestRoomOut(BaseModel):
+    id: UUID
+    number: str
+    floor: int
+    category_name: str
+    category_amenities: list[str]
+    images: list[RoomImageOut]
+
+
+class PublicCategoryOut(BaseModel):
+    key: str
+    name: str
+    amenities: list[str]
+    images: list[RoomImageOut]
+
+
+class PublicPropertyOut(BaseModel):
+    id: UUID
+    name: str
+    address: str | None
+    city: str
+    categories: list[PublicCategoryOut]
+    amenities: list[AmenityOut]
 
 
 class RoomBoardFloor(BaseModel):

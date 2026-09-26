@@ -657,6 +657,15 @@ def _seed(db) -> dict[str, int]:
     counts["knowledge_passages"] = len(KNOWLEDGE)
 
     db.commit()
+
+    # --- food & beverage order book and guest spend history -----------------------
+    try:
+        from seed_fnb import seed_fnb_data
+    except ImportError:
+        from scripts.seed_fnb import seed_fnb_data
+    fnb_counts = seed_fnb_data(db)
+    counts.update(fnb_counts)
+
     return counts
 
 
