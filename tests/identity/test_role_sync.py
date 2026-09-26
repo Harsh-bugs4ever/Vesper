@@ -81,7 +81,7 @@ def test_a_new_permission_reaches_an_existing_system_role(patched):
 
 def test_a_permission_removed_in_code_is_removed_from_the_role(patched):
     """The sync is two-way, or a revoked permission lingers in production forever."""
-    bloated = FakeRole("employee", ["tasks:read", "rates:approve", "users:write"])
+    bloated = FakeRole("staff", ["tasks:read", "rates:approve", "users:write"])
     session = patched([bloated])
     service.ensure_default_roles(session, uuid4())
 
@@ -99,14 +99,14 @@ def test_a_role_an_operator_edited_is_left_alone(patched):
 
 
 def test_an_already_correct_role_is_not_rewritten(patched):
-    correct = FakeRole("employee", sorted(str(p) for p in DEFAULT_ROLE_PERMISSIONS["employee"]))
+    correct = FakeRole("staff", sorted(str(p) for p in DEFAULT_ROLE_PERMISSIONS["staff"]))
     before = list(correct.permissions)
     session = patched([correct])
     service.ensure_default_roles(session, uuid4())
 
     assert correct.permissions == before
     # The other shipped roles are missing here, so they are created; this one is not.
-    assert "employee" not in {r.key for r in session.added}
+    assert "staff" not in {r.key for r in session.added}
 
 
 def test_permissions_are_stored_sorted(patched):

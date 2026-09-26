@@ -166,7 +166,7 @@ def list_queue(
         query = query.where(ActionCard.engine == engine)
 
     cards = list(db.scalars(query.order_by(ActionCard.score.desc()).limit(limit * 2)))
-    visible = [c for c in cards if principal.can(c.required_permission)]
+    visible = [c for c in cards if principal.can(c.required_permission) and (principal.role in {"gm", "service"} or principal.can_see_department(c.department_id))]
     return visible[:limit]
 
 
@@ -208,6 +208,7 @@ def expire_stale(db: Session, property_id: UUID) -> int:
 def claim(db: Session, principal: Principal, card_id: UUID) -> ActionCard:
     """Take the card off the queue while you decide. Ten minutes, then it comes back."""
     card = get_card(db, UUID(principal.property_id), card_id)
+    principal.require_object(card)
     _assert_actionable(card)
     principal.require(card.required_permission)
 
@@ -231,6 +232,7 @@ def claim(db: Session, principal: Principal, card_id: UUID) -> ActionCard:
 
 def release(db: Session, principal: Principal, card_id: UUID) -> ActionCard:
     card = get_card(db, UUID(principal.property_id), card_id)
+    principal.require_object(card)
     if card.status == CardStatus.CLAIMED and str(card.claimed_by) == principal.id:
         card.status = CardStatus.PENDING
         card.claimed_by = None
@@ -248,6 +250,7 @@ def approve(db: Session, principal: Principal, card_id: UUID, adjustments: dict 
     """
     property_id = UUID(principal.property_id)
     card = get_card(db, property_id, card_id)
+    principal.require_object(card)
     _assert_actionable(card)
     principal.require(card.required_permission)
     _assert_claimable_by(card, principal)
@@ -315,6 +318,7 @@ def undo_card(db: Session, principal: Principal, card_id: UUID) -> ActionCard:
     """Put it back, if the window is still open."""
     property_id = UUID(principal.property_id)
     card = get_card(db, property_id, card_id)
+    principal.require_object(card)
     principal.require(card.required_permission)
 
     if card.status != CardStatus.EXECUTED:
@@ -348,6 +352,7 @@ def undo_card(db: Session, principal: Principal, card_id: UUID) -> ActionCard:
 def snooze(db: Session, principal: Principal, card_id: UUID, minutes: int) -> ActionCard:
     """Not now. Comes back at the chosen time with its drivers refreshed."""
     card = get_card(db, UUID(principal.property_id), card_id)
+    principal.require_object(card)
     _assert_actionable(card)
     principal.require(card.required_permission)
 
@@ -373,6 +378,7 @@ def dismiss(db: Session, principal: Principal, card_id: UUID, reason: str, note:
     """No, and here is why. The reason is what the engine learns from."""
     property_id = UUID(principal.property_id)
     card = get_card(db, property_id, card_id)
+    principal.require_object(card)
     _assert_actionable(card)
     principal.require(card.required_permission)
     if reason not in {r.value for r in DismissReason}:
@@ -547,18 +553,23 @@ def record_audit(
     return entry
 
 
-def stats_summary(db: Session, property_id: UUID) -> dict:
+def stats_summary(db: Session, property_id: UUID, *, department_ids: set[str] | None = None) -> dict:
     """Action-queue tiles on the owner dashboard."""
     base = select(func.count()).select_from(ActionCard).where(ActionCard.property_id == property_id)
+    if department_ids is not None:
+        base = base.where(ActionCard.department_id.in_([UUID(value) for value in department_ids]))
     pending = db.scalar(base.where(ActionCard.status == CardStatus.PENDING)) or 0
     executed = db.scalar(base.where(ActionCard.status == CardStatus.EXECUTED)) or 0
+    impact_query = select(func.coalesce(func.sum(ActionCard.impact_amount), 0)).where(
+        ActionCard.property_id == property_id,
+        ActionCard.status == CardStatus.EXECUTED,
+        ActionCard.was_shadow.is_(False),
+    )
+    if department_ids is not None:
+        impact_query = impact_query.where(ActionCard.department_id.in_([UUID(value) for value in department_ids]))
     total_impact = (
         db.scalar(
-            select(func.coalesce(func.sum(ActionCard.impact_amount), 0)).where(
-                ActionCard.property_id == property_id,
-                ActionCard.status == CardStatus.EXECUTED,
-                ActionCard.was_shadow.is_(False),
-            )
+            impact_query
         )
         or 0
     )

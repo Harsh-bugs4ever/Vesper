@@ -3,10 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
-from vesper_common.db import get_session
+from vesper_common.db import get_session, session_scope
 from vesper_common.events import bus
 from vesper_common.permissions import Perm
-from vesper_common.security import Principal, current_user, requires, token_from_query
+from vesper_common.security import Principal, authorize_staff_principal, current_user, requires, token_from_query
+from vesper_common.errors import Forbidden
 
 from . import service
 from .schemas import OutboxCreate, OutboxOut, OutboxSummary
@@ -34,25 +35,41 @@ async def live(websocket: WebSocket, token: str = Query(...)) -> None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    db = session_scope()
+    try:
+        principal = authorize_staff_principal(principal, db)
+        if principal.role == "service":
+            raise ValueError("Service token cannot subscribe")
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    finally:
+        db.close()
+
     await service.hub.connect(
         websocket,
-        property_id=principal.property_id,
-        user_id=principal.id,
-        department_id=principal.department_id,
-        role=principal.role,
+        principal=principal,
     )
     try:
         # Paint the feed immediately rather than waiting for the next event.
         recent = [
             {"type": e.name, "payload": e.payload, "occurred_at": e.occurred_at, "id": e.id}
             for e in bus.recent(25)
-            if e.property_id == principal.property_id
+            if e.property_id == principal.property_id and principal.can_see_event(e.payload.get("department_id"))
         ]
         await websocket.send_json({"type": "backlog", "events": list(reversed(recent))})
 
         while True:
             # The client only ever pings; everything else is server-pushed.
             await websocket.receive_text()
+            db = session_scope()
+            try:
+                authorize_staff_principal(principal, db)
+            except Exception:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                break
+            finally:
+                db.close()
             await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         pass
@@ -88,6 +105,8 @@ def queue_message(
     principal: Principal = Depends(current_user),
     db: Session = Depends(get_session),
 ) -> OutboxOut:
+    if principal.role not in {"gm", "service"}:
+        raise Forbidden("Outbox administration requires General Manager access")
     message = service.queue(
         db,
         UUID(principal.property_id),
@@ -120,9 +139,13 @@ def run_retries(
     db: Session = Depends(get_session),
 ) -> dict:
     """Timer-driven sweep of everything due for another attempt."""
+    if principal.role != "service":
+        raise Forbidden("Service access required")
     return service.run_retries(db, UUID(principal.property_id))
 
 
 @router.get("/live/connections", response_model=dict)
 def connections(principal: Principal = Depends(current_user)) -> dict:
+    if principal.role not in {"gm", "service"}:
+        raise Forbidden("General Manager access required")
     return {"connected": service.hub.connection_count(principal.property_id)}

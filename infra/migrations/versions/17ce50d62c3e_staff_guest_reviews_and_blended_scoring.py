@@ -26,6 +26,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    existing = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("stay_review_summaries", schema="guest_intel")}
+    if {"final_score", "engagement_bonus", "guest_sentiment", "possible_retaliation"} <= existing:
+        return
     # The NOT NULL columns carry a server_default, which autogenerate does not add.
     # Without it, ALTER TABLE fails on any table that already has rows — the migration
     # passes on an empty development database and breaks on the first real one.

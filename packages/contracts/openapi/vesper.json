@@ -1,6 +1,29 @@
 {
   "components": {
     "schemas": {
+      "AccessToken": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "title": "AccessToken",
+        "type": "object"
+      },
       "ActionStats": {
         "properties": {
           "executed_cards": {
@@ -34,6 +57,7 @@
         "properties": {
           "assignments": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Assignments",
@@ -66,6 +90,7 @@
           "adjustments": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -316,6 +341,32 @@
         "title": "AssetServiced",
         "type": "object"
       },
+      "AssignmentIn": {
+        "properties": {
+          "department_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Id"
+          },
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "property_id"
+        ],
+        "title": "AssignmentIn",
+        "type": "object"
+      },
       "AttendanceMethod": {
         "enum": [
           "qr",
@@ -473,10 +524,12 @@
             "type": "string"
           },
           "after": {
+            "additionalProperties": true,
             "title": "After",
             "type": "object"
           },
           "before": {
+            "additionalProperties": true,
             "title": "Before",
             "type": "object"
           },
@@ -545,10 +598,12 @@
             "title": "Actor Role"
           },
           "after": {
+            "additionalProperties": true,
             "title": "After",
             "type": "object"
           },
           "before": {
+            "additionalProperties": true,
             "title": "Before",
             "type": "object"
           },
@@ -677,6 +732,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -745,6 +801,7 @@
             "type": "string"
           },
           "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Rate",
             "type": "string"
           },
@@ -789,6 +846,7 @@
             "type": "string"
           },
           "total_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Amount",
             "type": "string"
           }
@@ -808,6 +866,20 @@
           "status"
         ],
         "title": "BookingOut",
+        "type": "object"
+      },
+      "BranchSwitch": {
+        "properties": {
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "property_id"
+        ],
+        "title": "BranchSwitch",
         "type": "object"
       },
       "CardCreate": {
@@ -872,6 +944,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -882,6 +955,7 @@
             "$ref": "#/components/schemas/CardKind"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -915,6 +989,7 @@
       "CardDetail": {
         "properties": {
           "adjustments": {
+            "additionalProperties": true,
             "title": "Adjustments",
             "type": "object"
           },
@@ -1017,6 +1092,7 @@
             "type": "string"
           },
           "impact_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Impact Amount",
             "type": "string"
           },
@@ -1025,6 +1101,7 @@
             "type": "string"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -1124,6 +1201,7 @@
       "CardOut": {
         "properties": {
           "adjustments": {
+            "additionalProperties": true,
             "title": "Adjustments",
             "type": "object"
           },
@@ -1222,6 +1300,7 @@
             "type": "string"
           },
           "impact_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Impact Amount",
             "type": "string"
           },
@@ -1230,6 +1309,7 @@
             "type": "string"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -1631,6 +1711,7 @@
             "type": "number"
           },
           "features": {
+            "additionalProperties": true,
             "title": "Features",
             "type": "object"
           },
@@ -1648,6 +1729,7 @@
             "type": "string"
           },
           "predicted_adr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Predicted Adr",
             "type": "string"
           },
@@ -1789,6 +1871,7 @@
             "title": "Phone"
           },
           "preferences": {
+            "additionalProperties": true,
             "title": "Preferences",
             "type": "object"
           }
@@ -1949,6 +2032,7 @@
             "title": "Phone"
           },
           "preferences": {
+            "additionalProperties": true,
             "title": "Preferences",
             "type": "object"
           },
@@ -2707,6 +2791,13 @@
       },
       "MeOut": {
         "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentIn"
+            },
+            "title": "Assignments",
+            "type": "array"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -2746,6 +2837,11 @@
             "type": "string"
           },
           "role": {
+            "enum": [
+              "gm",
+              "manager",
+              "staff"
+            ],
             "title": "Role",
             "type": "string"
           }
@@ -2801,6 +2897,7 @@
             "type": "integer"
           },
           "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Price",
             "type": "string"
           }
@@ -2901,6 +2998,7 @@
             "type": "number"
           },
           "estimated_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Estimated Value",
             "type": "string"
           },
@@ -3020,6 +3118,7 @@
             "type": "string"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -3193,6 +3292,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -3223,6 +3323,7 @@
             "type": "number"
           },
           "actual_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Actual Amount",
             "type": "string"
           },
@@ -3252,6 +3353,7 @@
             "title": "Notes"
           },
           "predicted_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Predicted Amount",
             "type": "string"
           },
@@ -3389,6 +3491,7 @@
             "type": "string"
           },
           "settings": {
+            "additionalProperties": true,
             "title": "Settings",
             "type": "object"
           },
@@ -3517,6 +3620,7 @@
           "settings": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3537,6 +3641,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -3591,10 +3696,12 @@
             "type": "string"
           },
           "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quantity",
             "type": "string"
           },
           "rationale": {
+            "additionalProperties": true,
             "title": "Rationale",
             "type": "object"
           },
@@ -3626,10 +3733,12 @@
             "title": "Supplier"
           },
           "total_cost": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Cost",
             "type": "string"
           },
           "unit_cost": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Cost",
             "type": "string"
           }
@@ -3692,6 +3801,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -3735,6 +3845,7 @@
           },
           "previous_rates": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Previous Rates",
@@ -3804,12 +3915,14 @@
             "type": "string"
           },
           "new_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "New Rate",
             "type": "string"
           },
           "previous_rate": {
             "anyOf": [
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -3911,6 +4024,7 @@
         "properties": {
           "previous_rates": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Previous Rates",
@@ -4186,6 +4300,7 @@
             "type": "string"
           },
           "total_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Amount",
             "type": "string"
           }
@@ -4252,6 +4367,11 @@
             "type": "boolean"
           },
           "key": {
+            "enum": [
+              "gm",
+              "manager",
+              "staff"
+            ],
             "title": "Key",
             "type": "string"
           },
@@ -4291,35 +4411,6 @@
           "permissions"
         ],
         "title": "RolePermissionsUpdate",
-        "type": "object"
-      },
-      "RoleUpsert": {
-        "properties": {
-          "key": {
-            "maxLength": 48,
-            "minLength": 2,
-            "title": "Key",
-            "type": "string"
-          },
-          "label": {
-            "maxLength": 80,
-            "minLength": 2,
-            "title": "Label",
-            "type": "string"
-          },
-          "permissions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Permissions",
-            "type": "array"
-          }
-        },
-        "required": [
-          "key",
-          "label"
-        ],
-        "title": "RoleUpsert",
         "type": "object"
       },
       "RoomBoardFloor": {
@@ -4378,6 +4469,7 @@
             "type": "array"
           },
           "base_rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Base Rate",
             "type": "string"
           },
@@ -4964,6 +5056,7 @@
           },
           "top_themes": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Top Themes",
@@ -5033,7 +5126,7 @@
         "type": "object"
       },
       "SimulateRequest": {
-        "description": "The owner's three sliders.",
+        "description": "The General Manager's three sliders.",
         "properties": {
           "days": {
             "default": 30,
@@ -5070,6 +5163,7 @@
       "SimulateResult": {
         "properties": {
           "assumptions": {
+            "additionalProperties": true,
             "title": "Assumptions",
             "type": "object"
           },
@@ -5091,6 +5185,7 @@
           },
           "nights": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Nights",
@@ -5687,6 +5782,7 @@
             "title": "Checked Out At"
           },
           "folio_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Folio Total",
             "type": "string"
           },
@@ -5751,6 +5847,7 @@
             "type": "integer"
           },
           "departments": {
+            "additionalProperties": true,
             "title": "Departments",
             "type": "object"
           },
@@ -5911,6 +6008,7 @@
             "type": "integer"
           },
           "departments": {
+            "additionalProperties": true,
             "title": "Departments",
             "type": "object"
           },
@@ -6093,6 +6191,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -6111,6 +6210,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -6123,6 +6223,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -6157,6 +6258,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -6215,6 +6317,7 @@
             "type": "integer"
           },
           "minimum_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Minimum Quantity",
             "type": "string"
           },
@@ -6223,10 +6326,12 @@
             "type": "string"
           },
           "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quantity",
             "type": "string"
           },
           "reorder_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Reorder Quantity",
             "type": "string"
           },
@@ -6250,6 +6355,7 @@
             "type": "string"
           },
           "unit_cost": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Cost",
             "type": "string"
           }
@@ -6312,6 +6418,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -6337,6 +6444,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -6362,6 +6470,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -6394,6 +6503,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -6413,6 +6523,7 @@
       "StockMovementOut": {
         "properties": {
           "balance_after": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Balance After",
             "type": "string"
           },
@@ -6443,6 +6554,7 @@
             "title": "Note"
           },
           "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quantity",
             "type": "string"
           },
@@ -6549,6 +6661,7 @@
             "title": "Due In Minutes"
           },
           "meta": {
+            "additionalProperties": true,
             "title": "Meta",
             "type": "object"
           },
@@ -6674,6 +6787,7 @@
             "type": "boolean"
           },
           "meta": {
+            "additionalProperties": true,
             "title": "Meta",
             "type": "object"
           },
@@ -6862,6 +6976,13 @@
       },
       "UserCreate": {
         "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentIn"
+            },
+            "title": "Assignments",
+            "type": "array"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -6921,6 +7042,11 @@
             "title": "Phone"
           },
           "role_key": {
+            "enum": [
+              "gm",
+              "manager",
+              "staff"
+            ],
             "title": "Role Key",
             "type": "string"
           }
@@ -6936,6 +7062,13 @@
       },
       "UserDetail": {
         "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentIn"
+            },
+            "title": "Assignments",
+            "type": "array"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -7007,12 +7140,22 @@
             ],
             "title": "Phone"
           },
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          },
           "role_id": {
             "format": "uuid",
             "title": "Role Id",
             "type": "string"
           },
           "role_key": {
+            "enum": [
+              "gm",
+              "manager",
+              "staff"
+            ],
             "title": "Role Key",
             "type": "string"
           }
@@ -7022,6 +7165,7 @@
           "email",
           "full_name",
           "role_id",
+          "property_id",
           "is_active",
           "role_key",
           "permissions"
@@ -7031,6 +7175,13 @@
       },
       "UserOut": {
         "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentIn"
+            },
+            "title": "Assignments",
+            "type": "array"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -7095,6 +7246,11 @@
             ],
             "title": "Phone"
           },
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          },
           "role_id": {
             "format": "uuid",
             "title": "Role Id",
@@ -7106,6 +7262,7 @@
           "email",
           "full_name",
           "role_id",
+          "property_id",
           "is_active"
         ],
         "title": "UserOut",
@@ -7113,6 +7270,20 @@
       },
       "UserUpdate": {
         "properties": {
+          "assignments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AssignmentIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignments"
+          },
           "department_id": {
             "anyOf": [
               {
@@ -7188,6 +7359,11 @@
           "role_key": {
             "anyOf": [
               {
+                "enum": [
+                  "gm",
+                  "manager",
+                  "staff"
+                ],
                 "type": "string"
               },
               {
@@ -7241,6 +7417,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -7256,6 +7433,7 @@
             "$ref": "#/components/schemas/VisitKind"
           },
           "meta": {
+            "additionalProperties": true,
             "title": "Meta",
             "type": "object"
           },
@@ -7317,6 +7495,7 @@
       "VisitOut": {
         "properties": {
           "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount",
             "type": "string"
           },
@@ -7335,6 +7514,7 @@
             "type": "string"
           },
           "meta": {
+            "additionalProperties": true,
             "title": "Meta",
             "type": "object"
           },
@@ -7386,6 +7566,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -7445,6 +7626,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -7473,6 +7655,7 @@
             "title": "Scheduled For"
           },
           "scheduling_rationale": {
+            "additionalProperties": true,
             "title": "Scheduling Rationale",
             "type": "object"
           },
@@ -7504,6 +7687,7 @@
           "actual_cost": {
             "anyOf": [
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -7558,6 +7742,7 @@
             "title": "Description"
           },
           "estimated_cost": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Estimated Cost",
             "type": "string"
           },
@@ -7598,6 +7783,7 @@
             "title": "Scheduled For"
           },
           "scheduling_rationale": {
+            "additionalProperties": true,
             "title": "Scheduling Rationale",
             "type": "object"
           },
@@ -7793,52 +7979,6 @@
           }
         ],
         "summary": "Permissions",
-        "tags": [
-          "identity-admin"
-        ]
-      }
-    },
-    "/admin/roles": {
-      "post": {
-        "operationId": "create_role_admin_roles_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RoleUpsert"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RoleOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Role",
         "tags": [
           "identity-admin"
         ]
@@ -8249,6 +8389,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Record Readings Assets Readings Post",
                   "type": "object"
                 }
@@ -8643,7 +8784,7 @@
     },
     "/attendance/team": {
       "get": {
-        "description": "A supervisor sees their own department unless they ask for another and may.",
+        "description": "Team attendance within an assigned department.",
         "operationId": "team_attendance_attendance_team_get",
         "parameters": [
           {
@@ -8999,6 +9140,52 @@
         ]
       }
     },
+    "/auth/switch-property": {
+      "post": {
+        "operationId": "switch_property_auth_switch_property_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Switch Property",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/bookings": {
       "get": {
         "operationId": "list_bookings_bookings_get",
@@ -9176,6 +9363,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "title": "Response Occupancy History Bookings Occupancy History Get",
@@ -9968,7 +10156,7 @@
     },
     "/dashboard": {
       "get": {
-        "description": "Every tile on the owner dashboard in one call.\n\nThe caller's own token is forwarded to each service, so the dashboard shows exactly\nwhat this person is allowed to see rather than widening to a service principal.\nTiles that could not be loaded come back null and are named in `unavailable`.",
+        "description": "Every tile on the General Manager dashboard in one call.\n\nThe caller's own token is forwarded to each service, so the dashboard shows exactly\nwhat this person is allowed to see rather than widening to a service principal.\nTiles that could not be loaded come back null and are named in `unavailable`.",
         "operationId": "dashboard_dashboard_get",
         "parameters": [
           {
@@ -9989,6 +10177,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Dashboard Dashboard Get",
                   "type": "object"
                 }
@@ -10485,6 +10674,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Reindex Guest Intel Knowledge Reindex Post",
                   "type": "object"
                 }
@@ -10791,6 +10981,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "title": "Response Sentiment Trend Guest Intel Sentiment Trend Get",
@@ -10917,6 +11108,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Prompt Departing Guest Reviews Prompt Departing Post",
                   "type": "object"
                 }
@@ -10957,6 +11149,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Service Notes For Guest Guest Reviews Service Notes Guests  Guest Id  Get",
                   "type": "object"
                 }
@@ -11007,6 +11200,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Service Notes For Stay Guest Reviews Service Notes Stays  Stay Id  Get",
                   "type": "object"
                 }
@@ -11163,6 +11357,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Consider Reward Guest Reviews Stays  Stay Id  Consider Reward Post",
                   "type": "object"
                 }
@@ -11457,6 +11652,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "title": "Response Served By Guest Served By Get",
@@ -11731,6 +11927,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Health Health Get",
                   "type": "object"
                 }
@@ -12142,6 +12339,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Sweep Expiring Inventory Sweep Expiring Post",
                   "type": "object"
                 }
@@ -12379,6 +12577,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "title": "Response Learning Learning Get",
@@ -12436,6 +12635,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Assess All Maintenance Assess Post",
                   "type": "object"
                 }
@@ -12457,7 +12657,6 @@
     },
     "/maintenance/health": {
       "get": {
-        "description": "Risk-ranked asset list \u2014 the health cards on the maintenance screen.",
         "operationId": "list_health_maintenance_health_get",
         "parameters": [
           {
@@ -12512,7 +12711,6 @@
     },
     "/maintenance/health/{asset_id}": {
       "get": {
-        "description": "One asset's risk gauge, drivers and anomaly markers for the trend chart.",
         "operationId": "get_health_maintenance_health__asset_id__get",
         "parameters": [
           {
@@ -12819,6 +13017,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Connections Notifications Live Connections Get",
                   "type": "object"
                 }
@@ -12962,6 +13161,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Run Retries Notifications Outbox Run Retries Post",
                   "type": "object"
                 }
@@ -13176,6 +13376,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Property Ids",
         "tags": [
           "property"
@@ -13231,7 +13436,7 @@
     },
     "/property/list": {
       "get": {
-        "description": "Every property, named, for the switcher in the admin header.\n\nUnlike /ids this identifies the business, so it needs a token. It is every\nsigned-in user rather than a permission: the header renders for all of them, and\na switcher that cannot name what it is switching between is not a switcher.",
+        "description": "Assigned properties, named, for the branch switcher.\n\nThis list is scoped to current branch assignments.",
         "operationId": "list_properties_property_list_get",
         "responses": {
           "200": {
@@ -13268,6 +13473,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Occupancy Property Occupancy Get",
                   "type": "object"
                 }
@@ -13583,6 +13789,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Ready Ready Get",
                   "type": "object"
                 }
@@ -13681,6 +13888,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Sweep Overdue Requests Sweep Overdue Post",
                   "type": "object"
                 }
@@ -13829,6 +14037,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Propose Cards Revenue Cards Propose Post",
                   "type": "object"
                 }
@@ -14214,6 +14423,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Restore Rates Revenue Rates Restore Post",
                   "type": "object"
                 }
@@ -14477,6 +14687,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Room Qr Rooms  Room Id  Qr Get",
                   "type": "object"
                 }
@@ -15848,6 +16059,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Apply Assignments Workforce Roster Apply Post",
                   "type": "object"
                 }
@@ -16001,7 +16213,6 @@
     },
     "/workforce/rosters/generate": {
       "post": {
-        "description": "Build a draft roster for a week from the demand forecast and who is available.\n\nAlways a draft: an auto-generated roster never becomes the one people turn up to\nuntil a human publishes it.",
         "operationId": "generate_roster_workforce_rosters_generate_post",
         "requestBody": {
           "content": {

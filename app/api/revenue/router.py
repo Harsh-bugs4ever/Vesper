@@ -124,6 +124,9 @@ def propose_cards(
 
     Runs on a schedule after the nightly forecast; exposed so the demo can trigger it.
     """
+    if principal.role not in {"gm", "service"}:
+        from vesper_common.errors import Forbidden
+        raise Forbidden("General Manager access required")
     raised = service.propose_rate_cards(db, UUID(principal.property_id), days=days)
     return {"cards_raised": len(raised)}
 

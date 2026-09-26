@@ -54,10 +54,28 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     role: Mapped[Role] = relationship(back_populates="users")
+    assignments: Mapped[list["UserAssignment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     @property
     def permissions(self) -> set[str]:
-        return set(self.role.permissions) | set(self.extra_permissions or [])
+        from vesper_common.permissions import GM_REQUIRED_PERMISSIONS, Role as RoleKey, allowed_permissions_for_role
+        granted = (set(self.role.permissions) | set(self.extra_permissions or [])) & allowed_permissions_for_role(self.role.key)
+        if self.role.key == RoleKey.GM:
+            granted |= {str(permission) for permission in GM_REQUIRED_PERMISSIONS}
+        return granted
+
+
+class UserAssignment(Base, TimestampMixin):
+    """An independent branch/department grant; NULL department grants branch overview to a GM."""
+
+    __tablename__ = "user_assignments"
+    __table_args__ = (UniqueConstraint("user_id", "property_id", "department_id"), {"schema": SCHEMA})
+
+    id: Mapped[UUID] = uuid_pk()
+    user_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA}.users.id"), nullable=False, index=True)
+    property_id: Mapped[UUID] = uuid_ref(nullable=False)
+    department_id: Mapped[UUID | None] = uuid_ref()
+    user: Mapped[User] = relationship(back_populates="assignments")
 
 
 class RefreshSession(Base, TimestampMixin):

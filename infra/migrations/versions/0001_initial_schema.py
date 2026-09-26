@@ -42,7 +42,12 @@ def upgrade() -> None:
     bind = op.get_bind()
     for schema in SCHEMAS:
         op.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-    _metadata().create_all(bind=bind)
+    # Keep the baseline stable as later model tables are added. Their migrations own
+    # creation; otherwise a fresh upgrade attempts to create them twice.
+    baseline_tables = [table for table in _metadata().sorted_tables if table.name not in {
+        "user_assignments", "guest_staff_reviews", "staff_performance_summaries",
+    }]
+    _metadata().create_all(bind=bind, tables=baseline_tables)
 
 
 def downgrade() -> None:

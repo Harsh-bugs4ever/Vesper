@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from vesper_common.db import get_session
-from vesper_common.permissions import Perm
+from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, requires
+from vesper_common.errors import Forbidden
 
 from . import service
 from .models import StockItem
@@ -50,7 +51,7 @@ def list_items(
         expiring_only=expiring_only,
         search=search,
     )
-    return [_detail(i) for i in items]
+    return [_detail(i) for i in items if principal.role in {Role.GM, "service"} or principal.can_see_department(i.department_id)]
 
 
 @router.post("/items", response_model=StockItemDetail, status_code=status.HTTP_201_CREATED)
@@ -59,6 +60,7 @@ def create_item(
     principal: Principal = Depends(requires(Perm.STOCK_WRITE)),
     db: Session = Depends(get_session),
 ) -> StockItemDetail:
+    principal.require_department_record(db, body.department_id)
     item = StockItem(property_id=UUID(principal.property_id), **body.model_dump())
     db.add(item)
     db.commit()
@@ -71,7 +73,8 @@ def summary(
     principal: Principal = Depends(requires(Perm.STOCK_READ)),
     db: Session = Depends(get_session),
 ) -> InventorySummary:
-    return InventorySummary(**service.summary(db, UUID(principal.property_id)))
+    departments = None if principal.role in {Role.GM, "service"} else principal.department_ids
+    return InventorySummary(**service.summary(db, UUID(principal.property_id), department_ids=departments))
 
 
 @router.post("/sweep-expiring", response_model=dict)
@@ -80,6 +83,8 @@ def sweep_expiring(
     db: Session = Depends(get_session),
 ) -> dict:
     """Daily job: badge anything inside the expiry warning window."""
+    if principal.role not in {"gm", "service"}:
+        raise Forbidden("Property-wide sweep requires General Manager access")
     items = service.sweep_expiring(db, UUID(principal.property_id))
     return {"flagged": len(items)}
 
@@ -90,7 +95,9 @@ def get_item(
     principal: Principal = Depends(requires(Perm.STOCK_READ)),
     db: Session = Depends(get_session),
 ) -> StockItemDetail:
-    return _detail(service.get_item(db, UUID(principal.property_id), item_id))
+    item = service.get_item(db, UUID(principal.property_id), item_id)
+    principal.require_object(item)
+    return _detail(item)
 
 
 @router.patch("/items/{item_id}", response_model=StockItemDetail)
@@ -101,6 +108,7 @@ def update_item(
     db: Session = Depends(get_session),
 ) -> StockItemDetail:
     item = service.get_item(db, UUID(principal.property_id), item_id)
+    principal.require_object(item)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     db.commit()
@@ -117,6 +125,7 @@ def move_stock(
     principal: Principal = Depends(requires(Perm.STOCK_WRITE)),
     db: Session = Depends(get_session),
 ) -> StockMovementOut:
+    principal.require_object(service.get_item(db, UUID(principal.property_id), item_id))
     movement = service.move_stock(
         db,
         UUID(principal.property_id),
@@ -136,6 +145,7 @@ def item_movements(
     principal: Principal = Depends(requires(Perm.STOCK_READ)),
     db: Session = Depends(get_session),
 ) -> list[StockMovementOut]:
+    principal.require_object(service.get_item(db, UUID(principal.property_id), item_id))
     rows = service.item_movements(db, UUID(principal.property_id), item_id, limit=limit)
     return [StockMovementOut.model_validate(r) for r in rows]
 
@@ -147,7 +157,7 @@ def list_orders(
     db: Session = Depends(get_session),
 ) -> list[PurchaseOrderOut]:
     rows = service.list_purchase_orders(db, UUID(principal.property_id), status=status_filter)
-    return [PurchaseOrderOut.model_validate(r) for r in rows]
+    return [PurchaseOrderOut.model_validate(r) for r in rows if principal.role in {Role.GM, "service"} or principal.can_see_department(service.get_item(db, UUID(principal.property_id), r.item_id).department_id)]
 
 
 @purchase_router.post("/{order_id}/approve", response_model=PurchaseOrderOut)
@@ -157,6 +167,7 @@ def approve(
     principal: Principal = Depends(requires(Perm.PURCHASE_APPROVE)),
     db: Session = Depends(get_session),
 ) -> PurchaseOrderOut:
+    principal.require_object(service.get_item(db, UUID(principal.property_id), service.get_purchase_order(db, UUID(principal.property_id), order_id).item_id))
     order = service.approve_purchase_order(
         db, UUID(principal.property_id), order_id, actor_id=UUID(principal.id), quantity=body.quantity
     )
@@ -169,6 +180,7 @@ def receive(
     principal: Principal = Depends(requires(Perm.STOCK_WRITE)),
     db: Session = Depends(get_session),
 ) -> PurchaseOrderOut:
+    principal.require_object(service.get_item(db, UUID(principal.property_id), service.get_purchase_order(db, UUID(principal.property_id), order_id).item_id))
     order = service.receive_purchase_order(
         db, UUID(principal.property_id), order_id, actor_id=UUID(principal.id)
     )
@@ -181,5 +193,6 @@ def cancel(
     principal: Principal = Depends(requires(Perm.PURCHASE_APPROVE)),
     db: Session = Depends(get_session),
 ) -> PurchaseOrderOut:
+    principal.require_object(service.get_item(db, UUID(principal.property_id), service.get_purchase_order(db, UUID(principal.property_id), order_id).item_id))
     order = service.cancel_purchase_order(db, UUID(principal.property_id), order_id)
     return PurchaseOrderOut.model_validate(order)

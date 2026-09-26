@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from vesper_common.clock import utcnow
 from vesper_common.db import get_session
-from vesper_common.permissions import Perm
+from vesper_common.permissions import Perm, Role
+from vesper_common.errors import Forbidden
 from vesper_common.security import Principal, current_user, requires
 
 from . import dashboard as dashboard_builder
@@ -66,6 +67,10 @@ def create_card(
     db: Session = Depends(get_session),
 ) -> CardOut:
     """Engines post here. Re-posting the same dedupe_key refreshes rather than duplicates."""
+    if principal.role not in {Role.GM, "service"}:
+        raise Forbidden("Only General Managers and internal engines may create cards")
+    if body.department_id is not None:
+        principal.require_department_record(db, body.department_id)
     payload = body.model_copy(
         update={"drivers": [d.model_dump() for d in body.drivers], "kind": body.kind.value,
                 "urgency": body.urgency.value}
@@ -79,7 +84,8 @@ def stats(
     principal: Principal = Depends(requires(Perm.CARDS_READ)),
     db: Session = Depends(get_session),
 ) -> ActionStats:
-    return ActionStats(**service.stats_summary(db, UUID(principal.property_id)))
+    departments = None if principal.role in {Role.GM, "service"} else principal.department_ids
+    return ActionStats(**service.stats_summary(db, UUID(principal.property_id), department_ids=departments))
 
 
 @router.get("/{card_id}", response_model=CardDetail)
@@ -88,7 +94,9 @@ def get_card(
     principal: Principal = Depends(requires(Perm.CARDS_READ)),
     db: Session = Depends(get_session),
 ) -> CardDetail:
-    return _detail(service.get_card(db, UUID(principal.property_id), card_id))
+    card = service.get_card(db, UUID(principal.property_id), card_id)
+    principal.require_object(card)
+    return _detail(card)
 
 
 @router.post("/{card_id}/claim", response_model=CardDetail)
@@ -205,6 +213,8 @@ def record_audit(
     db: Session = Depends(get_session),
 ) -> AuditOut:
     """Other services log their own decisions here so there is one trail, not thirteen."""
+    if principal.role != "service":
+        raise Forbidden("Service access required")
     entry = service.record_audit(
         db,
         UUID(principal.property_id),
@@ -227,7 +237,7 @@ def dashboard(
     principal: Principal = Depends(requires(Perm.DASHBOARD_READ)),
     db: Session = Depends(get_session),
 ) -> dict:
-    """Every tile on the owner dashboard in one call.
+    """Every tile on the General Manager dashboard in one call.
 
     The caller's own token is forwarded to each service, so the dashboard shows exactly
     what this person is allowed to see rather than widening to a service principal.

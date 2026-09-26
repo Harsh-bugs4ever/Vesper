@@ -8,12 +8,9 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
-    OWNER = "owner"
     GM = "gm"
     MANAGER = "manager"
-    SUPERVISOR = "supervisor"
-    EMPLOYEE = "employee"
-    GUEST = "guest"
+    STAFF = "staff"
 
 
 class Perm(StrEnum):
@@ -84,29 +81,25 @@ class Perm(StrEnum):
     DASHBOARD_READ = "dashboard:read"
 
 
-EMPLOYEE_PERMS: set[str] = {
+STAFF_PERMS: set[str] = {
     Perm.ATTENDANCE_MARK,
     Perm.TASKS_READ,
+    Perm.TASKS_COMPLETE,
+    Perm.STAFF_REVIEW_READ_OWN,
+}
+
+MANAGER_PERMS: set[str] = {
+    Perm.PROPERTY_READ,
+    Perm.ATTENDANCE_READ_TEAM,
+    Perm.TASKS_READ,
+    Perm.TASKS_ASSIGN,
     Perm.TASKS_COMPLETE,
     Perm.ROOMS_STATUS_WRITE,
     Perm.REQUESTS_READ,
     Perm.REQUESTS_ACCEPT,
     Perm.ISSUES_WRITE,
     Perm.STOCK_READ,
-    Perm.GUEST_REVIEW_WRITE,
-    Perm.STAFF_REVIEW_READ_OWN,
-}
-
-SUPERVISOR_PERMS: set[str] = EMPLOYEE_PERMS | {
-    Perm.ATTENDANCE_READ_TEAM,
-    Perm.TASKS_ASSIGN,
     Perm.STOCK_WRITE,
-    Perm.CARDS_READ,
-    Perm.PROPERTY_READ,
-}
-
-MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
-    Perm.USERS_READ,
     Perm.BOOKINGS_READ,
     Perm.BOOKINGS_WRITE,
     Perm.GUESTS_READ,
@@ -114,6 +107,7 @@ MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
     Perm.STAFF_REVIEW_READ,
     Perm.CARDS_APPROVE,
     Perm.CARDS_DISMISS,
+    Perm.CARDS_READ,
     Perm.WORKORDER_APPROVE,
     Perm.MAINTENANCE_RUN,
     Perm.ROSTER_APPROVE,
@@ -123,34 +117,73 @@ MANAGER_PERMS: set[str] = SUPERVISOR_PERMS | {
     Perm.DASHBOARD_READ,
 }
 
-GM_PERMS: set[str] = MANAGER_PERMS | {
+GM_PERMS: set[str] = {
+    Perm.PROPERTY_READ,
     Perm.USERS_WRITE,
+    Perm.USERS_READ,
+    Perm.ROLES_WRITE,
     Perm.PROPERTY_WRITE,
     Perm.IMPORT_RUN,
     Perm.AUDIT_READ,
+    Perm.SETTINGS_WRITE,
+    Perm.SHADOW_TOGGLE,
+    Perm.ATTENDANCE_READ_TEAM,
+    Perm.TASKS_READ,
+    Perm.TASKS_ASSIGN,
+    Perm.REQUESTS_READ,
+    Perm.STOCK_READ,
+    Perm.BOOKINGS_READ,
+    Perm.GUESTS_READ,
+    Perm.STAFF_REVIEW_READ,
+    Perm.CARDS_READ,
+    Perm.CARDS_APPROVE,
+    Perm.CARDS_DISMISS,
+    Perm.WORKORDER_APPROVE,
+    Perm.MAINTENANCE_RUN,
+    Perm.ROSTER_APPROVE,
+    Perm.PURCHASE_APPROVE,
+    Perm.CONCIERGE_USE,
     Perm.RATES_APPROVE,
     Perm.OFFERS_APPROVE,
     Perm.SIMULATOR_RUN,
     Perm.LEARNING_READ,
 }
 
-OWNER_PERMS: set[str] = GM_PERMS | {
-    Perm.ROLES_WRITE,
-    Perm.SETTINGS_WRITE,
-    Perm.SHADOW_TOGGLE,
-}
-
-# Guests hold a QR token, not an account. They may only touch their own room.
-GUEST_PERMS: set[str] = {Perm.CONCIERGE_USE}
-
 DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
-    Role.OWNER: OWNER_PERMS,
     Role.GM: GM_PERMS,
     Role.MANAGER: MANAGER_PERMS,
-    Role.SUPERVISOR: SUPERVISOR_PERMS,
-    Role.EMPLOYEE: EMPLOYEE_PERMS,
-    Role.GUEST: GUEST_PERMS,
+    Role.STAFF: STAFF_PERMS,
 }
+
+STAFF_DEPARTMENTAL_EXTRAS: set[str] = {
+    Perm.TASKS_ASSIGN,
+    Perm.ATTENDANCE_READ_TEAM,
+    Perm.STOCK_WRITE,
+    Perm.STOCK_READ,
+    Perm.ROOMS_STATUS_WRITE,
+    Perm.REQUESTS_READ,
+    Perm.REQUESTS_ACCEPT,
+    Perm.ISSUES_WRITE,
+    Perm.GUEST_REVIEW_WRITE,
+}
+
+GM_REQUIRED_PERMISSIONS: set[str] = {
+    Perm.USERS_READ,
+    Perm.USERS_WRITE,
+    Perm.ROLES_WRITE,
+    Perm.AUDIT_READ,
+    Perm.DASHBOARD_READ,
+    Perm.FORECAST_READ,
+    Perm.LEARNING_READ,
+    Perm.SIMULATOR_RUN,
+}
+
+
+def allowed_permissions_for_role(role: str) -> set[str]:
+    allowed = {str(p) for p in DEFAULT_ROLE_PERMISSIONS.get(role, set())}
+    if role == Role.STAFF:
+        allowed |= {str(p) for p in STAFF_DEPARTMENTAL_EXTRAS}
+    return allowed
 
 ALL_PERMISSIONS: list[str] = sorted(p.value for p in Perm)
 

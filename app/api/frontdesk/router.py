@@ -21,9 +21,13 @@ from .schemas import (
     VisitOut,
 )
 
-bookings_router = APIRouter(prefix="/bookings", tags=["bookings"])
-stays_router = APIRouter(prefix="/stays", tags=["stays"])
-visits_router = APIRouter(prefix="/visits", tags=["visits"])
+def _front_office(principal: Principal = Depends(current_user), db: Session = Depends(get_session)) -> None:
+    principal.require_department_key(db, "front_office")
+
+
+bookings_router = APIRouter(prefix="/bookings", tags=["bookings"], dependencies=[Depends(_front_office)])
+stays_router = APIRouter(prefix="/stays", tags=["stays"], dependencies=[Depends(_front_office)])
+visits_router = APIRouter(prefix="/visits", tags=["visits"], dependencies=[Depends(_front_office)])
 
 
 @bookings_router.get("", response_model=list[BookingOut])

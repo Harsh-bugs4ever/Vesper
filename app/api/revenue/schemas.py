@@ -81,7 +81,7 @@ class CompetitorRow(BaseModel):
 
 
 class SimulateRequest(BaseModel):
-    """The owner's three sliders."""
+    """The General Manager's three sliders."""
 
     rate_change_pct: float = Field(default=0.0, ge=-50, le=50)
     staffing_change_pct: float = Field(default=0.0, ge=-50, le=50)

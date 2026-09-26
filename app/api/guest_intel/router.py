@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm
 from vesper_common.security import Principal, current_guest, current_user, requires
+from vesper_common.permissions import Role
 
 from . import service
 from .rag import concierge
@@ -37,6 +38,8 @@ def score_sentiment(
     db: Session = Depends(get_session),
 ) -> SentimentOut:
     """Score a comment. Normally driven by the rating event, exposed for backfills."""
+    if principal.role not in {Role.GM, "service"} or body.department_id is not None:
+        principal.require_department_record(db, body.department_id)
     record = service.record_sentiment(
         db,
         UUID(principal.property_id),
@@ -52,28 +55,28 @@ def score_sentiment(
 @router.get("/sentiment/summary", response_model=SentimentSummary)
 def sentiment_summary(
     days: int = Query(default=30, ge=1, le=365),
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> SentimentSummary:
     return SentimentSummary(
-        **service.sentiment_summary(db, UUID(principal.property_id), days=days)
+        **service.sentiment_summary(db, UUID(principal.property_id), days=days, department_ids=None if principal.role in {Role.GM, "service"} else principal.department_ids)
     )
 
 
 @router.get("/sentiment/trend", response_model=list[dict])
 def sentiment_trend(
     days: int = Query(default=30, ge=1, le=365),
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[dict]:
     """Department sentiment over time — the trend chart."""
-    return service.department_trend(db, UUID(principal.property_id), days=days)
+    return service.department_trend(db, UUID(principal.property_id), days=days, department_ids=None if principal.role in {Role.GM, "service"} else principal.department_ids)
 
 
 @router.get("/dna/{guest_id}", response_model=GuestDnaOut)
 def get_dna(
     guest_id: UUID,
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> GuestDnaOut:
     """The Guest DNA card: preference chips, sentiment and churn risk."""
@@ -86,7 +89,7 @@ def get_dna(
 def rebuild_dna(
     guest_id: UUID,
     request: Request,
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> GuestDnaOut:
     row = service.build_dna(
@@ -97,7 +100,7 @@ def rebuild_dna(
 
 @router.get("/at-risk", response_model=list[GuestDnaOut])
 def at_risk(
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[GuestDnaOut]:
     """Guests drifting away, most at risk first."""
@@ -108,7 +111,7 @@ def at_risk(
 @router.get("/offers", response_model=list[OfferOut])
 def list_offers(
     status_filter: str | None = Query(default=None, alias="status"),
-    principal: Principal = Depends(requires(Perm.GUESTS_READ)),
+    principal: Principal = Depends(requires(Perm.LEARNING_READ)),
     db: Session = Depends(get_session),
 ) -> list[OfferOut]:
     rows = service.list_offers(db, UUID(principal.property_id), status=status_filter)
@@ -229,6 +232,7 @@ def staff_ask(
     db: Session = Depends(get_session),
 ) -> ConciergeOut:
     """The same concierge for staff — policy lookups without asking a manager."""
+    principal.require_department_key(db, "front_office")
     message = service.ask(
         db,
         UUID(principal.property_id),
@@ -248,6 +252,7 @@ def escalations(
     db: Session = Depends(get_session),
 ) -> list[ConciergeOut]:
     """Questions the concierge could not answer — a staff queue and a content backlog."""
+    principal.require_department_key(db, "front_office")
     rows = service.escalations(
         db, UUID(principal.property_id), unhandled_only=unhandled_only
     )
@@ -260,6 +265,7 @@ def handle_escalation(
     principal: Principal = Depends(requires(Perm.CONCIERGE_USE)),
     db: Session = Depends(get_session),
 ) -> ConciergeOut:
+    principal.require_department_key(db, "front_office")
     message = service.handle_escalation(
         db, UUID(principal.property_id), message_id, actor_id=UUID(principal.id)
     )

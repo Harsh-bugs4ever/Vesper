@@ -270,12 +270,19 @@ def cancel_work_order(db: Session, property_id: UUID, order_id: UUID) -> WorkOrd
     return order
 
 
-def summary(db: Session, property_id: UUID) -> dict:
+def summary(db: Session, property_id: UUID, *, department_ids: set[str] | None = None) -> dict:
     """Maintenance tiles for the owner dashboard."""
     health = list_health(db, property_id)
+    if department_ids is not None:
+        from app.api.property.models import Asset
+        allowed_assets = set(db.scalars(select(Asset.id).where(Asset.property_id == property_id, Asset.department_id.in_([UUID(value) for value in department_ids]))))
+        health = [row for row in health if row.asset_id in allowed_assets]
     at_risk = [h for h in health if h.risk_score >= CARD_RISK_THRESHOLD]
     open_orders = list_work_orders(db, property_id, status=WorkOrderStatus.OPEN)
     scheduled = list_work_orders(db, property_id, status=WorkOrderStatus.SCHEDULED)
+    if department_ids is not None:
+        open_orders = [row for row in open_orders if str(row.department_id) in department_ids]
+        scheduled = [row for row in scheduled if str(row.department_id) in department_ids]
     return {
         "assets_assessed": len(health),
         "assets_at_risk": len(at_risk),
