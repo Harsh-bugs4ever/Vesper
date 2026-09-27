@@ -8,8 +8,11 @@ import { cn, safeFormatDate } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
 
-function midnight(value: string | Date): Date {
-  const date = typeof value === "string" ? new Date(`${value}T00:00:00`) : new Date(value);
+function midnight(value: string | Date | null | undefined): Date {
+  if (value == null || value === "") return new Date(NaN);
+  const date = typeof value === "string"
+    ? new Date(/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value) ? `${value.slice(0, 10)}T00:00:00` : value)
+    : new Date(value);
   date.setHours(0, 0, 0, 0);
   return date;
 }
@@ -40,6 +43,11 @@ interface Placement {
 function place(booking: CalendarBooking, windowStart: Date, days: number): Placement | null {
   const checkIn = midnight(booking.checkIn);
   const checkOut = midnight(booking.checkOut);
+
+  if (!Number.isFinite(checkIn.getTime()) || !Number.isFinite(checkOut.getTime()) ||
+      !Number.isFinite(windowStart.getTime()) || checkOut <= checkIn) {
+    return null;
+  }
 
   const startOffset = Math.round((checkIn.getTime() - windowStart.getTime()) / DAY_MS);
   const endOffset = Math.round((checkOut.getTime() - windowStart.getTime()) / DAY_MS);
