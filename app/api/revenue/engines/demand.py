@@ -206,9 +206,9 @@ def _try_prophet(history: list[Observation], horizon_days: int, start: date) -> 
         future = model.make_future_dataframe(periods=max(reach, 1))
         predicted = model.predict(future)
         result = predicted[predicted["ds"].dt.date.isin(wanted)]
-    except Exception:
+    except Exception as exc:
         # A fit that blows up must not take the pricing page down with it.
-        log.exception("Prophet fit failed; falling back to the baseline")
+        log.warning("Prophet fit failed (%s); falling back to gradient/baseline", exc)
         return None
 
     recent_adr = statistics.fmean([o.adr for o in history[-30:]] or [0.0])
