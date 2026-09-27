@@ -140,8 +140,13 @@ class Scheduler:
         key = f"vesper:sched:{self.service}:{job.name}:{bucket}"
         try:
             return bool(bus.client.set(key, self._instance, nx=True, ex=LEASE_SECONDS))
-        except (redis.RedisError, OSError):
-            log.warning("could not take the lease for %s; running anyway", job.name)
+        except (redis.RedisError, OSError) as exc:
+            log.warning(
+                "could not take the lease for %s (%s: %s); running anyway",
+                job.name,
+                type(exc).__name__,
+                exc,
+            )
             return True
 
 
