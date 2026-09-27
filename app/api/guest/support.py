@@ -12,6 +12,20 @@ from vesper_common.events import Event, bus
 from app.api.guest.models import SupportConversation, SupportParticipant, SupportPost
 from app.api.guest_intel import service as intel_service
 from app.api.guest_intel.models import ConciergeMessage
+from app.api.property.models import Department
+
+
+def support_department(question: str) -> str:
+    """Conservative routing for human handoff; ambiguous messages go to Front Office."""
+    text = question.lower()
+    categories = {
+        "housekeeping": ("towel", "linen", "clean", "housekeeping", "bedsheet"),
+        "fnb": ("food", "breakfast", "lunch", "dinner", "restaurant", "meal", "drink"),
+        "maintenance": ("broken", "repair", "leak", "air conditioning", "ac not", "shower"),
+        "security": ("security", "unsafe", "theft", "stolen", "threat"),
+    }
+    matches = [key for key, words in categories.items() if any(word in text for word in words)]
+    return matches[0] if len(matches) == 1 else "front_office"
 
 
 def ask_guest(
@@ -99,6 +113,13 @@ def ask_guest(
     db.add(ai_post)
 
     if msg.escalated:
+        department = db.scalar(select(Department).where(
+            Department.property_id == property_id,
+            Department.key == support_department(question),
+        ))
+        if department is not None:
+            conv.department_id = department.id
+            conv.assigned_owner_id = department.head_user_id
         conv.status = "escalated"
         conv.escalation_reason = msg.escalation_reason
         conv.urgency = "high"
@@ -107,6 +128,7 @@ def ask_guest(
             {
                 "conversation_id": str(conv.id),
                 "property_id": str(property_id),
+                "department_id": str(conv.department_id) if conv.department_id else None,
                 "room_number": room_number,
                 "reason": msg.escalation_reason,
             },
@@ -144,6 +166,7 @@ def list_conversations(
         ).all()
         results.append({
             "id": c.id,
+            "stay_id": c.stay_id,
             "kind": c.kind,
             "topic": c.topic,
             "urgency": c.urgency,
@@ -187,6 +210,7 @@ def get_conversation(db: Session, property_id: UUID, conversation_id: UUID) -> d
     ).all()
     return {
         "id": c.id,
+        "stay_id": c.stay_id,
         "kind": c.kind,
         "topic": c.topic,
         "urgency": c.urgency,

@@ -47,6 +47,7 @@ import {
   type DepartmentOverviewSnapshot,
 } from "@/lib/api";
 import { OccupancyForecastChart } from "@/components/charts/occupancy-forecast-chart";
+import { GmDigitalTwin } from "@/components/connected/gm-digital-twin";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -323,7 +324,7 @@ export function GmDashboard() {
                               <span>Service Rating</span>
                               <span className="font-semibold text-gold-700 flex items-center gap-1">
                                 <Star className="h-3 w-3 fill-gold-400 text-gold-500" />
-                                {dept.team_rating ?? 4.8} / 5.0
+                                {dept.team_rating ? `${dept.team_rating} / 5.0` : "No reviews"}
                               </span>
                             </div>
                           </div>
@@ -362,7 +363,7 @@ export function GmDashboard() {
                         {d.department_name} Operational Hub
                       </h3>
                       <p className="text-xs text-sage-700 mt-0.5">
-                        Current active shift: <strong>{d.active_shift_name || "Morning Shift (07:00 - 15:30)"}</strong> · SLA Compliance: <strong>{d.sla_on_time_pct ?? 94}%</strong>
+                        Shift: <strong>{d.active_shift_name || "Schedule unavailable"}</strong> · Open work within SLA: <strong>{d.sla_on_time_pct ?? 0}%</strong>
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -405,7 +406,7 @@ export function GmDashboard() {
                           {d.attendance_today} <span className="text-sm font-sans font-normal text-sand-500">On Duty</span>
                         </p>
                         <p className="mt-1 text-xs text-emerald-700 font-medium">
-                          100% check-in verified today
+                          Based on attendance punches recorded today
                         </p>
                         <p className="mt-3 text-xs text-sand-600 leading-relaxed">
                           Active staff assigned to floor coverage and live tickets for {d.department_name}.
@@ -438,7 +439,7 @@ export function GmDashboard() {
                           ~{d.avg_predicted_staff_daily || d.attendance_today} <span className="text-sm font-sans font-normal text-sand-500">staff/day</span>
                         </p>
                         <p className="mt-1 text-xs text-forest-700 font-medium">
-                          Target based on occupancy forecast
+                          Baseline estimate from occupancy forecast
                         </p>
                         {d.staff_needed_next_14d && d.staff_needed_next_14d.length > 0 ? (
                           <div className="mt-3">
@@ -486,12 +487,12 @@ export function GmDashboard() {
                         </p>
                         <div className="mt-3 space-y-1 text-xs text-sand-600">
                           <div className="flex justify-between">
-                            <span>Budget Spent:</span>
-                            <span className="font-semibold text-sand-900">₹{(d.budget_spent ?? 63000).toLocaleString()}</span>
+                            <span>Budget Allocated:</span>
+                            <span className="font-semibold text-sand-900">₹{(d.budget_allocated ?? 0).toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Remaining:</span>
-                            <span className="font-semibold text-emerald-700">₹{(d.budget_remaining ?? 87000).toLocaleString()}</span>
+                            <span className="font-semibold text-emerald-700">{d.budget_allocated ? `₹${(d.budget_remaining ?? 0).toLocaleString()}` : "No active budget"}</span>
                           </div>
                         </div>
                       </div>
@@ -512,10 +513,10 @@ export function GmDashboard() {
                           <Star className="h-4 w-4 fill-gold-400 text-gold-500" />
                         </div>
                         <p className="mt-3 font-serif text-3xl font-bold text-sand-950">
-                          {d.team_rating ?? 4.8} <span className="text-sm font-sans font-normal text-sand-500">/ 5.0</span>
+                          {d.team_rating ? d.team_rating : "—"} <span className="text-sm font-sans font-normal text-sand-500">{d.team_rating ? "/ 5.0" : "No reviews"}</span>
                         </p>
                         <p className="mt-1 text-xs text-emerald-700 font-medium">
-                          {d.sla_on_time_pct ?? 94}% on-time SLA resolution
+                          {d.sla_on_time_pct ?? 0}% of open work within SLA
                         </p>
                         <p className="mt-3 text-xs text-sand-600">
                           {d.open_tasks} active tasks · {d.open_requests} guest tickets ({d.overdue_tasks + d.overdue_requests} overdue).
@@ -537,6 +538,7 @@ export function GmDashboard() {
                       </button>
                     </div>
                   </div>
+                  <GmDigitalTwin departmentId={d.department_id} />
                 </div>
               );
             })()
@@ -1194,14 +1196,14 @@ export function GmDashboard() {
                         {act.summary}
                       </p>
                       <p className="text-[11px] text-sand-500">
-                        Confidence:{" "}
+                        Engine score (uncalibrated):{" "}
                         <span className="font-semibold text-sand-800">
                           {Math.round(act.confidence * 100)}%
                         </span>
                         {act.impact_amount !== undefined && (
                           <>
                             {" "}
-                            · Impact:{" "}
+                            · Unverified estimate:{" "}
                             <span className="font-semibold text-emerald-700">
                               ₹{act.impact_amount.toLocaleString("en-IN")}
                             </span>

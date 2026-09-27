@@ -70,7 +70,7 @@ export function GuestOrderConfirmationModal({
             Order Placed Successfully!
           </h2>
           <p className="mt-1 text-xs text-sand-200">
-            Room {order.roomNumber} · Payment Confirmed via {order.paymentMethod}
+            Room {order.roomNumber} · Payment pending
           </p>
         </div>
 
@@ -80,10 +80,10 @@ export function GuestOrderConfirmationModal({
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-center space-y-2">
             <div className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-800">
               <Clock className="h-4 w-4 text-emerald-700 animate-pulse" />
-              <span>Estimated Delivery: 20 to 30 Minutes</span>
+              <span>Requested delivery target</span>
             </div>
             <p className="text-sm font-medium text-emerald-950">
-              Your order is placed! Our chef is freshly preparing your meal, and it will be delivered hot to your room in <strong>20 to 30 minutes</strong>.
+              Your order has reached the hotel. Follow its live status below; delivery timing is confirmed by staff.
             </p>
             <div className="inline-block rounded-full bg-emerald-100/80 px-3 py-1 text-xs font-semibold text-emerald-900">
               Expected Arrival: {order.estimatedDeliveryTime}
@@ -101,8 +101,8 @@ export function GuestOrderConfirmationModal({
                 <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white text-[11px] font-bold">
                   ✓
                 </div>
-                <p className="font-semibold text-sage-950">UPI Paid</p>
-                <p className="text-[10px] text-sand-500">Ref #{order.txnId.slice(-6)}</p>
+                <p className="font-semibold text-sage-950">Order placed</p>
+                <p className="text-[10px] text-sand-500">Payment pending</p>
               </div>
 
               <div className="space-y-1">
@@ -128,7 +128,7 @@ export function GuestOrderConfirmationModal({
             <div className="flex items-center justify-between border-b border-sand-100 pb-2">
               <span className="font-semibold text-sage-900">Order #{order.id.slice(0, 8)}</span>
               <span className="font-mono font-bold text-sage-950">
-                ₹{order.totalAmount.toLocaleString("en-IN")} (UPI Paid)
+                ₹{order.totalAmount.toLocaleString("en-IN")} (payment pending)
               </span>
             </div>
 

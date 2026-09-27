@@ -18,6 +18,7 @@ from app.api.frontdesk.models import Booking, BookingStatus, Stay, StayStatus
 from app.api.guest.models import RequestStatus, ServiceRequest
 from app.api.guest_intel.models import GuestStaffReview
 from app.api.inventory.models import DepartmentBudget, InventoryRequest, StockItem
+from app.api.inventory.procurement import budget_totals
 from app.api.property.models import Department, Room
 from app.api.revenue.models import DemandForecast
 from app.api.staff.models import Attendance, Task, TaskStatus
@@ -143,16 +144,12 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
         next_14_forecasts = [min(1.0, max(0.2, base_rate + (i % 3 - 1) * 0.05)) for i in range(14)]
 
     # 8. Department Budgets
-    budgets_stmt = select(
-        DepartmentBudget.department_id,
-        DepartmentBudget.allocated,
-        DepartmentBudget.currency,
-    ).where(
+    budgets_stmt = select(DepartmentBudget).where(
         DepartmentBudget.property_id == branch,
         DepartmentBudget.period_start <= today,
         DepartmentBudget.period_end >= today,
     )
-    budget_map = {row.department_id: row for row in db.execute(budgets_stmt).all()}
+    budget_map = {row.department_id: row for row in db.scalars(budgets_stmt).all()}
 
     # 9. Low stock items grouped by department
     low_stock_stmt = select(
@@ -220,9 +217,10 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
         avg_predicted = int(round(sum(staff_curve) / len(staff_curve))) if staff_curve else att_td
 
         b_row = budget_map.get(d.id)
-        allocated_amt = float(b_row.allocated) if b_row else 150000.0
-        spent_amt = min(allocated_amt, round(allocated_amt * 0.42, 2))
-        remaining_amt = max(0.0, round(allocated_amt - spent_amt, 2))
+        totals = budget_totals(db, b_row) if b_row else None
+        allocated_amt = float(totals["allocated"]) if totals else 0.0
+        spent_amt = float(totals["spent"]) if totals else 0.0
+        remaining_amt = float(totals["remaining"]) if totals else 0.0
 
         dept_snapshots.append(DepartmentSnapshot(
             department_id=d.id,
@@ -233,7 +231,7 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
             overdue_tasks=od_tasks,
             completed_tasks_in_period=c_tasks,
             attendance_today=att_td,
-            active_shift_name="Morning Shift (07:00 - 15:30)",
+            active_shift_name="Shift schedule unavailable",
             staff_needed_next_14d=staff_curve,
             avg_predicted_staff_daily=avg_predicted,
             low_stock_items=low_stock_map.get(d.id, 0),
@@ -242,8 +240,9 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
             budget_spent=spent_amt,
             budget_remaining=remaining_amt,
             currency=b_row.currency if b_row else "INR",
-            team_rating=round(rev_map.get(d.id, 4.8), 1),
-            sla_on_time_pct=max(60, 100 - (od_tasks + od_reqs) * 8),
+            team_rating=round(rev_map.get(d.id, 0.0), 1),
+            sla_on_time_pct=round(100 * (o_tasks + o_reqs - od_tasks - od_reqs) /
+                                  (o_tasks + o_reqs)) if o_tasks + o_reqs else 0,
         ))
 
     exceptions: list[OverviewException] = []
@@ -379,20 +378,22 @@ def department_overview(
     avg_predicted = int(round(sum(staff_curve) / len(staff_curve))) if staff_curve else int(att_today)
 
     try:
-        b_row = db.execute(
-            select(DepartmentBudget.allocated, DepartmentBudget.currency).where(
+        b_row = db.scalars(
+            select(DepartmentBudget).where(
                 DepartmentBudget.property_id == branch,
                 DepartmentBudget.department_id == department.id,
                 DepartmentBudget.period_start <= today,
                 DepartmentBudget.period_end >= today,
             )
         ).first()
-        allocated_amt = float(b_row.allocated) if b_row else 150000.0
+        totals = budget_totals(db, b_row) if b_row else None
+        allocated_amt = float(totals["allocated"]) if totals else 0.0
     except Exception:
         b_row = None
-        allocated_amt = 150000.0
-    spent_amt = min(allocated_amt, round(allocated_amt * 0.42, 2))
-    remaining_amt = max(0.0, round(allocated_amt - spent_amt, 2))
+        totals = None
+        allocated_amt = 0.0
+    spent_amt = float(totals["spent"]) if b_row and totals else 0.0
+    remaining_amt = float(totals["remaining"]) if b_row and totals else 0.0
 
     try:
         low_stock_count = db.scalar(
@@ -440,7 +441,7 @@ def department_overview(
         overdue_tasks=od_tasks,
         completed_tasks_in_period=int(t_row.completed_tasks or 0),
         attendance_today=int(att_today),
-        active_shift_name="Morning Shift (07:00 - 15:30)",
+        active_shift_name="Shift schedule unavailable",
         staff_needed_next_14d=staff_curve,
         avg_predicted_staff_daily=avg_predicted,
         low_stock_items=int(low_stock_count),
@@ -449,8 +450,9 @@ def department_overview(
         budget_spent=spent_amt,
         budget_remaining=remaining_amt,
         currency=b_row.currency if b_row else "INR",
-        team_rating=round(float(avg_score), 1) if avg_score else 4.8,
-        sla_on_time_pct=max(60, 100 - (od_tasks + od_reqs) * 8),
+        team_rating=round(float(avg_score), 1) if avg_score else 0.0,
+        sla_on_time_pct=round(100 * (o_tasks + o_reqs - od_tasks - od_reqs) /
+                              (o_tasks + o_reqs)) if o_tasks + o_reqs else 0,
     )
 
     return {

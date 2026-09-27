@@ -86,7 +86,7 @@ def main():
         "summary": "Smoke test housekeeping report",
     })
     print("staff report created", report["id"])
-    call("GET", "/reports", token=manager)
+    call("GET", "/reports", token=manager, params={"department_id": department_id})
     call("POST", f"/reports/{report['id']}/approve", token=manager)
     print("manager report approved")
     print("workflow passed")

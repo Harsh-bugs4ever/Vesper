@@ -69,6 +69,11 @@ def test_a_protected_route_refuses_an_anonymous_caller(client: TestClient):
     assert response.status_code == 401
 
 
+def test_guest_cannot_enumerate_live_room_qr_secrets(client: TestClient, paths: set[str]):
+    assert "/guest/active-rooms" not in paths
+    assert client.get("/guest/active-rooms").status_code == 404
+
+
 def test_a_protected_route_refuses_a_forged_token(client: TestClient):
     response = client.get("/rooms", headers={"Authorization": "Bearer not-a-real-token"})
     assert response.status_code == 401

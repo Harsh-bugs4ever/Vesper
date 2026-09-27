@@ -32,7 +32,6 @@ const PUBLIC_PATHS = [
   "/guest/session",
   "/property/public",
   "/guest/amenities",
-  "/guest/active-rooms",
   "/guest/menu",
 ];
 
@@ -164,7 +163,6 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
     guest ||
     (path.startsWith("/guest/") &&
       path !== "/guest/session" &&
-      path !== "/guest/active-rooms" &&
       path !== "/guest/amenities" &&
       path !== "/guest/menu");
   const token = guestRequest

@@ -22,7 +22,6 @@ import { GuestUpiPaymentModal } from "@/components/guest/guest-upi-payment-modal
 import { GuestOrderConfirmationModal } from "@/components/guest/guest-order-confirmation-modal";
 import { GuestAiDiningRecommendations } from "@/components/guest/guest-ai-dining-recommendations";
 import {
-  FALLBACK_MENU_ITEMS,
   type MenuItem as CatalogMenuItem,
   type OrderItemHistorySummary,
 } from "@/lib/dining-catalog";
@@ -81,8 +80,6 @@ export default function GuestRoomPage() {
     hasNonVeg: boolean;
   } | null>(null);
 
-  // Local orders cache for instant optimistic display & offline robustness
-  const [localOrders, setLocalOrders] = useState<Request[]>([]);
 
   // AI Order History tracking for food recommendations (e.g. Non-Veg preferences)
   const [orderHistory, setOrderHistory] = useState<OrderItemHistorySummary[]>([]);
@@ -148,12 +145,7 @@ export default function GuestRoomPage() {
         setOrderHistory(JSON.parse(savedHistory));
       }
 
-      const savedLocalOrders = window.sessionStorage.getItem(
-        `vesper_guest_orders_${session.room_number}`
-      );
-      if (savedLocalOrders) {
-        setLocalOrders(JSON.parse(savedLocalOrders));
-      }
+      window.sessionStorage.removeItem(`vesper_guest_orders_${session.room_number}`);
     } catch {
       // Ignore sessionStorage parsing errors
     }
@@ -162,7 +154,7 @@ export default function GuestRoomPage() {
   const key = ["guest-room-requests", session?.stay_id];
 
   const menu = useQuery({
-    queryKey: ["guest-room-menu", session?.property_id],
+    queryKey: ["guest-room-menu", session?.stay_id],
     queryFn: () => api.get<Menu>("/guest/menu"),
     retry: 1,
   });
@@ -222,60 +214,20 @@ export default function GuestRoomPage() {
     setSession(null);
   };
 
-  // Build fallback menu categories when backend server is offline or returned empty
-  const fallbackCategories = useMemo(() => {
-    const grouped: Record<string, MenuItem[]> = {};
-    for (const item of FALLBACK_MENU_ITEMS) {
-      if (!grouped[item.categoryLabel]) {
-        grouped[item.categoryLabel] = [];
-      }
-      grouped[item.categoryLabel].push({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        is_veg: item.is_veg,
-        is_available: item.is_available,
-      });
-    }
-    return grouped;
-  }, []);
-
-  // Master catalog of all menu items (backend live items + fallback resort catalog)
   const masterCatalog = useMemo(() => {
-    const itemMap = new Map<string, MenuItem>();
-
-    // 1. First add fallback items
-    for (const item of FALLBACK_MENU_ITEMS) {
-      itemMap.set(String(item.id).toLowerCase(), {
+    return Object.entries(menu.data?.categories ?? {}).flatMap(([category, items]) =>
+      items.map((item) => ({
         id: item.id,
         name: item.name,
-        description: item.description,
+        category: category.includes("dessert") ? "desserts" : category.includes("beverage") ? "beverages" : "mains",
+        categoryLabel: category.replaceAll("_", " "),
+        description: item.description ?? "",
         price: Number(item.price),
         is_veg: item.is_veg,
         is_available: item.is_available,
-      });
-    }
-
-    // 2. Add backend live items (overrides or supplements with live items)
-    if (menu.data?.categories) {
-      for (const items of Object.values(menu.data.categories)) {
-        for (const item of items) {
-          if (item && item.id) {
-            itemMap.set(String(item.id).toLowerCase(), {
-              id: String(item.id),
-              name: item.name,
-              description: item.description,
-              price: Number(item.price || 0),
-              is_veg: Boolean(item.is_veg),
-              is_available: Boolean(item.is_available),
-            });
-          }
-        }
-      }
-    }
-
-    return Array.from(itemMap.values());
+        preparationTimeMinutes: 25,
+      } as CatalogMenuItem))
+    );
   }, [menu.data?.categories]);
 
   // Robust menu item finder by ID, lowercase ID, or name
@@ -295,32 +247,10 @@ export default function GuestRoomPage() {
     );
     if (match) return match;
 
-    // 3. Fallback search in FALLBACK_MENU_ITEMS
-    const fallbackMatch = FALLBACK_MENU_ITEMS.find(
-      (m) => String(m.id).toLowerCase() === cleanId || m.name.toLowerCase().trim() === cleanId
-    );
-    if (fallbackMatch) {
-      return {
-        id: fallbackMatch.id,
-        name: fallbackMatch.name,
-        description: fallbackMatch.description,
-        price: Number(fallbackMatch.price),
-        is_veg: fallbackMatch.is_veg,
-        is_available: fallbackMatch.is_available,
-      };
-    }
-
     return undefined;
   };
 
-  const isBackendMenuLoaded = Boolean(
-    menu.data?.categories && Object.keys(menu.data.categories).length > 0
-  );
-
-  // Seamlessly fall back to curated resort catalog so guest is never blocked by offline backend
-  const menuCategories = isBackendMenuLoaded
-    ? (menu.data!.categories)
-    : fallbackCategories;
+  const menuCategories = menu.data?.categories ?? {};
 
   const allMenuItems = masterCatalog;
 
@@ -343,13 +273,7 @@ export default function GuestRoomPage() {
     })
     .join(", ");
 
-  // Merge server requests and locally placed orders
-  const allRequests = useMemo(() => {
-    const serverRequests = requests.data || [];
-    const serverIds = new Set(serverRequests.map((r) => r.id));
-    const uniqueLocal = localOrders.filter((r) => !serverIds.has(r.id));
-    return [...uniqueLocal, ...serverRequests];
-  }, [requests.data, localOrders]);
+  const allRequests = requests.data || [];
 
   // Handle 1-click add to cart from AI recommendation cards
   const handleAddToCartFromAi = (item: CatalogMenuItem | MenuItem) => {
@@ -359,128 +283,43 @@ export default function GuestRoomPage() {
     }));
   };
 
-  // Initiate UPI payment dummy scanner flow
   const handleOpenPayment = () => {
     if (cartItems.length === 0 || isSessionTerminated) return;
     setIsPaymentModalOpen(true);
   };
 
-  // Called when UPI Payment is successfully scanned & simulated
-  const handlePaymentSuccess = (details: {
-    txnId: string;
-    amount: number;
-    paymentMethod: string;
-    paidAt: string;
-  }) => {
-    const generatedOrderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-
-    // Calculate delivery time promise (20 to 30 minutes from now)
-    const deliveryDate = new Date(Date.now() + 25 * 60 * 1000); // 25 mins average
-    const estimatedTimeString = deliveryDate.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const orderedItemsWithDetails = cartItems.map((ci) => {
-      const catalogItem = getMenuItem(ci.menu_item_id);
-      const unitPrice = Number(catalogItem?.price ?? 0);
-      return {
-        menu_item_id: ci.menu_item_id,
-        name: catalogItem?.name || "Gourmet Dish",
-        quantity: ci.quantity,
-        unit_price: unitPrice,
-        price: unitPrice * ci.quantity,
-        is_veg: catalogItem ? catalogItem.is_veg : true,
-      };
-    });
-
-    const hasNonVeg = orderedItemsWithDetails.some((i) => !i.is_veg);
-
-    // 1. Update AI Taste Profile based on ordered items
-    const newTasteEntries: OrderItemHistorySummary[] = orderedItemsWithDetails.map((i) => ({
-      name: i.name,
-      is_veg: Boolean(i.is_veg),
-      quantity: i.quantity,
-    }));
-
-    const updatedTasteHistory = [...orderHistory, ...newTasteEntries];
-    setOrderHistory(updatedTasteHistory);
-    if (session?.room_number) {
-      try {
-        window.sessionStorage.setItem(
-          `vesper_guest_taste_history_${session.room_number}`,
-          JSON.stringify(updatedTasteHistory)
-        );
-      } catch {
-        // ignore
-      }
-    }
-
-    // 2. Create the placed Request object
-    const newRequest: Request = {
-      id: generatedOrderId,
-      kind: "room_service",
-      status: "in_progress",
-      note: `Paid via ${details.paymentMethod} (Ref #${details.txnId}). ${
-        orderNote.trim() ? `Note: ${orderNote.trim()}` : ""
-      }`,
-      total_amount: cartTotal,
-      due_at: deliveryDate.toISOString(),
-      rating: null,
-      items: orderedItemsWithDetails,
-    };
-
-    const updatedLocalOrders = [newRequest, ...localOrders];
-    setLocalOrders(updatedLocalOrders);
-    if (session?.room_number) {
-      try {
-        window.sessionStorage.setItem(
-          `vesper_guest_orders_${session.room_number}`,
-          JSON.stringify(updatedLocalOrders)
-        );
-      } catch {
-        // ignore
-      }
-    }
-
-    // 3. Prepare confirmed order state for popup
-    setConfirmedOrder({
-      id: generatedOrderId,
-      roomNumber: session?.room_number || "405",
-      guestName: session?.guest_name,
-      items: orderedItemsWithDetails,
-      totalAmount: cartTotal,
-      txnId: details.txnId,
-      paymentMethod: details.paymentMethod,
-      placedAt: details.paidAt,
-      estimatedDeliveryTime: estimatedTimeString,
-      note: orderNote.trim() || undefined,
-      hasNonVeg,
-    });
-
-    // 4. Attempt backend sync if available (safe best effort)
-    if (session && !session.token.startsWith("demo-token-")) {
-      create.mutate(
-        {
-          kind: "room_service",
-          note: newRequest.note || undefined,
-          items: cartItems,
+  const handleConfirmOrder = () => {
+    if (!session || create.isPending) return;
+    create.mutate(
+      { kind: "room_service", note: orderNote.trim() || undefined, items: cartItems },
+      {
+        onSuccess: (created) => {
+          const orderedItems = cartItems.map((ci) => {
+            const item = getMenuItem(ci.menu_item_id);
+            return { name: item?.name || "Menu item", quantity: ci.quantity, price: Number(item?.price ?? 0) * ci.quantity, is_veg: item?.is_veg ?? true };
+          });
+          setConfirmedOrder({
+            id: created.id,
+            roomNumber: session.room_number,
+            guestName: session.guest_name ?? undefined,
+            items: orderedItems,
+            totalAmount: Number(created.total_amount),
+            txnId: "",
+            paymentMethod: "Payment pending; arrange with hotel",
+            placedAt: new Date().toLocaleTimeString("en-IN"),
+            estimatedDeliveryTime: created.due_at ? new Date(created.due_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "To be confirmed",
+            note: orderNote.trim() || undefined,
+            hasNonVeg: orderedItems.some((item) => !item.is_veg),
+          });
+          setCart({});
+          setOrderNote("");
+          setIsPaymentModalOpen(false);
+          setIsConfirmationModalOpen(true);
+          void client.invalidateQueries({ queryKey: ["guest-requests"] });
         },
-        {
-          onError: () => {
-            // Local state already updated cleanly
-          },
-        }
-      );
-    }
-
-    // 5. Reset cart & close scanner
-    setCart({});
-    setOrderNote("");
-    setIsPaymentModalOpen(false);
-    setIsConfirmationModalOpen(true);
+      }
+    );
   };
-
   const handleTrackOrder = () => {
     const el = document.getElementById("requests-heading");
     if (el) {
@@ -649,7 +488,7 @@ export default function GuestRoomPage() {
               <p className="text-xs text-sand-600">Freshly prepared and delivered to your door</p>
             </div>
             <span className="text-xs font-semibold uppercase tracking-wider text-sage-800 bg-sand-100 px-2.5 py-1 rounded-full">
-              Kitchen Live
+              {menu.isError ? "Kitchen menu unavailable" : "Kitchen Live"}
             </span>
           </div>
 
@@ -658,6 +497,10 @@ export default function GuestRoomPage() {
               <RefreshCw className="h-6 w-6 animate-spin text-sage-700" />
               <p className="text-xs font-medium">Loading live kitchen menu & availability…</p>
             </div>
+          ) : menu.isError ? (
+            <p role="alert" className="mt-6 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">
+              Could not load the current menu. Please try again before ordering.
+            </p>
           ) : (
             <div className="mt-6 space-y-6">
               {/* Dynamic AI Food Recommendations based on user order history */}
@@ -954,7 +797,9 @@ export default function GuestRoomPage() {
         <GuestUpiPaymentModal
           isOpen={isPaymentModalOpen}
           onClose={() => setIsPaymentModalOpen(false)}
-          onPaymentSuccess={handlePaymentSuccess}
+          onConfirm={handleConfirmOrder}
+          isSubmitting={create.isPending}
+          error={create.isError ? (create.error instanceof Error ? create.error.message : "Could not place order.") : undefined}
           amount={cartTotal}
           roomNumber={session.room_number}
           itemsSummary={cartSummaryString}

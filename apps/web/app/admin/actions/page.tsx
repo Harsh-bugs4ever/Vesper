@@ -658,7 +658,7 @@ function LiveActionQueue() {
 
                     {/* Confidence Bar */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-sand-600">Confidence:</span>
+                      <span className="text-xs font-medium text-sand-600">Engine score (uncalibrated):</span>
                       <div className="h-2 w-24 overflow-hidden rounded-full bg-sand-200">
                         <div
                           className={cn(
@@ -709,11 +709,11 @@ function LiveActionQueue() {
                     {/* Impact Box */}
                     <div className="flex flex-col justify-between rounded-xl border border-sand-200 bg-sand-50/50 p-4">
                       <div>
-                        <span className="text-xs font-medium text-sand-500">Projected Impact</span>
+                        <span className="text-xs font-medium text-sand-500">Engine estimate · unverified</span>
                         <p className="font-serif text-2xl font-semibold text-emerald-700">
                           ₹{Number(card.impact_amount).toLocaleString("en-IN")}
                         </p>
-                        <p className="mt-0.5 text-xs text-sand-600">Engine: {card.engine}</p>
+                        <p className="mt-0.5 text-xs text-sand-600">Source: {card.engine}. Check underlying records and assumptions before approval.</p>
                       </div>
 
                       {card.payload && Object.keys(card.payload).length > 0 && (

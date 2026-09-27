@@ -37,6 +37,19 @@ learning_router = APIRouter(prefix="/learning", tags=["learning"])
 audit_router = APIRouter(prefix="/audit", tags=["audit"])
 
 
+@dashboard_router.get("/digital-twin")
+def digital_twin(department_id: UUID,
+                 rain_delta_mm: float = Query(default=0, ge=-50, le=150),
+                 heat_delta_c: float = Query(default=0, ge=-15, le=15),
+                 principal: Principal = Depends(requires_gm(Perm.DASHBOARD_READ)),
+                 db: Session = Depends(get_session)) -> dict:
+    """Read-only 14-day operational scenario for one department."""
+    from .digital_twin import build_twin
+
+    return build_twin(db, UUID(principal.property_id), department_id,
+                      rain_delta_mm=rain_delta_mm, heat_delta_c=heat_delta_c)
+
+
 @dashboard_router.get("/overview", response_model=GMOverviewOut)
 def gm_overview(branch_id: UUID | None = None, start: date | None = None,
                 end: date | None = None,
@@ -99,6 +112,14 @@ def queue(
     cards = service.list_queue(
         db, principal, kind=kind, engine=engine, include_decided=include_decided, limit=limit
     )
+    # Earlier demo runs persisted cards built from invented utilization, vision,
+    # expiry and recovery evidence. Retain their audit records, but keep them
+    # out of the decision queue until those sources are connected.
+    unsupported = {"facility_demand_engine", "vision_turnover_engine",
+                   "inventory_waste_rescue_engine"}
+    cards = [card for card in cards if card.engine not in unsupported
+             and not (card.engine == "churn_recovery_engine"
+                      and (card.dedupe_key or "").startswith("guest_recovery:simulated:"))]
     return [_detail(c) for c in cards]
 
 

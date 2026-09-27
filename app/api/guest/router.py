@@ -74,12 +74,6 @@ def open_session(
     return GuestSession(**session)
 
 
-@guest_router.get("/active-rooms", response_model=list[dict])
-def active_rooms(db: Session = Depends(get_session)) -> list[dict]:
-    """Get active checked-in rooms with their QR secrets for testing and room cards."""
-    return service.list_active_checked_in_rooms(db)
-
-
 @guest_router.get("/menu", response_model=MenuOut)
 def guest_menu(
     request: Request, db: Session = Depends(get_session)
