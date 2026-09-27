@@ -24,6 +24,6 @@ services:
       - key: VESPER_REDIS_URL
         sync: false
       - key: VESPER_REDIS_POOL_MAX_CONNECTIONS
-        value: "8"
+        value: "32"
       - key: PORT
         value: "8000"

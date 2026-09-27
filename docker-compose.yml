@@ -39,7 +39,7 @@ services:
     environment:
       VESPER_DATABASE_URL: postgresql+psycopg://postgres:ansh@host.docker.internal:5432/vesper_hackathon
       VESPER_REDIS_URL: ${VESPER_REDIS_URL:-redis://redis:6379/0}
-      VESPER_REDIS_POOL_MAX_CONNECTIONS: ${VESPER_REDIS_POOL_MAX_CONNECTIONS:-8}
+      VESPER_REDIS_POOL_MAX_CONNECTIONS: ${VESPER_REDIS_POOL_MAX_CONNECTIONS:-32}
       VESPER_JWT_SECRET: ${VESPER_JWT_SECRET:-dev-only-change-me}
       VESPER_ENVIRONMENT: ${VESPER_ENVIRONMENT:-development}
       VESPER_PROPERTY_TIMEZONE: ${VESPER_PROPERTY_TIMEZONE:-Asia/Kolkata}

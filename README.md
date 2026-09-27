@@ -400,13 +400,16 @@ backend's `VESPER_REDIS_URL` secret. It should look like:
 rediss://default:<TOKEN>@<ENDPOINT>:<PORT>
 ```
 
-Use the TCP URL, not the Upstash REST URL/token. The REST API is a different protocol
-and cannot serve the app's blocking Streams consumers. Keep TLS enabled with `rediss://`.
+Use the TCP URL and a full-access TCP token, not the Upstash REST URL/token or read-only
+TCP token. The app needs `SET` for scheduler leases, `XGROUP`/`XREADGROUP`/`XACK` for
+event consumers, and publish/write commands for events. The REST API is a different
+protocol and cannot serve the app's blocking Streams consumers. Keep TLS enabled with
+`rediss://`.
 If the token contains reserved URL characters, percent-encode it before putting it in
 the URL. Do not commit the real connection string.
 
 For Render, set `VESPER_REDIS_URL` in the service environment (the Blueprint declares
-it as an unsynced secret). Leave `VESPER_REDIS_POOL_MAX_CONNECTIONS` at `8` unless the
+it as an unsynced secret). Leave `VESPER_REDIS_POOL_MAX_CONNECTIONS` at `32` unless the
 backend needs more concurrent Redis operations. Each backend instance starts one
 blocking Redis connection per event consumer (currently 12), in addition to the bounded
 publisher and rate-limiter pools. Size the Upstash plan's simultaneous-connection limit

@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # One PostgreSQL database in development, one schema per bounded context.
     database_url: str = "postgresql+psycopg://vesper:vesper@localhost:5432/vesper"
     redis_url: str = "redis://localhost:6379/0"
-    redis_pool_max_connections: int = 8
+    # Startup fans out work across one scheduler thread per module; leave enough
+    # headroom for their concurrent lease claims and request-time Redis operations.
+    redis_pool_max_connections: int = 32
 
     @field_validator("redis_url")
     @classmethod
