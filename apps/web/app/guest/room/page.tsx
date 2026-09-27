@@ -17,6 +17,7 @@ import {
 import { api, auth, guestTokens, type GuestSession } from "@/lib/api";
 import { GuestAmenitiesSection } from "@/components/guest/guest-amenities-section";
 import { GuestAiConciergeDrawer } from "@/components/guest/guest-ai-concierge-drawer";
+import { GuestAiPlanner } from "@/components/guest/guest-ai-planner";
 import { GuestRoomQrCard } from "@/components/guest/guest-room-qr-card";
 import { GuestUpiPaymentModal } from "@/components/guest/guest-upi-payment-modal";
 import { GuestOrderConfirmationModal } from "@/components/guest/guest-order-confirmation-modal";
@@ -409,6 +410,8 @@ export default function GuestRoomPage() {
             </div>
           </div>
         )}
+
+        <GuestAiPlanner key={session.stay_id} stayId={session.stay_id} disabled={isSessionTerminated} />
 
         {/* Request a Service Section */}
         <section

@@ -17,6 +17,7 @@ from app.api.property import service as property_service
 from app.api.property.schemas import AmenityOut, GuestRoomOut, RoomImageOut
 
 from . import service
+from .planner import PlannerRequest, PlannerResponse, make_plan, property_now
 from .schemas import (
     GuestCreate,
     GuestOut,
@@ -157,6 +158,25 @@ def guest_room(principal: Principal = Depends(active_guest),
         category_name=room.category.name if room.category else "Standard Room",
         category_amenities=room.category.amenities if room.category else [],
         images=[RoomImageOut.model_validate(i) for i in room.images],
+    )
+
+
+@guest_router.post("/planner", response_model=PlannerResponse)
+def guest_planner(
+    body: PlannerRequest,
+    principal: Principal = Depends(active_guest),
+    db: Session = Depends(get_session),
+) -> PlannerResponse:
+    """Recommend available experiences for this stay without a slow model round trip."""
+    property_id = UUID(principal.property_id)
+    property_row = property_service.get_property(db, property_id)
+    amenities = property_service.list_amenities(db, property_id)
+    occupancy = property_service.occupancy_snapshot(db, property_id)
+    return make_plan(
+        body.plan,
+        amenities,
+        occupancy["occupancy_rate"],
+        property_now(property_row.timezone),
     )
 
 
