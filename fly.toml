@@ -1,0 +1,62 @@
+# fly.toml app configuration file for Vesper backend
+# Generated for deployment on Fly.io
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "vesper-backend"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Runs database migrations automatically on every deploy before rolling out instances
+  release_command = "python -m alembic upgrade head"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+  VESPER_ENVIRONMENT = "production"
+  VESPER_SERVICE_NAME = "vesper-backend"
+  VESPER_PROPERTY_TIMEZONE = "Asia/Kolkata"
+  VESPER_CURRENCY = "INR"
+  VESPER_SHADOW_MODE_DEFAULT = "false"
+  VESPER_CONCIERGE_MODEL = "llama-3.3-70b-versatile"
+  # Note: Set sensitive environment variables with `fly secrets set`:
+  # - VESPER_DATABASE_URL
+  # - VESPER_REDIS_URL
+  # - VESPER_JWT_SECRET
+  # - VESPER_CORS_ORIGINS
+  # - VESPER_GROQ_API_KEY (optional, for concierge AI)
+  # - VESPER_NUGEN_API_KEY (optional)
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/ready"
+
+[mounts]
+  # Persistent volume for issue attachments and uploaded documents
+  source = "uploads_data"
+  destination = "/data/uploads"
+  initial_size = "1gb"
+
+[[vm]]
+  # Prophet, XGBoost, Scikit-learn, and OR-Tools benefit from 1-2GB memory
+  size = "shared-cpu-2x"
+  memory = "1024mb"
+  cpus = 2

@@ -56,13 +56,18 @@ def _metadata():
         "maintenance.work_orders": {"room_id", "source_issue_id"},
         "inventory.purchase_orders": {
             "department_id", "budget_id", "request_line_id", "currency",
-            "received_quantity", "returned_quantity",
+            "received_quantity", "returned_quantity", "reorder_key",
+        },
+        "inventory.stock_items": {
+            "safety_stock_days", "target_stock_days", "average_daily_usage_14d",
+            "reorder_threshold", "last_threshold_calculated_at",
         },
         "inventory.stock_movements": {"department_id"},
     }
     later_indexes = {
         "uq_frontdesk_one_active_stay_per_room", "uq_frontdesk_one_active_stay_per_booking",
         "uq_frontdesk_stays_open_room", "uq_frontdesk_stays_booking",
+        "ix_stock_movements_reorder_history", "ix_purchase_orders_incoming_item_status",
     }
     baseline = MetaData(naming_convention=Base.metadata.naming_convention)
     for table in Base.metadata.sorted_tables:

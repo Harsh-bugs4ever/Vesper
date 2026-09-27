@@ -28,7 +28,10 @@ SCHEMA = "guest_intel"
 
 
 def upgrade() -> None:
-    op.create_table(
+    inspector = sa.inspect(op.get_bind())
+    staff_reviews_exists = inspector.has_table("guest_staff_reviews", schema=SCHEMA)
+    if not staff_reviews_exists:
+        op.create_table(
         "guest_staff_reviews",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("property_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -51,13 +54,14 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "stay_id", "staff_id", "guest_id", name="uq_staff_review_one_per_guest_per_stay"
         ),
-        schema=SCHEMA,
-    )
-    op.create_index("ix_gsr_stay", "guest_staff_reviews", ["stay_id"], schema=SCHEMA)
-    op.create_index("ix_gsr_guest", "guest_staff_reviews", ["guest_id"], schema=SCHEMA)
-    op.create_index("ix_gsr_staff", "guest_staff_reviews", ["staff_id"], schema=SCHEMA)
+            schema=SCHEMA,
+        )
+        op.create_index("ix_gsr_stay", "guest_staff_reviews", ["stay_id"], schema=SCHEMA)
+        op.create_index("ix_gsr_guest", "guest_staff_reviews", ["guest_id"], schema=SCHEMA)
+        op.create_index("ix_gsr_staff", "guest_staff_reviews", ["staff_id"], schema=SCHEMA)
 
-    op.create_table(
+    if not inspector.has_table("staff_performance_summaries", schema=SCHEMA):
+        op.create_table(
         "staff_performance_summaries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("property_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -82,11 +86,11 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("property_id", "staff_id", name="uq_staff_performance_one_per_staff"),
-        schema=SCHEMA,
-    )
-    op.create_index("ix_sps_staff", "staff_performance_summaries", ["staff_id"], schema=SCHEMA)
-    op.create_index("ix_sps_department", "staff_performance_summaries", ["department_id"], schema=SCHEMA)
-    op.create_index("ix_sps_score", "staff_performance_summaries", ["score"], schema=SCHEMA)
+            schema=SCHEMA,
+        )
+        op.create_index("ix_sps_staff", "staff_performance_summaries", ["staff_id"], schema=SCHEMA)
+        op.create_index("ix_sps_department", "staff_performance_summaries", ["department_id"], schema=SCHEMA)
+        op.create_index("ix_sps_score", "staff_performance_summaries", ["score"], schema=SCHEMA)
 
 
 def downgrade() -> None:

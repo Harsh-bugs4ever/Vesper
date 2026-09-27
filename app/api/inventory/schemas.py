@@ -24,6 +24,11 @@ class StockItemOut(ORMModel):
     expires_on: date | None = None
     supplier: str | None = None
     lead_time_days: int
+    safety_stock_days: int
+    target_stock_days: int
+    average_daily_usage_14d: Decimal
+    reorder_threshold: Decimal
+    last_threshold_calculated_at: datetime | None = None
 
 
 class StockItemDetail(StockItemOut):
@@ -41,7 +46,9 @@ class StockItemCreate(BaseModel):
     reorder_quantity: Decimal = Decimal("0")
     unit_cost: Decimal = Decimal("0")
     supplier: str | None = None
-    lead_time_days: int = 2
+    lead_time_days: int = 3
+    safety_stock_days: int = Field(default=2, ge=0)
+    target_stock_days: int = Field(default=14, ge=1)
     expires_on: date | None = None
     department_id: UUID | None = None
 
@@ -53,6 +60,8 @@ class StockItemUpdate(BaseModel):
     unit_cost: Decimal | None = None
     supplier: str | None = None
     lead_time_days: int | None = None
+    safety_stock_days: int | None = Field(default=None, ge=0)
+    target_stock_days: int | None = Field(default=None, ge=1)
     expires_on: date | None = None
     is_active: bool | None = None
 
@@ -190,3 +199,30 @@ class InventorySummary(BaseModel):
     expiring_items: int
     stock_value: float
     pending_suggestions: int
+
+
+class ReorderAnalysis(BaseModel):
+    item_id: UUID
+    current_stock: Decimal
+    incoming_stock: Decimal
+    reserved_stock: Decimal
+    available_stock: Decimal
+    consumption_14d: Decimal
+    average_daily_usage: Decimal
+    supplier_lead_time_days: int
+    safety_stock_days: int
+    safety_stock: Decimal
+    reorder_threshold: Decimal
+    target_stock: Decimal
+    recommended_quantity: Decimal
+    days_remaining: Decimal | None
+    requires_reorder: bool
+    threshold_source: str
+    status: str
+    pending_purchase_order_id: UUID | None = None
+
+
+class ReorderAlert(ReorderAnalysis):
+    name: str
+    sku: str
+    unit: str

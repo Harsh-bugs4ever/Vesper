@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowLeft, Check, Lock, ShieldCheck } from "lucide-react";
 
@@ -9,6 +10,8 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useToast } from "@/components/ui/toast";
 import { reviewErrorMessage, useDepartingStays, useReviewGuest } from "@/lib/hooks/use-reviews";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth/auth-context";
+import { performanceApi } from "@/lib/api/performance";
 
 /**
  * Staff reviewing the guests they looked after.
@@ -31,6 +34,14 @@ interface DepartingStay {
 
 export default function StaffReviewsPage() {
   const { showToast } = useToast();
+  const { user, isConnected, hasPermission } = useAuth();
+  const canReadOwn = hasPermission("staff_review:read_own");
+  const canReviewDeparting = hasPermission("guest_review:read");
+  const ownRatings = useQuery({
+    queryKey: ["staff", "own-ratings", user?.propertyId, user?.id],
+    queryFn: performanceApi.mine,
+    enabled: isConnected && canReadOwn,
+  });
 
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
@@ -94,16 +105,35 @@ export default function StaffReviewsPage() {
           Back to my shift
         </Link>
 
-        <h1 className="mt-2 font-serif text-2xl font-semibold text-sand-950">
-          Review departing guests
-        </h1>
-        <p className="mt-1 text-sm text-sand-600">
-          {remaining === 0
-            ? "You have reviewed everyone departing from your floor."
-            : `${remaining} guest${remaining === 1 ? "" : "s"} you looked after ${remaining === 1 ? "is" : "are"} checking out.`}
-        </p>
+        <h1 className="mt-2 font-serif text-2xl font-semibold text-sand-950">{canReadOwn ? "My guest ratings" : "Review departing guests"}</h1>
+        {canReadOwn && <p className="mt-1 text-sm text-sand-600">Feedback guests gave about your work.</p>}
       </div>
 
+      {!canReadOwn && !canReviewDeparting ? <p role="alert" className="rounded-xl border border-amber-200 bg-white p-4 text-sm text-sand-700">Your account cannot view personal ratings.</p>
+        : !canReadOwn ? null
+        : ownRatings.isPending ? <p role="status" className="rounded-xl bg-white p-4 text-sm text-sand-700">Loading your ratings…</p>
+        : ownRatings.isError ? <p role="alert" className="rounded-xl border border-rose-200 bg-white p-4 text-sm text-rose-700">Could not load your ratings: {ownRatings.error instanceof Error ? ownRatings.error.message : "Please try again."}</p>
+          : ownRatings.data && <section aria-label="Your rating summary" className="rounded-xl border border-sand-200 bg-white p-5">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              <div>
+                <p className="text-sm text-sand-600">Average guest rating</p>
+                <p className="font-serif text-3xl font-semibold text-sand-950">{ownRatings.data.mean_rating == null ? "—" : `${ownRatings.data.mean_rating.toFixed(1)} / 5`}</p>
+              </div>
+              {ownRatings.data.mean_rating != null && <StarRating value={Math.round(ownRatings.data.mean_rating)} size="sm" />}
+              <p className="text-sm text-sand-700">From {ownRatings.data.review_count} guest rating{ownRatings.data.review_count === 1 ? "" : "s"}</p>
+            </div>
+            {ownRatings.data.review_count === 0 ? <p className="mt-3 text-sm text-sand-700">No guest ratings have been recorded for you yet.</p>
+              : <ul className="mt-4 space-y-1 text-sm text-sand-700">{ownRatings.data.reasons.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}</ul>}
+            <p className="mt-4 text-xs text-sand-600">Individual guest comments are reviewed with your manager.</p>
+          </section>}
+
+      {canReviewDeparting && <section className="space-y-4" aria-label="Review departing guests">
+        <div>
+          <h2 className="font-serif text-xl font-semibold text-sand-950">Review departing guests</h2>
+          <p className="mt-1 text-sm text-sand-600">{remaining === 0
+            ? "You have reviewed everyone departing from your floor."
+            : `${remaining} guest${remaining === 1 ? "" : "s"} you looked after ${remaining === 1 ? "is" : "are"} checking out.`}</p>
+        </div>
       {/* The rules, stated before the form rather than buried after it. */}
       <div className="flex items-start gap-2.5 rounded-xl border border-sand-200 bg-sand-50/70 p-3.5">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sage-600" />
@@ -226,6 +256,7 @@ export default function StaffReviewsPage() {
           );
         })}
       </ul>
+      </section>}
     </div>
   );
 }

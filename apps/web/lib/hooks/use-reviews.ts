@@ -48,17 +48,18 @@ export function useRateStaff() {
 
 /** Stays departing today that this staff member may still review. */
 export function useDepartingStays() {
-  const { isConnected, user } = useAuth();
+  const { isConnected, user, hasPermission } = useAuth();
+  const canReadDeparting = hasPermission("guest_review:read");
   const query = useQuery({
     queryKey: ["departing-stays", user?.propertyId, user?.id],
-    enabled: isConnected && Boolean(user),
+    enabled: isConnected && Boolean(user) && canReadDeparting,
     queryFn: guestReviewApi.departing,
     retry: false,
   });
 
   return {
     stays: query.data ?? [],
-    isLoading: query.isLoading && isConnected,
+    isLoading: query.isLoading && isConnected && canReadDeparting,
     error: query.error,
   };
 }

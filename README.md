@@ -338,6 +338,11 @@ make seed                        # rooms, staff, bookings, orders and connected 
 rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
 staff tasks, one assigned task for every demo staff account, claimable department
 work, requisitions, guest requests, issue reports and manager scenarios.
+Set `DEEPSEEK_API_KEY` in `.env` for the seeder's AI task pack. It uses
+`deepseek-flash` by default; `DEEPSEEK_MODEL` overrides the model.
+`--refresh-ai` requests a new pack and replaces the DeepSeek cache.
+`--no-deepseek` uses cached or local tasks without an API call. Without a matching
+cache or `--no-deepseek`, a missing key or failed DeepSeek request stops seeding.
 Running it again fills missing demo attendance, food-order task links, menu stock
 and workflow examples, and recovers the food-order seed if an earlier run stopped
 before creating any orders. It also repairs old placeholder room references when exactly

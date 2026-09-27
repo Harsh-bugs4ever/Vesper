@@ -43,6 +43,7 @@ def handle(envelope: Envelope) -> None:
 
 def _purchase_card(db, envelope: Envelope) -> None:
     payload = envelope.payload
+    analysis = payload.get("analysis") or {}
     on_hand = float(payload.get("on_hand", 0))
     minimum = float(payload.get("minimum", 0)) or 1.0
     lead_time = int(payload.get("lead_time_days", 2))
@@ -67,26 +68,29 @@ def _purchase_card(db, envelope: Envelope) -> None:
             engine="inventory",
             kind=CardKind.PURCHASE.value,
             title=f"Reorder {payload.get('name', 'stock item')}",
-            summary=(
-                f"{payload.get('name')} is at {on_hand:g} {payload.get('unit', 'units')}, "
-                f"at or below its minimum of {minimum:g}. "
-                f"{payload.get('supplier') or 'The usual supplier'} takes {lead_time} days."
-            ),
+            summary=(f"{payload.get('name')} has {analysis.get('available_stock', on_hand)} "
+                f"{payload.get('unit', 'units')} available against a demand-based reorder "
+                f"threshold of {minimum:g}. Order {payload.get('suggested_quantity')} "
+                f"{payload.get('unit', 'units')} after review."),
             drivers=[
                 {
-                    "label": "Below minimum",
-                    "detail": f"{on_hand:g} on hand against a minimum of {minimum:g}",
-                    "weight": 0.6,
+                    "label": "14-day demand",
+                    "detail": (f"{analysis.get('consumption_14d', 0)} consumed; "
+                               f"{analysis.get('average_daily_usage', 0)}/day"),
+                    "weight": 0.45,
                 },
                 {
-                    "label": "Lead time",
-                    "detail": f"{lead_time} days from order to delivery",
-                    "weight": 0.25,
+                    "label": "Delivery and safety cover",
+                    "detail": (f"{lead_time} delivery days + "
+                               f"{analysis.get('safety_stock_days', 0)} safety days "
+                               f"= {minimum:g} threshold"),
+                    "weight": 0.35,
                 },
                 {
-                    "label": "Cost",
-                    "detail": f"Estimated ₹{cost:,.0f} for the suggested quantity",
-                    "weight": 0.15,
+                    "label": "Available and cost",
+                    "detail": (f"{analysis.get('available_stock', on_hand)} available; "
+                               f"estimated ₹{cost:,.0f}"),
+                    "weight": 0.20,
                 },
             ],
             confidence=confidence,
@@ -98,6 +102,7 @@ def _purchase_card(db, envelope: Envelope) -> None:
                 "purchase_order_id": payload.get("purchase_order_id"),
                 "item_id": payload.get("item_id"),
                 "quantity": payload.get("suggested_quantity"),
+                "analysis": analysis,
                 # The manager may change how much to order, nothing else.
                 "editable_fields": ["quantity"],
             },

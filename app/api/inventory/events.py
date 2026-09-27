@@ -15,18 +15,31 @@ from . import service
 
 log = logging.getLogger(__name__)
 
-WATCHED = {Event.REQUEST_DELIVERED.value}
+WATCHED = {Event.REQUEST_DELIVERED.value, Event.STOCK_MOVED.value,
+           Event.CARD_DISMISSED.value}
 
 
 @on_events("inventory-service", WATCHED)
 def handle(envelope: Envelope) -> None:
     payload = envelope.payload
-    if not envelope.property_id or not payload.get("items"):
+    if not envelope.property_id:
         return
 
     db = session_scope()
     try:
         property_id = UUID(envelope.property_id)
+        if envelope.name == Event.STOCK_MOVED.value:
+            if float(payload.get("quantity", 0)) < 0 and payload.get("item_id"):
+                item = service.get_item(db, property_id, UUID(payload["item_id"]))
+                service.maybe_flag_low(db, property_id, item)
+            return
+        if envelope.name == Event.CARD_DISMISSED.value:
+            if payload.get("engine") == "inventory" and payload.get("purchase_order_id"):
+                service.close_suggestion(db, property_id, UUID(payload["purchase_order_id"]),
+                                         reason=envelope.name)
+            return
+        if not payload.get("items"):
+            return
         source_ref = UUID(payload["request_id"]) if payload.get("request_id") else None
         for line in payload["items"]:
             recipe = line.get("recipe") or {}

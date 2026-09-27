@@ -1,0 +1,846 @@
+{
+  "model": "deepseek-flash",
+  "generated_at": "2026-09-27T03:10:45.269743+00:00",
+  "tasks": [
+    {
+      "department": "front_office",
+      "title": "Pre-arrival VIP suite setup",
+      "description": "Ensure VIP suite 1201 has welcome amenities, personalized letter, and turndown service scheduled for 6 PM arrival.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "front_office",
+      "title": "Investigate multiple wake-up call failures",
+      "description": "Three guests in rooms 815, 816, 817 missed wake-up calls; check PBX logs and test room phones for faults.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "front_office",
+      "title": "Handle overbooking on 14th floor",
+      "description": "Two reservations for same suite due to system glitch; relocate one guest to similar suite and offer compensation.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "front_office",
+      "title": "Update guest profile with new preferences",
+      "description": "Returning guest Mr. Sharma requested extra pillows and a firm mattress; update profile and notify housekeeping.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Process group check-in for wedding party",
+      "description": "45-room wedding group arriving at 3 PM; pre-assign rooms, prepare key packets, and coordinate luggage assistance.",
+      "room_related": true,
+      "due_minutes": 120
+    },
+    {
+      "department": "front_office",
+      "title": "Resolve room key demagnetization issue",
+      "description": "Guest in 623 reports repeated key failures; inspect lock, reprogram key, and check for electromagnetic interference.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Coordinate early check-in request",
+      "description": "Guest arriving at 9 AM requests immediate room; check housekeeping status and expedite cleaning of room 512.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "front_office",
+      "title": "Verify billing for departed guest",
+      "description": "Guest checked out but minibar charges disputed; review POS system and contact outlet to confirm consumption.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "front_office",
+      "title": "Arrange airport transfer for delayed flight",
+      "description": "Guest's flight delayed by 4 hours; reschedule limousine pickup and inform driver of new arrival time.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Conduct shift handover briefing",
+      "description": "Brief incoming staff on VIP arrivals, pending maintenance in room 1010, and special requests from 705.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Audit registration cards for missing signatures",
+      "description": "Review 20 recent check-ins; three cards lack signature; contact guests to sign electronically or in person.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "front_office",
+      "title": "Handle lost passport found in lobby",
+      "description": "Passport found in lobby seating; secure in safe and attempt to contact guest in room 904.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "front_office",
+      "title": "Test emergency generator for front desk systems",
+      "description": "Monthly test of backup power for PMS terminals; ensure uninterrupted operation during simulated outage.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "front_office",
+      "title": "Update rate codes for upcoming holiday",
+      "description": "Load Diwali package rates into PMS and ensure online travel agents reflect new pricing.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "front_office",
+      "title": "Investigate noise complaint from room 1102",
+      "description": "Guest reports loud music from adjacent room; dispatch security to 1103 and follow up with guest.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Reconcile no-show reservations",
+      "description": "Three reservations marked no-show; verify if guests arrived late or should be charged; update system accordingly.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "front_office",
+      "title": "Prepare for fire drill evacuation",
+      "description": "Coordinate with security to conduct drill; ensure front desk has updated guest list and assembly point maps.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "front_office",
+      "title": "Assist guest with wheelchair accessibility",
+      "description": "Guest in 208 requires wheelchair for duration of stay; arrange from vendor and ensure room is accessible.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "front_office",
+      "title": "Translate check-in instructions for Japanese guest",
+      "description": "Guest speaks limited English; use translation app to explain hotel amenities and emergency procedures.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "front_office",
+      "title": "Review CCTV footage for missing luggage",
+      "description": "Guest reports suitcase missing from bell desk; review footage from 2 PM to 4 PM and coordinate with security.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "housekeeping",
+      "title": "Deep clean presidential suite",
+      "description": "Perform a scheduled deep clean of the presidential suite, including carpet shampooing and upholstery treatment, to maintain luxury standards.",
+      "room_related": true,
+      "due_minutes": 240
+    },
+    {
+      "department": "housekeeping",
+      "title": "Replace stained bathroom tiles",
+      "description": "In room 412, two bathroom tiles have stubborn stains that cannot be removed; coordinate with maintenance to replace them.",
+      "room_related": true,
+      "due_minutes": 120
+    },
+    {
+      "department": "housekeeping",
+      "title": "Lobby marble polishing",
+      "description": "Polish the marble flooring in the main lobby to restore shine and remove scuff marks from recent events.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "housekeeping",
+      "title": "Restock minibar in room 305",
+      "description": "Guest in room 305 reported missing items from the minibar; restock and verify inventory.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "housekeeping",
+      "title": "Remove broken glass in corridor",
+      "description": "A glass was shattered in the 14th-floor corridor near the elevator; clean and ensure safety.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "housekeeping",
+      "title": "Deep clean sofa in executive lounge",
+      "description": "The sofa in the executive lounge has a coffee stain; deep clean to remove stain and odor.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "housekeeping",
+      "title": "Replace burnt-out light bulbs",
+      "description": "Three bulbs are out in the hallway on the 10th floor; replace to maintain proper lighting.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "housekeeping",
+      "title": "Sanitize room after illness",
+      "description": "Guest in room 210 reported illness; perform enhanced sanitization of all surfaces and linens.",
+      "room_related": true,
+      "due_minutes": 120
+    },
+    {
+      "department": "housekeeping",
+      "title": "Remove gum from carpet",
+      "description": "Chewing gum stuck to the carpet in room 518; remove using appropriate cleaning agents.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "housekeeping",
+      "title": "Prepare room for early check-in",
+      "description": "Room 620 needs to be ready by 10 AM for early check-in; prioritize cleaning and setup.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "housekeeping",
+      "title": "Replace torn bedsheet",
+      "description": "Bedsheet in room 708 has a tear; replace with a new one and inspect for other damage.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "housekeeping",
+      "title": "Clean air vents in restaurant",
+      "description": "Dust buildup on air vents in the restaurant; clean to improve air quality and prevent allergies.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "housekeeping",
+      "title": "Remove mold from shower",
+      "description": "Mold detected in the shower of room 902; treat with anti-mold solution and scrub thoroughly.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "housekeeping",
+      "title": "Set up extra bed in room 415",
+      "description": "Guest requested an extra bed; set up and ensure all linens are provided.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "housekeeping",
+      "title": "Deep clean curtains in ballroom",
+      "description": "Curtains in the ballroom have accumulated dust; remove and send for deep cleaning.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "housekeeping",
+      "title": "Replace frayed towels in room 112",
+      "description": "Towels in room 112 are frayed; replace with new set and discard old ones.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "housekeeping",
+      "title": "Polish silverware for banquet",
+      "description": "Banquet department needs silverware polished for tonight's event; ensure all pieces are spotless.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "housekeeping",
+      "title": "Remove pet hair from room 808",
+      "description": "Previous guest had a pet; thoroughly remove pet hair from carpets and furniture.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "housekeeping",
+      "title": "Clean chandelier in lobby",
+      "description": "Dust and clean the large chandelier in the lobby to maintain its brilliance.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "housekeeping",
+      "title": "Replace remote control in room 214",
+      "description": "TV remote in room 214 is missing; provide a new one and ensure it works.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "In-Room Dining Order Delay",
+      "description": "Guest in room 1205 reports their breakfast order is 25 minutes late; kitchen is to expedite and send a complimentary fruit platter.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "Minibar Stock Discrepancy",
+      "description": "Housekeeping reported minibar consumption in room 812 but the charge was not posted; F&B to verify and update the folio.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "fnb",
+      "title": "Allergy Protocol Reminder",
+      "description": "A guest at table 14 in the main restaurant has a severe shellfish allergy; server to confirm with chef and ensure separate preparation area.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "Banquet Coffee Urn Leak",
+      "description": "A coffee urn in the Grand Ballroom is leaking during a conference break; staff to replace it and mop the area to prevent slipping.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "VIP Suite Amenity Setup",
+      "description": "Prepare and deliver a customized welcome amenity to the Presidential Suite for a VIP arrival; include preferred beverages and snacks.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "fnb",
+      "title": "Poolside Bar Inventory Count",
+      "description": "Conduct a mid-shift inventory count at the poolside bar to reconcile discrepancies and restock low items before the evening rush.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "fnb",
+      "title": "Wine Cellar Temperature Check",
+      "description": "The wine cellar temperature alarm triggered; F&B manager to inspect the cooling unit and relocate vulnerable bottles if needed.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "fnb",
+      "title": "Room Service Tray Retrieval",
+      "description": "Multiple room service trays are accumulating in the 10th-floor corridor; assign a server to collect and return them to the kitchen.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "fnb",
+      "title": "Buffet Replenishment Schedule",
+      "description": "Lunch buffet items are running low; coordinate with kitchen to replenish chafing dishes and ensure hot items remain at safe temperatures.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "Guest Complaint: Overcooked Steak",
+      "description": "Guest at table 22 returned a steak for being overcooked; prepare a new steak to the correct temperature and offer a complimentary dessert.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "fnb",
+      "title": "Broken Glass in Restaurant",
+      "description": "A glass shattered near the host stand; staff to clean the area thoroughly and inspect for any glass fragments on nearby tables.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "fnb",
+      "title": "In-Room Dining Menu Update",
+      "description": "Update the in-room dining menus in all suites to reflect the new seasonal offerings; replace old menus and recycle them.",
+      "room_related": true,
+      "due_minutes": 120
+    },
+    {
+      "department": "fnb",
+      "title": "Private Dining Room Setup",
+      "description": "Prepare the private dining room for a 10-guest dinner; arrange table settings, confirm menu with chef, and test audiovisual equipment.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "fnb",
+      "title": "Coffee Machine Maintenance",
+      "description": "The espresso machine in the lobby café is producing weak coffee; perform descaling and recalibrate the grinder.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "fnb",
+      "title": "Lost and Found: Wine Glass",
+      "description": "A guest left a personal wine glass in the restaurant; secure it and coordinate with concierge to return it to the guest's room.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "fnb",
+      "title": "Staff Meal Quality Check",
+      "description": "Employee cafeteria feedback indicates bland food; conduct a taste test and adjust seasoning for the next meal period.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "fnb",
+      "title": "Event Order Clarification",
+      "description": "Banquet event order for tomorrow's gala has conflicting dietary requirements; contact the organizer to confirm and update the BEO.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "fnb",
+      "title": "Refrigerator Temperature Log",
+      "description": "Walk-in refrigerator temperature log shows inconsistent readings; verify thermometer calibration and adjust if necessary.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "fnb",
+      "title": "Guest Request: Birthday Cake",
+      "description": "Guest in room 1502 requests a last-minute birthday cake; check pastry availability and arrange delivery with a candle.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "fnb",
+      "title": "Bar Glassware Polishing",
+      "description": "Assign a barback to polish all glassware and inspect for chips or cracks before the evening service.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "maintenance",
+      "title": "Replacement of faulty elevator indicator panel",
+      "description": "The floor indicator panel in elevator 2 intermittently shows incorrect floor numbers. Replace the panel to ensure accurate floor display.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "maintenance",
+      "title": "Inspect rooftop cooling tower for bacterial growth",
+      "description": "Quarterly inspection revealed potential bacterial growth in cooling tower 1. Perform cleaning and treatment to prevent health hazards.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "maintenance",
+      "title": "Adjust lobby automatic door sensor sensitivity",
+      "description": "The automatic doors are closing too quickly, causing a potential safety hazard. Adjust sensor sensitivity for smoother operation.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "maintenance",
+      "title": "Repair leaking pipe in room 412 bathroom",
+      "description": "Guest reported water pooling under the sink. Repair the leak and check for water damage to the cabinet.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "maintenance",
+      "title": "Replace burnt-out corridor light on 8th floor",
+      "description": "Multiple light fixtures in the east corridor are out, creating dim lighting. Replace bulbs and check circuit.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "maintenance",
+      "title": "Calibrate thermostat in room 721",
+      "description": "Guest complained the room is too cold despite setting the thermostat to 24°C. Calibrate and test the unit.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "maintenance",
+      "title": "Unclog drain in room 305 shower",
+      "description": "Shower drain is draining slowly, causing water to accumulate. Clear the clog and ensure proper flow.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "maintenance",
+      "title": "Tighten loose railing in stairwell B",
+      "description": "Safety inspection found the handrail on the 3rd floor landing is loose. Secure it to prevent accidents.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "maintenance",
+      "title": "Replace broken tile in lobby",
+      "description": "A cracked tile near the reception desk is a tripping hazard. Replace it with a matching tile.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "maintenance",
+      "title": "Test emergency generator under load",
+      "description": "Monthly test of the backup generator failed to start automatically. Diagnose and repair the auto-start mechanism.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "maintenance",
+      "title": "Fix flickering lights in room 618",
+      "description": "Guest reported flickering lights in the bathroom. Check wiring and replace faulty dimmer switch.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "maintenance",
+      "title": "Service kitchen exhaust fan",
+      "description": "Exhaust fan in the main kitchen is making a loud noise and vibrating. Clean and lubricate bearings.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "maintenance",
+      "title": "Repair cracked window in room 902",
+      "description": "A hairline crack in the window pane is causing a draft. Seal the crack temporarily and schedule replacement.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "maintenance",
+      "title": "Replace faulty smoke detector in corridor 5",
+      "description": "Smoke detector in the 5th floor corridor is chirping due to low battery. Replace battery and test detector.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "maintenance",
+      "title": "Adjust water pressure in room 215",
+      "description": "Guest reported low water pressure in the shower. Check and adjust pressure regulator.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "maintenance",
+      "title": "Repair automatic blinds in room 504",
+      "description": "The motorized blinds are stuck in the down position. Reset the motor and test operation.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "maintenance",
+      "title": "Inspect and clean grease trap",
+      "description": "Grease trap in the main kitchen is due for cleaning. Remove accumulated grease to prevent blockages.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "maintenance",
+      "title": "Fix squeaky door in room 310",
+      "description": "Guest complained about a squeaky bathroom door. Lubricate hinges and adjust alignment.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "maintenance",
+      "title": "Replace worn carpet in hallway 7",
+      "description": "High-traffic area on the 7th floor has worn carpet posing a trip risk. Replace the section.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "maintenance",
+      "title": "Repair malfunctioning key card reader on room 1103",
+      "description": "Guest unable to enter room due to faulty key card reader. Repair or replace the reader.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Restock Minibar Amenities",
+      "description": "Replenish minibar items in all suites on floors 10-15; low stock reported by housekeeping.",
+      "room_related": true,
+      "due_minutes": 90
+    },
+    {
+      "department": "store",
+      "title": "Emergency Linen Request",
+      "description": "Deliver 50 extra bath towels to the spa due to a sudden increase in guests after a wedding party.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Inventory Count Discrepancy",
+      "description": "Investigate a mismatch of 20 units in the premium wine cellar; recount and adjust records.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "store",
+      "title": "Guest Room Amenity Delivery",
+      "description": "Deliver welcome amenities to room 1205 as requested by the front desk for a VIP arrival.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "store",
+      "title": "Replace Faulty Coffee Machine",
+      "description": "Swap out a defective coffee machine in the executive lounge with a backup unit from storage.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "store",
+      "title": "Seasonal Decoration Retrieval",
+      "description": "Retrieve Diwali decorations from storage for the lobby setup, as per events team request.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "store",
+      "title": "Bulk Order Processing",
+      "description": "Process a bulk order for 200 bottles of mineral water for the upcoming conference.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "store",
+      "title": "Missing Uniform Delivery",
+      "description": "Deliver 10 sets of chef uniforms to the kitchen; new hires start today.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Room Setup for Guest with Allergies",
+      "description": "Provide hypoallergenic bedding and air purifier to room 0812 as per guest request.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "store",
+      "title": "Expired Stock Removal",
+      "description": "Remove expired snack items from the minibar inventory and record for disposal.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "store",
+      "title": "Emergency Power Adapter Delivery",
+      "description": "Deliver a universal power adapter to room 2204; guest needs it for medical device.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Restock Spa Towels",
+      "description": "Replenish spa towels from central store; current stock below par level.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "store",
+      "title": "Lost and Found Inventory",
+      "description": "Log and store lost items from housekeeping; three new items added today.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "store",
+      "title": "Pest Control Supplies Check",
+      "description": "Verify and restock pest control supplies for scheduled treatment tomorrow.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "store",
+      "title": "Guest Request for Extra Pillows",
+      "description": "Deliver two extra pillows to room 1508 as requested by guest.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Storage Room Organization",
+      "description": "Reorganize the central storage room for better accessibility of frequently used items.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "store",
+      "title": "Emergency Candle Delivery",
+      "description": "Provide candles to the restaurant for a power outage backup; generator under repair.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "store",
+      "title": "Restock Bathroom Amenities",
+      "description": "Replenish shampoo, conditioner, and soap in all rooms on floor 5; housekeeping reported low stock.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "store",
+      "title": "Promotional Material Distribution",
+      "description": "Distribute new brochures to the front desk and concierge for upcoming events.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "store",
+      "title": "Assist with Luggage Storage",
+      "description": "Help front desk with overflow luggage storage due to early check-outs and late departures.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "security",
+      "title": "VIP Arrival Escort",
+      "description": "Provide discreet escort for VIP guest from lobby to penthouse, coordinating with front desk and ensuring privacy.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "security",
+      "title": "CCTV Camera 12 Offline",
+      "description": "Camera 12 covering pool area is offline; dispatch technician to restore feed within 2 hours.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "security",
+      "title": "Investigate Unattended Bag",
+      "description": "Report of unattended bag in lobby; follow lost and found protocol and review CCTV footage.",
+      "room_related": false,
+      "due_minutes": 45
+    },
+    {
+      "department": "security",
+      "title": "Room Safe Malfunction",
+      "description": "Guest in room 712 reports safe won't open; send security officer to assist with manual override.",
+      "room_related": true,
+      "due_minutes": 60
+    },
+    {
+      "department": "security",
+      "title": "Fire Panel Alarm Test",
+      "description": "Conduct monthly fire alarm test in Zone 3 (floors 10-12) and document results.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "security",
+      "title": "Noise Complaint Investigation",
+      "description": "Multiple noise complaints from room 615; security to investigate and enforce quiet hours.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "security",
+      "title": "Keycard Access Audit",
+      "description": "Audit keycard access logs for back-of-house areas for the past 24 hours; report anomalies.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "security",
+      "title": "Lost Child Assistance",
+      "description": "Child reported missing near gift shop; initiate search protocol and monitor exits.",
+      "room_related": false,
+      "due_minutes": 30
+    },
+    {
+      "department": "security",
+      "title": "Parking Garage Patrol",
+      "description": "Increase patrol frequency in parking garage levels B1-B3 after reports of loitering.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "security",
+      "title": "Guest Room Door Ajar",
+      "description": "Room 923 door found ajar during floor check; secure room and verify with guest.",
+      "room_related": true,
+      "due_minutes": 45
+    },
+    {
+      "department": "security",
+      "title": "Suspicious Package Screening",
+      "description": "Package delivered to service entrance without manifest; screen and hold for inspection.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "security",
+      "title": "Emergency Lighting Check",
+      "description": "Inspect emergency lighting in stairwells 1-4 and replace any faulty units.",
+      "room_related": false,
+      "due_minutes": 120
+    },
+    {
+      "department": "security",
+      "title": "Guest Harassment Report",
+      "description": "Guest in room 508 reports harassment by another guest; security to interview parties and file report.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "security",
+      "title": "Perimeter Fence Inspection",
+      "description": "Check perimeter fence for breaches or damage, especially near loading dock.",
+      "room_related": false,
+      "due_minutes": 90
+    },
+    {
+      "department": "security",
+      "title": "Drunk Guest Assistance",
+      "description": "Guest in lobby bar inebriated and disruptive; security to assist to room and monitor.",
+      "room_related": true,
+      "due_minutes": 30
+    },
+    {
+      "department": "security",
+      "title": "Lockdown Drill Preparation",
+      "description": "Prepare and brief staff on upcoming lockdown drill; review procedures and assign roles.",
+      "room_related": false,
+      "due_minutes": 180
+    },
+    {
+      "department": "security",
+      "title": "Theft Report Investigation",
+      "description": "Guest reports missing laptop from room 1102; review access logs and interview staff.",
+      "room_related": true,
+      "due_minutes": 120
+    },
+    {
+      "department": "security",
+      "title": "Elevator Emergency Phone Test",
+      "description": "Test emergency phones in all elevators to ensure they connect to security desk.",
+      "room_related": false,
+      "due_minutes": 240
+    },
+    {
+      "department": "security",
+      "title": "Unauthorized Access Attempt",
+      "description": "Individual attempted to enter restricted IT room; review CCTV and update access list.",
+      "room_related": false,
+      "due_minutes": 60
+    },
+    {
+      "department": "security",
+      "title": "Medical Emergency Response",
+      "description": "Guest collapsed in fitness center; security to coordinate with medical team and clear path.",
+      "room_related": false,
+      "due_minutes": 30
+    }
+  ]
+}

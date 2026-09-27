@@ -25,6 +25,8 @@ from .errors import install_error_handlers
 from .events import Envelope, bus
 
 request_log = logging.getLogger("vesper.request")
+_readiness_cache: tuple[float, dict] | None = None
+_READINESS_CACHE_SECONDS = 2.0
 
 
 def configure_logging(service: str) -> None:
@@ -132,6 +134,10 @@ def create_app(
 
     @app.get("/ready", tags=["system"])
     def ready() -> dict:
+        global _readiness_cache
+        now = time.monotonic()
+        if _readiness_cache is not None and now - _readiness_cache[0] < _READINESS_CACHE_SECONDS:
+            return _readiness_cache[1]
         checks = {"database": False, "redis": False}
         try:
             with get_engine().connect() as conn:
@@ -143,7 +149,9 @@ def create_app(
             checks["redis"] = bool(bus.client.ping())
         except Exception:  # noqa: BLE001
             pass
-        return {"service": name, "ready": all(checks.values()), "checks": checks}
+        result = {"service": name, "ready": all(checks.values()), "checks": checks}
+        _readiness_cache = (now, result)
+        return result
 
     for router in routers:
         app.include_router(router)

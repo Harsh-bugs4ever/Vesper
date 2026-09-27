@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,7 +67,12 @@ class StockItem(Base, TimestampMixin):
 
     expires_on: Mapped[date | None] = mapped_column(Date, index=True)
     supplier: Mapped[str | None] = mapped_column(String(120))
-    lead_time_days: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    lead_time_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    safety_stock_days: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    target_stock_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    average_daily_usage_14d: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    reorder_threshold: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    last_threshold_calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Set when a suggestion is raised so we don't queue the same card every minute.
     low_flagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -91,7 +96,10 @@ class StockMovement(Base, TimestampMixin):
     """The ledger. Positive is in, negative is out."""
 
     __tablename__ = "stock_movements"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index("ix_stock_movements_reorder_history", "property_id", "item_id", "created_at", "reason"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)
@@ -114,7 +122,10 @@ class PurchaseOrder(Base, TimestampMixin):
     """Raised by the reorder rule, approved by a human, received by the store."""
 
     __tablename__ = "purchase_orders"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index("ix_purchase_orders_incoming_item_status", "property_id", "item_id", "status"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[UUID] = uuid_pk()
     property_id: Mapped[UUID] = uuid_ref(nullable=False)
@@ -143,6 +154,8 @@ class PurchaseOrder(Base, TimestampMixin):
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Why the engine thought this was needed — shown on the action card.
     rationale: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # A live automatic suggestion owns this key until approval or cancellation.
+    reorder_key: Mapped[str | None] = mapped_column(String(80), unique=True)
 
 
 class InventoryRequest(Base, TimestampMixin):

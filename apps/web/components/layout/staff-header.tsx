@@ -66,7 +66,8 @@ export function StaffHeader() {
           <Link
             href="/staff/reviews"
             className="p-2 rounded-lg border border-sand-200 bg-sand-50 text-sand-600 hover:text-sand-900 transition-colors"
-            title="Review departing guests"
+            title="My guest ratings"
+            aria-label="My guest ratings"
           >
             <Star className="w-4 h-4" />
           </Link>

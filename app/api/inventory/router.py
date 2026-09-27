@@ -8,7 +8,7 @@ from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, current_user, requires
 from vesper_common.errors import Forbidden, NotFound
 
-from . import procurement, service
+from . import procurement, reorder, service
 from .models import DepartmentBudget, StockItem
 from .schemas import (
     InventorySummary,
@@ -28,6 +28,8 @@ from .schemas import (
     StockItemUpdate,
     StockMoveRequest,
     StockMovementOut,
+    ReorderAnalysis,
+    ReorderAlert,
 )
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -207,6 +209,27 @@ def summary(
     return InventorySummary(**service.summary(db, UUID(principal.property_id), department_ids=departments))
 
 
+@router.get("/reorder-alerts", response_model=list[ReorderAlert])
+def reorder_alerts(principal: Principal = Depends(requires(Perm.STOCK_READ)),
+                   db: Session = Depends(get_session)) -> list[ReorderAlert]:
+    rows = []
+    for item in service.list_items(db, UUID(principal.property_id)):
+        if principal.role not in {Role.GM, "service"} and not principal.can_see_department(item.department_id):
+            continue
+        analysis = reorder.analyze(db, item)
+        if analysis["status"] != "healthy":
+            rows.append(ReorderAlert(**analysis, name=item.name, sku=item.sku, unit=item.unit))
+    return rows
+
+
+@router.get("/reorder-analysis", response_model=list[ReorderAnalysis])
+def all_reorder_analysis(principal: Principal = Depends(requires(Perm.STOCK_READ)),
+                         db: Session = Depends(get_session)) -> list[ReorderAnalysis]:
+    return [ReorderAnalysis(**reorder.analyze(db, item))
+            for item in service.list_items(db, UUID(principal.property_id))
+            if principal.role in {Role.GM, "service"} or principal.can_see_department(item.department_id)]
+
+
 @router.post("/sweep-expiring", response_model=dict)
 def sweep_expiring(
     principal: Principal = Depends(requires(Perm.STOCK_WRITE)),
@@ -228,6 +251,14 @@ def get_item(
     item = service.get_item(db, UUID(principal.property_id), item_id)
     principal.require_object(item)
     return _detail(item)
+
+
+@router.get("/items/{item_id}/reorder-analysis", response_model=ReorderAnalysis)
+def reorder_analysis(item_id: UUID, principal: Principal = Depends(requires(Perm.STOCK_READ)),
+                     db: Session = Depends(get_session)) -> ReorderAnalysis:
+    item = service.get_item(db, UUID(principal.property_id), item_id)
+    principal.require_object(item)
+    return ReorderAnalysis(**reorder.analyze(db, item))
 
 
 @router.patch("/items/{item_id}", response_model=StockItemDetail)

@@ -48,7 +48,12 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(seed, "inspect", lambda engine: SimpleNamespace(has_table=lambda *a, **kw: True))
     monkeypatch.setattr(seed, "session_scope", Session)
     monkeypatch.setattr(seed, "_seed", lambda db: calls.append("base"))
+    monkeypatch.setattr(seed, "_load_ai_content",
+                        lambda **kwargs: calls.append("ai_content") or {"tasks": []})
+    monkeypatch.setattr(seed, "_seed_existing_ai_tasks",
+                        lambda db, pid, content: calls.append(("ai_tasks", pid)) or 0)
     from scripts import seed_existing
+    from scripts import seed_inventory_reorder as reorder_module
     from scripts import seed_staff_tasks as assignments_module
     monkeypatch.setattr(seed_existing, "enrich_existing_demo",
                         lambda db, pid: calls.append(("enrich", pid)) or
@@ -64,12 +69,15 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(seed_workflow, "seed_workflow",
                         lambda db, pid, *, apply: calls.append((pid, apply)) or
                         {"created": 0, "already_present": 35})
+    monkeypatch.setattr(reorder_module, "seed_inventory_reorder",
+                        lambda db, pid: calls.append(("reorder", pid)) or
+                        {"consumption_movements": 0, "reorder_suggestions": 0})
     monkeypatch.setattr(seed.sys, "argv", ["seed.py"])
 
     assert seed.main() == 0
-    assert calls == [("enrich", property_id), ("assign", property_id),
+    assert calls == ["ai_content", ("enrich", property_id), ("assign", property_id),
                      ("pool", property_id),
-                     (property_id, True)]
+                     (property_id, True), ("reorder", property_id), ("ai_tasks", property_id)]
     assert "No base data was reset" in capsys.readouterr().out
 
 

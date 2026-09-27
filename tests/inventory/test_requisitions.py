@@ -14,15 +14,16 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.api.identity.models import Role as IdentityRole, User, UserAssignment
-from app.api.inventory import procurement, service
+from app.api.inventory import procurement, reorder, service
 from app.api.inventory.models import (
     DepartmentBudget, InventoryRequest, InventoryRequestAudit, InventoryRequestLine,
     PurchaseOperation, PurchaseOrder, PurchaseStatus, StockItem, StockMovement,
 )
 from app.api.inventory.router import _po_access, _request_manager
 from app.api.inventory.schemas import RequisitionCreate
+from app.api.action.models import ActionCard
 from app.api.property.models import Department, Property
-from vesper_common.clock import local_today
+from vesper_common.clock import local_today, utcnow
 from vesper_common.db import Base, SCHEMAS
 from vesper_common.errors import Conflict, Forbidden, NotFound
 from vesper_common.permissions import Perm, Role
@@ -35,7 +36,7 @@ import sqlite3
 import tempfile
 import threading
 
-from sqlalchemy import create_engine, event, select, text
+from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -77,7 +78,7 @@ def sessions():
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA busy_timeout=30000")
-            for s in ["identity", "property", "inventory"]:
+            for s in ["identity", "property", "inventory", "action"]:
                 db_path = os.path.join(temp_dir, f"test_{s}.db")
                 cursor.execute(f'ATTACH DATABASE "{db_path}" AS "{s}"')
             cursor.close()
@@ -89,7 +90,7 @@ def sessions():
                 StockItem.__table__, StockMovement.__table__, PurchaseOrder.__table__,
                 InventoryRequest.__table__, InventoryRequestLine.__table__,
                 InventoryRequestAudit.__table__, DepartmentBudget.__table__,
-                PurchaseOperation.__table__
+                PurchaseOperation.__table__, ActionCard.__table__
             ])
 
         yield sessionmaker(engine, expire_on_commit=False)
@@ -238,3 +239,123 @@ def test_concurrent_approvals_cannot_overspend(sessions):
         totals = procurement.budget_totals(db, db.get(DepartmentBudget, budget_id))
         assert totals["committed"] == Decimal("60.00")
         assert totals["remaining"] == Decimal("40.00")
+
+
+def test_demand_analysis_suggestion_and_incoming(sessions, monkeypatch):
+    events = []
+    monkeypatch.setattr(service.bus, "publish", lambda *args, **kwargs: events.append((args, kwargs)))
+    ids = fixture_rows(sessions, allocation=Decimal("2000"))
+    property_id, _, _, manager_id, _, _, item_id, _ = ids
+    with sessions() as db:
+        item = db.get(StockItem, item_id)
+        item.quantity = Decimal("45")
+        item.minimum_quantity = Decimal("12")
+        item.lead_time_days = 3
+        item.safety_stock_days = 2
+        item.target_stock_days = 14
+        for day in range(14):
+            db.add(StockMovement(property_id=property_id, item_id=item_id,
+                quantity=Decimal("-10"), reason="consumption", balance_after=Decimal("45"),
+                created_at=utcnow() - timedelta(days=day, minutes=1), note="Test demand"))
+        db.add(StockMovement(property_id=property_id, item_id=item_id,
+            quantity=Decimal("10"), reason="purchase", balance_after=Decimal("45"),
+            created_at=utcnow() - timedelta(days=16)))
+        db.commit()
+        analysis = reorder.analyze(db, item)
+        assert analysis["consumption_14d"] == Decimal("140")
+        assert analysis["average_daily_usage"] == Decimal("10")
+        assert analysis["safety_stock"] == Decimal("20")
+        assert analysis["reorder_threshold"] == Decimal("50")
+        assert analysis["recommended_quantity"] == Decimal("95")
+        assert analysis["requires_reorder"]
+        first = service.maybe_flag_low(db, property_id, item)
+        assert first is not None and Decimal(first.rationale["reorder_threshold"]) == 50
+        assert service.maybe_flag_low(db, property_id, item) is None
+        assert len(db.scalars(select(PurchaseOrder).where(
+            PurchaseOrder.item_id == item_id, PurchaseOrder.status == PurchaseStatus.SUGGESTED)).all()) == 1
+        assert len(events) == 1 and events[0][1]["property_id"] == str(property_id)
+        service.approve_purchase_order(db, property_id, first.id, actor_id=manager_id,
+                                       quantity=Decimal("20"))
+        analysis = reorder.analyze(db, item)
+        assert analysis["incoming_stock"] == Decimal("20")
+        assert analysis["available_stock"] == Decimal("65")
+        assert not analysis["requires_reorder"]
+        assert service.maybe_flag_low(db, property_id, item) is None
+        service.cancel_purchase_order(db, property_id, first.id)
+        assert reorder.analyze(db, item)["incoming_stock"] == 0
+        pending = db.scalars(select(PurchaseOrder).where(
+            PurchaseOrder.item_id == item_id,
+            PurchaseOrder.status == PurchaseStatus.SUGGESTED)).one()
+        assert len(db.scalars(select(PurchaseOrder).where(
+            PurchaseOrder.item_id == item_id, PurchaseOrder.status == PurchaseStatus.SUGGESTED)).all()) == 1
+        service.close_suggestion(db, property_id, pending.id, reason="card.dismissed")
+        assert service.maybe_flag_low(db, property_id, item) is None
+
+
+def test_cold_start_and_zero_demand(sessions):
+    ids = fixture_rows(sessions)
+    property_id, _, _, _, _, _, item_id, _ = ids
+    with sessions() as db:
+        item = db.get(StockItem, item_id)
+        item.minimum_quantity = Decimal("12")
+        analysis = reorder.analyze(db, item)
+        assert analysis["threshold_source"] == "manual"
+        assert analysis["reorder_threshold"] == Decimal("12")
+        assert not analysis["requires_reorder"]
+        db.add(StockMovement(property_id=property_id, item_id=item_id,
+            quantity=Decimal("-6"), reason="consumption", balance_after=Decimal("10"),
+            created_at=utcnow() - timedelta(days=3)))
+        db.commit()
+        analysis = reorder.analyze(db, item)
+        assert analysis["threshold_source"] == "limited_history"
+        assert Decimal("1.9") < analysis["average_daily_usage"] < Decimal("2.1")
+
+
+def test_reorder_seed_is_idempotent(sessions, monkeypatch):
+    from scripts.seed_inventory_reorder import seed_inventory_reorder
+    monkeypatch.setattr(service.bus, "publish", lambda *args, **kwargs: None)
+    ids = fixture_rows(sessions)
+    property_id, _, _, _, _, _, item_id, _ = ids
+    with sessions() as db:
+        item = db.get(StockItem, item_id)
+        item.sku = "FD-BREAD"
+        item.quantity = Decimal("24")
+        item.lead_time_days = 1
+        db.commit()
+        assert seed_inventory_reorder(db, property_id)["consumption_movements"] == 16
+        assert seed_inventory_reorder(db, property_id)["consumption_movements"] == 0
+        assert db.scalar(select(func.count(StockMovement.id)).where(
+            StockMovement.item_id == item_id)) == 16
+        assert db.scalar(select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.item_id == item_id,
+            PurchaseOrder.status == PurchaseStatus.SUGGESTED)) == 1
+        assert db.scalar(select(func.count(ActionCard.id)).where(
+            ActionCard.property_id == property_id, ActionCard.kind == "purchase")) == 1
+
+
+def test_concurrent_reorder_creates_one_suggestion(sessions, monkeypatch):
+    if not os.environ.get("VESPER_TEST_DATABASE_URL"):
+        pytest.skip("Row-lock concurrency requires a disposable PostgreSQL _test database")
+    monkeypatch.setattr(service.bus, "publish", lambda *args, **kwargs: None)
+    ids = fixture_rows(sessions)
+    property_id, _, _, _, _, _, item_id, _ = ids
+    with sessions() as db:
+        item = db.get(StockItem, item_id)
+        item.quantity = Decimal("2")
+        item.lead_time_days = 3
+        db.add(StockMovement(property_id=property_id, item_id=item_id,
+            quantity=Decimal("-10"), reason="consumption", balance_after=Decimal("2"),
+            created_at=utcnow() - timedelta(days=2)))
+        db.commit()
+
+    def evaluate():
+        with sessions() as db:
+            return service.maybe_flag_low(db, property_id,
+                service.get_item(db, property_id, item_id)) is not None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(lambda _: evaluate(), range(2))) == [False, True]
+    with sessions() as db:
+        assert db.scalar(select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.item_id == item_id,
+            PurchaseOrder.status == PurchaseStatus.SUGGESTED)) == 1

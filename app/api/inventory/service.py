@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import timedelta, timezone
 from decimal import Decimal
 from uuid import UUID, NAMESPACE_URL, uuid5
 
@@ -16,6 +16,7 @@ from app.api.property.models import Property
 
 from .models import MovementReason, PurchaseOperation, PurchaseOrder, PurchaseStatus, StockItem, StockMovement
 from .procurement import active_budget, budget_totals, money
+from . import reorder
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +116,6 @@ def move_stock(
     db.refresh(movement)
     db.refresh(item)
     publish_movement(property_id, item, movement, actor_id)
-    maybe_flag_low(db, property_id, item)
     return movement
 
 
@@ -137,19 +137,26 @@ def publish_movement(property_id: UUID, item: StockItem, movement: StockMovement
 
 
 def maybe_flag_low(db: Session, property_id: UUID, item: StockItem) -> PurchaseOrder | None:
-    """The reorder rule: below minimum, and not already flagged today."""
-    if not item.is_low:
-        # Back above the line — arm the flag again for next time.
-        if item.low_flagged_at is not None:
-            item.low_flagged_at = None
-            db.commit()
+    """Serialize reorder decisions on the stock row and reuse suggested POs."""
+    item = db.scalars(select(StockItem).where(
+        StockItem.id == item.id, StockItem.property_id == property_id,
+    ).with_for_update().execution_options(populate_existing=True)).one()
+    if not item.is_active:
         return None
-
-    if item.low_flagged_at and utcnow() - item.low_flagged_at < timedelta(hours=LOW_FLAG_COOLDOWN_HOURS):
+    analysis = reorder.analyze(db, item)
+    item.average_daily_usage_14d = analysis["average_daily_usage"]
+    item.reorder_threshold = analysis["reorder_threshold"]
+    item.last_threshold_calculated_at = utcnow()
+    if (not analysis["requires_reorder"] or analysis["pending_purchase_order_id"]):
+        db.commit()
         return None
-
-    item.low_flagged_at = utcnow()
-    quantity = Decimal(item.reorder_quantity) or (Decimal(item.minimum_quantity) * 2)
+    flagged_at = item.low_flagged_at
+    if flagged_at and flagged_at.tzinfo is None:
+        flagged_at = flagged_at.replace(tzinfo=timezone.utc)
+    if flagged_at and utcnow() - flagged_at < timedelta(hours=LOW_FLAG_COOLDOWN_HOURS):
+        db.commit()
+        return None
+    quantity = analysis["recommended_quantity"]
     order = PurchaseOrder(
         property_id=property_id,
         department_id=item.department_id,
@@ -161,12 +168,8 @@ def maybe_flag_low(db: Session, property_id: UUID, item: StockItem) -> PurchaseO
         supplier=item.supplier,
         status=PurchaseStatus.SUGGESTED,
         expected_on=local_today() + timedelta(days=item.lead_time_days),
-        rationale={
-            "on_hand": float(item.quantity),
-            "minimum": float(item.minimum_quantity),
-            "lead_time_days": item.lead_time_days,
-            "reason": "on-hand at or below minimum",
-        },
+        rationale=reorder.snapshot(analysis),
+        reorder_key=f"{property_id}:{item.id}",
     )
     db.add(order)
     db.commit()
@@ -175,23 +178,35 @@ def maybe_flag_low(db: Session, property_id: UUID, item: StockItem) -> PurchaseO
     # action-service picks this up and ranks it into the owner's queue.
     bus.publish(
         Event.STOCK_LOW,
-        {
-            "item_id": str(item.id),
-            "purchase_order_id": str(order.id),
-            "sku": item.sku,
-            "name": item.name,
-            "category": item.category,
-            "on_hand": float(item.quantity),
-            "minimum": float(item.minimum_quantity),
-            "suggested_quantity": float(quantity),
-            "unit": item.unit,
-            "estimated_cost": float(order.total_cost),
-            "supplier": item.supplier,
-            "lead_time_days": item.lead_time_days,
-        },
+        purchase_event_payload(item, order, analysis),
         property_id=str(property_id),
     )
     return order
+
+
+def purchase_event_payload(item: StockItem, order: PurchaseOrder, analysis: dict) -> dict:
+    return {
+        "item_id": str(item.id), "purchase_order_id": str(order.id),
+        "sku": item.sku, "name": item.name, "category": item.category,
+        "on_hand": float(item.quantity), "minimum": float(analysis["reorder_threshold"]),
+        "suggested_quantity": float(order.quantity), "unit": item.unit,
+        "estimated_cost": float(order.total_cost), "supplier": item.supplier,
+        "lead_time_days": item.lead_time_days, "analysis": reorder.snapshot(analysis),
+    }
+
+
+def close_suggestion(db: Session, property_id: UUID, order_id: UUID, *, reason: str) -> None:
+    """Mirror a dismissed action card without creating a competing decision flow."""
+    order = _locked_order(db, property_id, order_id)
+    if order.status != PurchaseStatus.SUGGESTED or order.reorder_key is None:
+        return
+    item = db.scalars(select(StockItem).where(StockItem.id == order.item_id,
+        StockItem.property_id == property_id).with_for_update()).one()
+    order.status = PurchaseStatus.CANCELLED
+    order.reorder_key = None
+    order.rationale = {**order.rationale, "closed_reason": reason}
+    item.low_flagged_at = utcnow()
+    db.commit()
 
 
 def consume_recipe(
@@ -287,15 +302,20 @@ def approve_purchase_order(
     if order.department_id is None:
         raise Conflict("Order has no responsible department")
     budget = active_budget(db, property_id, order.department_id, order.currency, lock=True)
+    suggested_quantity = Decimal(order.quantity)
     if quantity is not None:
         if quantity <= 0:
             raise Invalid("Order quantity must be greater than zero")
         order.quantity = quantity
         order.total_cost = money(quantity * Decimal(order.unit_cost))
+    order.rationale = {**(order.rationale or {}),
+                       "suggested_quantity": str(suggested_quantity),
+                       "approved_quantity": str(order.quantity)}
     if order.total_cost > budget_totals(db, budget)["remaining"]:
         raise Conflict("Department budget has insufficient remaining funds")
     order.budget_id = budget.id
     order.status = PurchaseStatus.APPROVED
+    order.reorder_key = None
     order.approved_by = actor_id
     order.approved_at = utcnow()
     db.commit()
@@ -350,7 +370,6 @@ def receive_purchase_order(db: Session, property_id: UUID, order_id: UUID, *, ac
     db.commit()
     db.refresh(order)
     publish_movement(property_id, movement.item, movement, actor_id)
-    maybe_flag_low(db, property_id, movement.item)
     return order
 
 
@@ -376,7 +395,6 @@ def return_purchase_order(db: Session, property_id: UUID, order_id: UUID, *, act
     db.commit()
     db.refresh(order)
     publish_movement(property_id, movement.item, movement, actor_id)
-    maybe_flag_low(db, property_id, movement.item)
     return order
 
 
@@ -387,8 +405,10 @@ def cancel_purchase_order(db: Session, property_id: UUID, order_id: UUID) -> Pur
     if order.status == PurchaseStatus.CANCELLED:
         return order
     order.status = PurchaseStatus.CANCELLED
+    order.reorder_key = None
     db.commit()
     db.refresh(order)
+    maybe_flag_low(db, property_id, get_item(db, property_id, order.item_id))
     return order
 
 

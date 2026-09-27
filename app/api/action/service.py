@@ -377,7 +377,9 @@ def snooze(db: Session, principal: Principal, card_id: UUID, minutes: int) -> Ac
     _audit(db, principal, "card.snoozed", card, before, _snapshot(card))
     bus.publish(
         Event.CARD_SNOOZED,
-        {"card_id": str(card.id), "until": card.snoozed_until.isoformat()},
+        {"card_id": str(card.id), "engine": card.engine,
+         "purchase_order_id": card.payload.get("purchase_order_id"),
+         "until": card.snoozed_until.isoformat()},
         property_id=principal.property_id,
         actor_id=principal.id,
     )
@@ -413,7 +415,8 @@ def dismiss(db: Session, principal: Principal, card_id: UUID, reason: str, note:
     _audit(db, principal, "card.dismissed", card, before, _snapshot(card), note=note)
     bus.publish(
         Event.CARD_DISMISSED,
-        {"card_id": str(card.id), "engine": card.engine, "reason": reason},
+        {"card_id": str(card.id), "engine": card.engine,
+         "purchase_order_id": card.payload.get("purchase_order_id"), "reason": reason},
         property_id=str(property_id),
         actor_id=principal.id,
     )
