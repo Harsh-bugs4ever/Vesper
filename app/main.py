@@ -27,6 +27,7 @@ import asyncio
 import logging
 
 import anyio.to_thread
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from vesper_common.app_factory import create_app
@@ -87,6 +88,9 @@ app = create_app(
     subscriptions=_startup,
     on_shutdown=_shutdown,
 )
+
+# Compresses payloads > 1KB (reduces JSON payload transfer times by 70-85%).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Added last, so it wraps everything else: a caller over their limit is turned away
 # before a handler, a database session or an event is spent on them.

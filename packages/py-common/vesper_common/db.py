@@ -59,6 +59,23 @@ def get_engine():
                 "connect_args": {"connect_timeout": 5},
             })
         _engine = create_engine(settings.database_url, **engine_kwargs)
+        if "sqlite" in settings.database_url:
+            from sqlalchemy import event
+
+            @event.listens_for(_engine, "connect")
+            def _set_sqlite_pragma(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                try:
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.execute("PRAGMA busy_timeout=10000")
+                    cursor.execute("PRAGMA cache_size=-64000")
+                    cursor.execute("PRAGMA temp_store=MEMORY")
+                except Exception:
+                    pass
+                finally:
+                    cursor.close()
+
         SessionLocal.configure(bind=_engine)
     return _engine
 

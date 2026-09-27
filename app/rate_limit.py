@@ -55,8 +55,8 @@ class RateLimiter:
             self._client = redis.Redis.from_url(
                 self._url,
                 decode_responses=True,
-                socket_connect_timeout=0.1,
-                socket_timeout=0.2,
+                socket_connect_timeout=0.05,
+                socket_timeout=0.1,
                 retry_on_timeout=False,
             )
         return self._client
@@ -80,8 +80,8 @@ class RateLimiter:
             count = pipe.execute()[0]
             return count <= limit, max(0, limit - count), reset_in
         except (redis.RedisError, OSError, TimeoutError):
-            # Trip circuit breaker for 30s so subsequent requests don't block
-            self._circuit_open_until = time.monotonic() + 30.0
+            # Trip circuit breaker for 300s so subsequent requests don't block
+            self._circuit_open_until = time.monotonic() + 300.0
             log.warning("rate limiter redis unavailable; failing over to in-memory rate limiting")
             self._client = None
             return self._check_memory(identity, kind, limit, window, reset_in)

@@ -12,13 +12,22 @@
  *     is already written for a human.
  */
 
-const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-// A loopback URL in a public bundle points at the guest's phone, not the resort PC.
-// Keep explicit non-loopback deployments, otherwise use the same-origin proxy.
-export const API_URL = configuredApiUrl &&
-  !/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(configuredApiUrl)
-  ? configuredApiUrl
-  : "/backend";
+function resolveApiUrl(): string {
+  if (typeof window !== "undefined") {
+    // If accessing from the local workstation, hit the backend directly on :8000
+    // to bypass the Next.js dev server proxy hop for instant roundtrips.
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return `http://${window.location.hostname}:8000`;
+    }
+  }
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (configured && !/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(configured)) {
+    return configured;
+  }
+  return typeof window === "undefined" ? "http://127.0.0.1:8000" : "/backend";
+}
+
+export const API_URL = resolveApiUrl();
 
 const ACCESS_KEY = "vesper_access_token";
 const REFRESH_KEY = "vesper_refresh_token";

@@ -1,5 +1,6 @@
 """Action overview and executive dashboards."""
 from datetime import date, datetime, time, timedelta
+import time as time_module
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -23,9 +24,24 @@ from app.api.property.models import Department, Room
 from app.api.revenue.models import DemandForecast
 from app.api.staff.models import Attendance, Task, TaskStatus
 
+_GM_CACHE: dict[tuple[UUID, date, date], tuple[float, dict]] = {}
+_DEPT_CACHE: dict[tuple[UUID, UUID, date, date], tuple[float, dict]] = {}
+_OVERVIEW_CACHE_TTL_SEC = 3.0
+
+
+def invalidate_overview_cache() -> None:
+    _GM_CACHE.clear()
+    _DEPT_CACHE.clear()
+
 
 def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
-    """Generate high-performance holistic GM executive overview."""
+    """Generate high-performance holistic GM executive overview with micro-caching."""
+    cache_key = (branch, begin, finish)
+    now_ts = time_module.time()
+    cached = _GM_CACHE.get(cache_key)
+    if cached and (now_ts - cached[0]) < _OVERVIEW_CACHE_TTL_SEC:
+        return cached[1]
+
     now = utcnow()
     today = now.date()
     today_dt = datetime.combine(today, time.min)
@@ -292,6 +308,8 @@ def gm_overview(db: Session, branch: UUID, begin: date, finish: date) -> dict:
         "exceptions": [e.model_dump() for e in exceptions],
         "insights": insights.model_dump(),
     }
+    _GM_CACHE[cache_key] = (now_ts, res)
+    return res
 
 
 def department_overview(
@@ -302,6 +320,12 @@ def department_overview(
     finish: date,
 ) -> dict:
     """Generate department-scoped operational performance snapshot."""
+    cache_key = (branch, department.id, begin, finish)
+    now_ts = time_module.time()
+    cached = _DEPT_CACHE.get(cache_key)
+    if cached and (now_ts - cached[0]) < _OVERVIEW_CACHE_TTL_SEC:
+        return cached[1]
+
     now = utcnow()
     today = now.date()
     today_dt = datetime.combine(today, time.min)
@@ -455,10 +479,12 @@ def department_overview(
                               (o_tasks + o_reqs)) if o_tasks + o_reqs else 0,
     )
 
-    return {
+    res = {
         "branch_id": branch,
         "period_start": begin,
         "period_end": finish,
         "generated_at": now,
         "department": snapshot.model_dump(),
     }
+    _DEPT_CACHE[cache_key] = (now_ts, res)
+    return res

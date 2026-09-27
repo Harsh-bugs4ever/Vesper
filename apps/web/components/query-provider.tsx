@@ -22,7 +22,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             // but not so fast that switching tabs refetches everything.
             staleTime: 30_000,
             gcTime: 5 * 60_000,
-            refetchOnWindowFocus: true,
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
             retry: (failureCount, error) => {
               // A 403 or a 404 will fail the same way three times in a row; only retry
               // things that might genuinely be transient.
