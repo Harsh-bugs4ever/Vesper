@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { safeFormatDate } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -621,9 +622,7 @@ export default function HousekeepingPage() {
                 <div>
                   <dt className="text-sand-500">Last Changed</dt>
                   <dd className="mt-0.5 font-medium text-sand-900">
-                    {selected.status_changed_at
-                      ? format(new Date(selected.status_changed_at), "d MMM, hh:mm a")
-                      : "—"}
+                    {safeFormatDate(selected.status_changed_at, "d MMM, hh:mm a")}
                   </dd>
                 </div>
                 <div className="col-span-2 border-t border-sand-200/60 pt-2">

@@ -4,7 +4,7 @@ import * as React from "react";
 import { format, isSameDay } from "date-fns";
 import { ArrowRight } from "lucide-react";
 import { bookingStateMeta } from "@/lib/config/frontdesk-ui";
-import { cn } from "@/lib/utils";
+import { cn, safeFormatDate } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
 
@@ -173,8 +173,8 @@ export function RoomCalendar({
                       {placement.booking.guest}
                     </span>
                     <span className="hidden shrink-0 text-xs opacity-70 sm:inline">
-                      {format(midnight(placement.booking.checkIn), "d")} –{" "}
-                      {format(midnight(placement.booking.checkOut), "d MMM")}
+                      {safeFormatDate(midnight(placement.booking.checkIn), "d")} –{" "}
+                      {safeFormatDate(midnight(placement.booking.checkOut), "d MMM")}
                     </span>
                     <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
                   </button>

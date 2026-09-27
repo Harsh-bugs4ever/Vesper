@@ -2,7 +2,8 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format } from "date-fns";
+import { safeFormatDate } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-context";
@@ -730,7 +731,7 @@ function LiveActionQueue() {
                       )}
 
                       <span className="text-xs text-sand-400">
-                        · {format(new Date(card.created_at), "d MMM, h:mm a")}
+                        · {safeFormatDate(card.created_at, "d MMM, h:mm a")}
                       </span>
                     </div>
 

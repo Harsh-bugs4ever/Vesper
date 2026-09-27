@@ -54,7 +54,7 @@ import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
+import { cn, safeFormatDate } from "@/lib/utils";
 function greetingFor(date: Date): string {
   const hour = date.getHours();
   if (hour < 12) return "Good morning";
@@ -976,7 +976,7 @@ export function GmDashboard() {
           }
           comparison={
             dashboard?.occupancy
-              ? `As of ${format(new Date(dashboard.occupancy.as_of), "p")}`
+              ? `As of ${safeFormatDate(dashboard.occupancy.as_of, "p")}`
               : "Sensor offline"
           }
           tone="sage"
@@ -2046,9 +2046,7 @@ export function ManagerDashboard() {
                       </p>
                       <p className="text-[11px] text-sand-500">
                         Clocked in at{" "}
-                        {rec.checked_in_at
-                          ? format(new Date(rec.checked_in_at), "p")
-                          : "—"}
+                        {safeFormatDate(rec.checked_in_at, "p")}
                       </p>
                     </div>
                     <div>
