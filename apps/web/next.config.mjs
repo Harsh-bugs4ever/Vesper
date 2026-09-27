@@ -3,8 +3,11 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const backendUrl = (process.env.BACKEND_URL || process.env.API_PROXY_TARGET || "http://127.0.0.1:8000")
-  .replace(/\/+$/, "");
+let rawBackendUrl = (process.env.BACKEND_URL || process.env.API_PROXY_TARGET || "").trim();
+if (!rawBackendUrl || (!rawBackendUrl.startsWith("http://") && !rawBackendUrl.startsWith("https://"))) {
+  rawBackendUrl = "http://127.0.0.1:8000";
+}
+const backendUrl = rawBackendUrl.replace(/\/+$/, "");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
