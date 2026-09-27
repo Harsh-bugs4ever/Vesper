@@ -409,6 +409,27 @@ export const amenities = {
   list: () => api.get<GuestAmenity[]>("/guest/amenities"),
 };
 
+export interface GuestPlannerStop {
+  time: string;
+  amenity: string;
+  location: string | null;
+  opening_hours: string | null;
+  crowd: "Quieter" | "Moderate" | "Busier";
+  reason: string;
+  optional: boolean;
+}
+
+export interface GuestPlannerResponse {
+  day: string;
+  summary: string;
+  crowd_note: string;
+  stops: GuestPlannerStop[];
+}
+
+export const guestPlanner = {
+  create: (plan: string) => api.guestPost<GuestPlannerResponse>("/guest/planner", { plan }),
+};
+
 export interface RoomImage {
   id: string;
   url: string;

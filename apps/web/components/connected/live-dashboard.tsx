@@ -1821,8 +1821,9 @@ export function ManagerDashboard() {
         <PanelHeader
           title={deptForecastData.title}
           description={deptForecastData.description}
+          className="flex-wrap"
           action={
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1 text-[11px] font-medium text-sand-700">
                 <span className="h-2 w-2 rounded-xs bg-forest-600" />
                 Optimal Staffing
