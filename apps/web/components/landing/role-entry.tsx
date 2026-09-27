@@ -153,13 +153,8 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
           </form>
 
           <div className="mt-6 rounded-xl border border-sand-200/80 bg-sand-50/70 p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-sand-900">Demo accounts by role</p>
-                <p className="mt-1 text-xs text-sand-600">Select a card to fill the email and password. Numbered groups fill the first account shown.</p>
-              </div>
-            </div>
-
+            <p className="text-sm font-semibold text-sand-900">Demo account credentials</p>
+            <p className="mt-1 text-xs text-sand-600">Select an account to fill its email and demo password (vesper123).</p>
             <div className="mt-4 space-y-4">
               <div>
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Leadership</p>
@@ -175,7 +170,6 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
                   ))}
                 </div>
               </div>
-
               <div>
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Department managers</p>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -191,24 +185,6 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
                   ))}
                 </div>
               </div>
-
-              <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Named staff accounts</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {[
-                    ["Housekeeping", "hk1@vesper.demo"],
-                    ["Engineering", "chiefeng@vesper.demo"],
-                    ["Store", "store@vesper.demo"],
-                    ["Security", "security@vesper.demo"],
-                  ].map(([role, account]) => (
-                    <button type="button" key={account} onClick={() => selectDemoAccount(account)} className="min-w-0 rounded-lg border border-sand-200 bg-white p-3 text-left transition-colors hover:border-sage-400 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600">
-                      <p className="text-xs font-semibold text-sage-950">{role}</p>
-                      <code className="mt-1 block break-all text-[11px] text-sage-700">{account}</code>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div>
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Department staff accounts</p>
                 <div className="grid gap-2 sm:grid-cols-2">

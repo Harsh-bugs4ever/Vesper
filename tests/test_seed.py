@@ -13,7 +13,7 @@ import pytest
 
 from scripts import seed, seed_fnb, seed_workflow
 from scripts.seed_existing import enrich_existing_demo
-from scripts.seed_staff_tasks import seed_claimable_work, seed_staff_tasks
+from scripts.seed_staff_assignments import seed_staff_tasks
 from vesper_common.clock import property_tz, utcnow
 
 
@@ -54,7 +54,8 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
                         lambda db, pid, content: calls.append(("ai_tasks", pid)) or 0)
     from scripts import seed_existing
     from scripts import seed_inventory_reorder as reorder_module
-    from scripts import seed_staff_tasks as assignments_module
+    from scripts import seed_staff_assignments as assignments_module
+    from scripts import seed_department_inventory as inventory_module
     monkeypatch.setattr(seed_existing, "enrich_existing_demo",
                         lambda db, pid: calls.append(("enrich", pid)) or
                         {"attendance_added": 0, "food_tasks_added": 0,
@@ -62,10 +63,9 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(assignments_module, "seed_staff_tasks",
                         lambda db, pid: calls.append(("assign", pid)) or
                         {"staff_accounts": 6, "tasks_added": 6, "already_present": 0})
-    monkeypatch.setattr(assignments_module, "seed_claimable_work",
-                        lambda db, pid: calls.append(("pool", pid)) or
-                        {"claimable_added": 36, "already_present": 0,
-                         "pool_grants_added": 0})
+    monkeypatch.setattr(inventory_module, "seed_department_inventory",
+                        lambda db, pid: calls.append(("inventory", pid)) or
+                        {"items_reassigned": 0, "department_items_added": 0})
     monkeypatch.setattr(seed_workflow, "seed_workflow",
                         lambda db, pid, *, apply: calls.append((pid, apply)) or
                         {"created": 0, "already_present": 35})
@@ -75,9 +75,9 @@ def test_existing_demo_rerun_only_adds_missing_workflows(monkeypatch, capsys):
     monkeypatch.setattr(seed.sys, "argv", ["seed.py"])
 
     assert seed.main() == 0
-    assert calls == ["ai_content", ("enrich", property_id), ("assign", property_id),
-                     ("pool", property_id),
-                     (property_id, True), ("reorder", property_id), ("ai_tasks", property_id)]
+    assert calls == ["ai_content", ("enrich", property_id), ("inventory", property_id),
+                     ("assign", property_id), (property_id, True),
+                     ("reorder", property_id), ("ai_tasks", property_id)]
     assert "No base data was reset" in capsys.readouterr().out
 
 
@@ -138,55 +138,67 @@ def test_every_demo_staff_member_gets_one_scoped_assigned_task(monkeypatch):
         assert task.title and task.description and task.due_at
 
 
-def test_claimable_work_is_open_and_scoped_to_demo_departments(monkeypatch):
+def test_department_inventory_is_assigned_and_seeded_idempotently(monkeypatch):
     _app_model_aliases(monkeypatch)
-    from vesper_models.staff import TaskStatus
+    from scripts.seed_department_inventory import seed_department_inventory
 
     property_id = uuid4()
-    departments = [SimpleNamespace(id=uuid4(), key=key) for key in
-        ("housekeeping", "fnb", "front_office", "maintenance", "store", "security")]
-    users = [SimpleNamespace(id=uuid4(), department_id=department.id,
-                             extra_permissions=["tasks:pool_read"] if index < 4 else [],
-                             email=f"{department.key}1@vesper.demo")
-             for index, department in enumerate(departments)]
-    rooms = [SimpleNamespace(id=uuid4(), number=str(401 + index)) for index in range(6)]
+    staff_role = SimpleNamespace(id=uuid4(), permissions=["tasks:pool_read"])
+    staff_user = SimpleNamespace(role_id=staff_role.id,
+                                 extra_permissions=["tasks:pool_read"])
+    departments = [SimpleNamespace(id=uuid4(), key=key) for key in (
+        "housekeeping", "fnb", "front_office", "maintenance", "store", "security")]
+    items = [
+        SimpleNamespace(sku="FD-BREAD", category="food", department_id=departments[0].id),
+        SimpleNamespace(sku="BV-TEA", category="beverage", department_id=departments[0].id),
+        SimpleNamespace(sku="LN-TOWEL", category="linen", department_id=departments[0].id),
+        SimpleNamespace(sku="SP-AC", category="spare_parts", department_id=departments[0].id),
+    ]
 
     class Session:
-        def __init__(self):
-            self.tasks = {}
-
         def get(self, model, row_id):
-            if model.__name__ == "Property":
-                return SimpleNamespace(name="JW Marriott Mumbai, Juhu")
-            return self.tasks.get(row_id)
+            return SimpleNamespace(name="JW Marriott Mumbai, Juhu")
 
         def scalar(self, statement):
-            return SimpleNamespace(id=uuid4())
+            return staff_role
 
         def scalars(self, statement):
             model = statement.column_descriptions[0]["entity"]
-            return {"Department": departments, "User": users, "Room": rooms}.get(model.__name__, [])
+            return {"Department": departments, "User": [staff_user], "Role": [staff_role],
+                    "StockItem": items}[model.__name__]
 
-        def add(self, task):
-            self.tasks[task.id] = task
+        def add(self, item):
+            items.append(item)
+
+        def flush(self):
+            for item in items:
+                if getattr(item, "id", None) is None:
+                    item.id = uuid4()
 
     db = Session()
-    assert seed_claimable_work(db, property_id) == {
-        "claimable_added": 36, "already_present": 0, "pool_grants_added": 2}
-    assert seed_claimable_work(db, property_id) == {
-        "claimable_added": 0, "already_present": 36, "pool_grants_added": 0}
-    assert len(db.tasks) == 36
-    assert all("tasks:pool_read" in user.extra_permissions for user in users)
-    authorized_ids = {department.id for department in departments}
-    assert all(task.property_id == property_id and task.department_id in authorized_ids
-               and task.assignee_id is None and task.status == TaskStatus.OPEN
-               and task.title and task.description and task.due_at
-               for task in db.tasks.values())
+    result = seed_department_inventory(db, property_id)
+    assert result == {"items_reassigned": 3, "department_items_added": 8,
+                      "staff_stock_permissions_added": 1,
+                      "obsolete_pool_permissions_removed": 2}
+    assert "stock:read" in staff_user.extra_permissions
+    assert "tasks:pool_read" not in staff_user.extra_permissions
+    assert "tasks:pool_read" not in staff_role.permissions
+    assert items[0].department_id == departments[4].id
+    assert items[1].department_id == departments[1].id
+    assert items[2].department_id == departments[0].id
+    assert items[3].department_id == departments[3].id
+    assert len(items) == 12
+
+    second = seed_department_inventory(db, property_id)
+    assert second == {"items_reassigned": 0, "department_items_added": 0,
+                      "staff_stock_permissions_added": 0,
+                      "obsolete_pool_permissions_removed": 0}
+    assert len(items) == 12
 
 
 def test_standalone_staff_seeder_commits_assignments(monkeypatch, capsys):
     _app_model_aliases(monkeypatch)
-    from scripts import seed_staff_tasks as assignments_module
+    from scripts import seed_staff_assignments as assignments_module
 
     property_id = uuid4()
     calls = []
@@ -209,14 +221,10 @@ def test_standalone_staff_seeder_commits_assignments(monkeypatch, capsys):
     monkeypatch.setattr(assignments_module, "seed_staff_tasks",
                         lambda db, pid: calls.append(pid) or
                         {"staff_accounts": 184, "tasks_added": 184, "already_present": 0})
-    monkeypatch.setattr(assignments_module, "seed_claimable_work",
-                        lambda db, pid: calls.append("pool") or
-                        {"claimable_added": 36, "already_present": 0,
-                         "pool_grants_added": 0})
-    monkeypatch.setattr(assignments_module.sys, "argv", ["seed_staff_tasks.py"])
+    monkeypatch.setattr(assignments_module.sys, "argv", ["seed_staff_assignments.py"])
 
     assert assignments_module.main() == 0
-    assert calls == [property_id, "pool", "commit"]
+    assert calls == [property_id, "commit"]
     assert "tasks_added       184" in capsys.readouterr().out
 
 

@@ -47,6 +47,7 @@ ACTORS = {
     "front_office": "fom@vesper.demo",
     "housekeeping": "exec@vesper.demo",
     "fnb": "chef@vesper.demo",
+    "cook": "fnb1@vesper.demo",
     "maintenance": "chiefeng@vesper.demo",
     "housekeeper": "hk1@vesper.demo",
 }
@@ -314,8 +315,14 @@ class Simulation:
         if not pending:
             return "nothing waiting"
         task = pending[0]
-        self.resort.post(f"/tasks/{task['id']}/claim", None, token)
-        self.resort.put(f"/tasks/{task['id']}/status", {"status": "done"}, token)
+        staff_actor = {"fnb": "cook", "housekeeping": "housekeeper"}.get(actor)
+        if staff_actor is None:
+            raise ValueError(f"No demo staff assignee configured for {actor}")
+        staff_token = self.resort.sign_in(staff_actor)
+        staff_id = self.resort.get("/auth/me", staff_token)["id"]
+        self.resort.put(f"/tasks/{task['id']}/assignee", {"assignee_id": staff_id}, token)
+        self.resort.put(f"/tasks/{task['id']}/status", {"status": "in_progress"}, staff_token)
+        self.resort.put(f"/tasks/{task['id']}/status", {"status": "done"}, staff_token)
         return task["title"]
 
     def show_stock(self) -> str:

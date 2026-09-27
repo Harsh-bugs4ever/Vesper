@@ -111,6 +111,8 @@ class TaskLocation(BaseModel):
     room_id: UUID
     room_number: str
     floor: int
+    image_url: str | None = None
+    image_alt: str | None = None
 
 
 class TaskCreate(BaseModel):

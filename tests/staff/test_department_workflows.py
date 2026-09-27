@@ -159,17 +159,6 @@ def test_task_completion_requires_assignee_and_department(monkeypatch):
     assert denied.value.status_code == 404
 
 
-def test_task_claim_rejects_another_assignee(monkeypatch):
-    property_id, department_id = uuid4(), uuid4()
-    actor = principal(property_id, department_id, permissions={Perm.TASKS_READ,
-                                                               Perm.TASKS_POOL_READ})
-    task = Task(id=uuid4(), property_id=property_id, department_id=department_id,
-                assignee_id=uuid4(), title="Clean room", status=TaskStatus.ASSIGNED)
-    monkeypatch.setattr(staff_router.service, "get_task", lambda *args: task)
-    with pytest.raises(Forbidden):
-        staff_router.claim(task.id, actor, Database())
-
-
 def test_manager_cannot_read_unrelated_department_reports():
     property_id, own, other = uuid4(), uuid4(), uuid4()
     manager = principal(property_id, own, role=Role.MANAGER,

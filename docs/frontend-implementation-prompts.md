@@ -68,10 +68,10 @@ Implement frontend Phase 3 against frontdesk, staff and maintenance APIs.
 
 1. Reuse /bookings/today and related guest/stay endpoints for Arrivals, Departures and In-house tabs. Add date filters, search, guest-profile drawers and real room image/status context.
 2. Make the workspace available to front-desk staff and their manager using actual permissions.
-3. Staff dashboard: show personal tasks, authorized claimable work, progress, attendance actions and staff-report submission.
+3. Staff dashboard: show assigned personal tasks, progress, attendance actions and staff-report submission.
 4. Manager dashboard: show scoped operational counts, overdue work, staff reports, assignments and approvals. Remove personal to-do lists from managers.
 5. Add Maintenance within Housekeeping for relevant room defects and linked work orders. Show engineering-owned work only to the extent permitted by the backend.
-6. Task claim, assignment, completion, attendance, check-in/out and report submission must call real mutation endpoints. Update views from successful responses and invalidate dependent queries.
+6. Task assignment, start, completion, attendance, check-in/out and report submission must call real mutation endpoints. Update views from successful responses and invalidate dependent queries.
 7. Surface permission, conflict and validation failures. Never turn a failed mutation into a local success or use timers to simulate completion.
 8. Remove any remaining hardcoded task, booking, staff or maintenance records in these components.
 

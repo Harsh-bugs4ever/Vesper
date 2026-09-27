@@ -36,34 +36,6 @@ def task():
     )
 
 
-def test_claim_is_idempotent_for_winner_and_conflicts_for_other_staff(monkeypatch):
-    row = task()
-    db = LockedTaskDB(row)
-    first, second = uuid4(), uuid4()
-    published = []
-    monkeypatch.setattr(service.bus, "publish", lambda *args, **kwargs: published.append(args))
-
-    service.claim_task(db, row.property_id, row.id, first, department_ids={row.department_id})
-    service.claim_task(db, row.property_id, row.id, first, department_ids={row.department_id})
-    with pytest.raises(Conflict):
-        service.claim_task(db, row.property_id, row.id, second, department_ids={row.department_id})
-
-    assert row.assignee_id == first
-    assert row.status == TaskStatus.IN_PROGRESS
-    assert db.commits == 1
-    assert len(published) == 1
-
-
-def test_locked_task_rechecks_department_and_pool_permission():
-    row = task()
-    db = LockedTaskDB(row)
-    with pytest.raises(Forbidden):
-        service.claim_task(db, row.property_id, row.id, uuid4(), department_ids={uuid4()})
-    with pytest.raises(Forbidden):
-        service.claim_task(db, row.property_id, row.id, uuid4(), department_ids={row.department_id}, can_claim_pool=False)
-    assert db.commits == 0
-
-
 def test_completion_is_idempotent_only_for_completing_staff(monkeypatch):
     row = task()
     winner, other = uuid4(), uuid4()

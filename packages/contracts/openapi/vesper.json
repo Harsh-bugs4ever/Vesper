@@ -877,6 +877,20 @@
         "title": "Body_import_csv_property_import_post",
         "type": "object"
       },
+      "Body_submit_task_evidence_tasks__task_id__evidence_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_submit_task_evidence_tasks__task_id__evidence_post",
+        "type": "object"
+      },
       "Body_upload_category_image_property_room_categories__category_id__images_post": {
         "properties": {
           "alt_text": {
@@ -1383,6 +1397,17 @@
             "title": "Adjustments",
             "type": "object"
           },
+          "auto_recipient": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Recipient"
+          },
           "can_undo": {
             "title": "Can Undo",
             "type": "boolean"
@@ -1486,6 +1511,17 @@
             "title": "Impact Amount",
             "type": "string"
           },
+          "is_auto_dispatched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Auto Dispatched"
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
@@ -1495,9 +1531,31 @@
             "title": "Payload",
             "type": "object"
           },
+          "profit_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Pct"
+          },
           "required_permission": {
             "title": "Required Permission",
             "type": "string"
+          },
+          "risk_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Pct"
           },
           "score": {
             "title": "Score",
@@ -1583,7 +1641,11 @@
           "work_order",
           "roster_change",
           "retention_offer",
-          "staffing_gap"
+          "staffing_gap",
+          "facility_promo",
+          "guest_recovery",
+          "vision_audit",
+          "chef_special"
         ],
         "title": "CardKind",
         "type": "string"
@@ -1594,6 +1656,17 @@
             "additionalProperties": true,
             "title": "Adjustments",
             "type": "object"
+          },
+          "auto_recipient": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Recipient"
           },
           "claimed_by": {
             "anyOf": [
@@ -1694,6 +1767,17 @@
             "title": "Impact Amount",
             "type": "string"
           },
+          "is_auto_dispatched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Auto Dispatched"
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
@@ -1703,9 +1787,31 @@
             "title": "Payload",
             "type": "object"
           },
+          "profit_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Pct"
+          },
           "required_permission": {
             "title": "Required Permission",
             "type": "string"
+          },
+          "risk_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Pct"
           },
           "score": {
             "title": "Score",
@@ -1991,13 +2097,43 @@
       },
       "DepartmentSnapshot": {
         "properties": {
+          "active_shift_name": {
+            "default": "Morning Shift",
+            "title": "Active Shift Name",
+            "type": "string"
+          },
           "attendance_today": {
             "title": "Attendance Today",
             "type": "integer"
           },
+          "avg_predicted_staff_daily": {
+            "default": 0,
+            "title": "Avg Predicted Staff Daily",
+            "type": "integer"
+          },
+          "budget_allocated": {
+            "default": 0.0,
+            "title": "Budget Allocated",
+            "type": "number"
+          },
+          "budget_remaining": {
+            "default": 0.0,
+            "title": "Budget Remaining",
+            "type": "number"
+          },
+          "budget_spent": {
+            "default": 0.0,
+            "title": "Budget Spent",
+            "type": "number"
+          },
           "completed_tasks_in_period": {
             "title": "Completed Tasks In Period",
             "type": "integer"
+          },
+          "currency": {
+            "default": "INR",
+            "title": "Currency",
+            "type": "string"
           },
           "department_id": {
             "format": "uuid",
@@ -2007,6 +2143,11 @@
           "department_name": {
             "title": "Department Name",
             "type": "string"
+          },
+          "low_stock_items": {
+            "default": 0,
+            "title": "Low Stock Items",
+            "type": "integer"
           },
           "open_requests": {
             "title": "Open Requests",
@@ -2023,6 +2164,28 @@
           "overdue_tasks": {
             "title": "Overdue Tasks",
             "type": "integer"
+          },
+          "pending_requisitions": {
+            "default": 0,
+            "title": "Pending Requisitions",
+            "type": "integer"
+          },
+          "sla_on_time_pct": {
+            "default": 94,
+            "title": "Sla On Time Pct",
+            "type": "integer"
+          },
+          "staff_needed_next_14d": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Staff Needed Next 14D",
+            "type": "array"
+          },
+          "team_rating": {
+            "default": 4.8,
+            "title": "Team Rating",
+            "type": "number"
           }
         },
         "required": [
@@ -3558,6 +3721,7 @@
           },
           "role": {
             "enum": [
+              "owner",
               "gm",
               "manager",
               "staff"
@@ -3670,6 +3834,151 @@
         ],
         "title": "MovementReason",
         "type": "string"
+      },
+      "MyTeamMemberOut": {
+        "properties": {
+          "employee_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Code"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "role_title": {
+            "title": "Role Title",
+            "type": "string"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/MyTeamShiftOut"
+            },
+            "title": "Shifts",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "full_name",
+          "role_title"
+        ],
+        "title": "MyTeamMemberOut",
+        "type": "object"
+      },
+      "MyTeamRosterOut": {
+        "properties": {
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": "string"
+          },
+          "department_name": {
+            "title": "Department Name",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MyTeamMemberOut"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "roster_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roster Method"
+          },
+          "roster_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roster Status"
+          },
+          "week_start": {
+            "format": "date",
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "department_id",
+          "department_name",
+          "week_start",
+          "members"
+        ],
+        "title": "MyTeamRosterOut",
+        "type": "object"
+      },
+      "MyTeamShiftOut": {
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "shift_key": {
+            "title": "Shift Key",
+            "type": "string"
+          },
+          "shift_name": {
+            "title": "Shift Name",
+            "type": "string"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_date",
+          "shift_key",
+          "shift_name"
+        ],
+        "title": "MyTeamShiftOut",
+        "type": "object"
       },
       "OfferApprove": {
         "description": "The offer composer: the manager writes the message and may retune the discount.",
@@ -5229,6 +5538,269 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "ReorderAlert": {
+        "properties": {
+          "available_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Available Stock",
+            "type": "string"
+          },
+          "average_daily_usage": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Daily Usage",
+            "type": "string"
+          },
+          "consumption_14d": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Consumption 14D",
+            "type": "string"
+          },
+          "current_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Stock",
+            "type": "string"
+          },
+          "days_remaining": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Remaining"
+          },
+          "incoming_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Incoming Stock",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pending_purchase_order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Purchase Order Id"
+          },
+          "recommended_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Recommended Quantity",
+            "type": "string"
+          },
+          "reorder_threshold": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reorder Threshold",
+            "type": "string"
+          },
+          "requires_reorder": {
+            "title": "Requires Reorder",
+            "type": "boolean"
+          },
+          "reserved_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reserved Stock",
+            "type": "string"
+          },
+          "safety_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Safety Stock",
+            "type": "string"
+          },
+          "safety_stock_days": {
+            "title": "Safety Stock Days",
+            "type": "integer"
+          },
+          "sku": {
+            "title": "Sku",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supplier_lead_time_days": {
+            "title": "Supplier Lead Time Days",
+            "type": "integer"
+          },
+          "target_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Target Stock",
+            "type": "string"
+          },
+          "threshold_source": {
+            "title": "Threshold Source",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "current_stock",
+          "incoming_stock",
+          "reserved_stock",
+          "available_stock",
+          "consumption_14d",
+          "average_daily_usage",
+          "supplier_lead_time_days",
+          "safety_stock_days",
+          "safety_stock",
+          "reorder_threshold",
+          "target_stock",
+          "recommended_quantity",
+          "days_remaining",
+          "requires_reorder",
+          "threshold_source",
+          "status",
+          "name",
+          "sku",
+          "unit"
+        ],
+        "title": "ReorderAlert",
+        "type": "object"
+      },
+      "ReorderAnalysis": {
+        "properties": {
+          "available_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Available Stock",
+            "type": "string"
+          },
+          "average_daily_usage": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Daily Usage",
+            "type": "string"
+          },
+          "consumption_14d": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Consumption 14D",
+            "type": "string"
+          },
+          "current_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Stock",
+            "type": "string"
+          },
+          "days_remaining": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Remaining"
+          },
+          "incoming_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Incoming Stock",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "pending_purchase_order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Purchase Order Id"
+          },
+          "recommended_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Recommended Quantity",
+            "type": "string"
+          },
+          "reorder_threshold": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reorder Threshold",
+            "type": "string"
+          },
+          "requires_reorder": {
+            "title": "Requires Reorder",
+            "type": "boolean"
+          },
+          "reserved_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reserved Stock",
+            "type": "string"
+          },
+          "safety_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Safety Stock",
+            "type": "string"
+          },
+          "safety_stock_days": {
+            "title": "Safety Stock Days",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supplier_lead_time_days": {
+            "title": "Supplier Lead Time Days",
+            "type": "integer"
+          },
+          "target_stock": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Target Stock",
+            "type": "string"
+          },
+          "threshold_source": {
+            "title": "Threshold Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "current_stock",
+          "incoming_stock",
+          "reserved_stock",
+          "available_stock",
+          "consumption_14d",
+          "average_daily_usage",
+          "supplier_lead_time_days",
+          "safety_stock_days",
+          "safety_stock",
+          "reorder_threshold",
+          "target_stock",
+          "recommended_quantity",
+          "days_remaining",
+          "requires_reorder",
+          "threshold_source",
+          "status"
+        ],
+        "title": "ReorderAnalysis",
+        "type": "object"
+      },
       "ReportCreate": {
         "properties": {
           "category": {
@@ -5642,6 +6214,40 @@
         "title": "RequisitionAuditOut",
         "type": "object"
       },
+      "RequisitionCatalogItemOut": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sku": {
+            "title": "Sku",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "category",
+          "unit"
+        ],
+        "title": "RequisitionCatalogItemOut",
+        "type": "object"
+      },
       "RequisitionCreate": {
         "properties": {
           "items": {
@@ -5685,6 +6291,24 @@
           "reason"
         ],
         "title": "RequisitionDecision",
+        "type": "object"
+      },
+      "RequisitionDraftRequest": {
+        "properties": {
+          "need": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need"
+          }
+        },
+        "title": "RequisitionDraftRequest",
         "type": "object"
       },
       "RequisitionLineCreate": {
@@ -5892,6 +6516,7 @@
           },
           "key": {
             "enum": [
+              "owner",
               "gm",
               "manager",
               "staff"
@@ -7857,7 +8482,7 @@
             "title": "Expires On"
           },
           "lead_time_days": {
-            "default": 2,
+            "default": 3,
             "title": "Lead Time Days",
             "type": "integer"
           },
@@ -7906,6 +8531,12 @@
             "default": "0",
             "title": "Reorder Quantity"
           },
+          "safety_stock_days": {
+            "default": 2,
+            "minimum": 0.0,
+            "title": "Safety Stock Days",
+            "type": "integer"
+          },
           "sku": {
             "maxLength": 40,
             "minLength": 1,
@@ -7922,6 +8553,12 @@
               }
             ],
             "title": "Supplier"
+          },
+          "target_stock_days": {
+            "default": 14,
+            "minimum": 1.0,
+            "title": "Target Stock Days",
+            "type": "integer"
           },
           "unit": {
             "default": "unit",
@@ -7952,6 +8589,11 @@
       },
       "StockItemDetail": {
         "properties": {
+          "average_daily_usage_14d": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Daily Usage 14D",
+            "type": "string"
+          },
           "category": {
             "title": "Category",
             "type": "string"
@@ -7988,6 +8630,18 @@
             "title": "Is Low",
             "type": "boolean"
           },
+          "last_threshold_calculated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Threshold Calculated At"
+          },
           "lead_time_days": {
             "title": "Lead Time Days",
             "type": "integer"
@@ -8011,6 +8665,15 @@
             "title": "Reorder Quantity",
             "type": "string"
           },
+          "reorder_threshold": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reorder Threshold",
+            "type": "string"
+          },
+          "safety_stock_days": {
+            "title": "Safety Stock Days",
+            "type": "integer"
+          },
           "sku": {
             "title": "Sku",
             "type": "string"
@@ -8025,6 +8688,10 @@
               }
             ],
             "title": "Supplier"
+          },
+          "target_stock_days": {
+            "title": "Target Stock Days",
+            "type": "integer"
           },
           "unit": {
             "title": "Unit",
@@ -8047,6 +8714,10 @@
           "reorder_quantity",
           "unit_cost",
           "lead_time_days",
+          "safety_stock_days",
+          "target_stock_days",
+          "average_daily_usage_14d",
+          "reorder_threshold",
           "is_low"
         ],
         "title": "StockItemDetail",
@@ -8129,6 +8800,18 @@
             ],
             "title": "Reorder Quantity"
           },
+          "safety_stock_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Stock Days"
+          },
           "supplier": {
             "anyOf": [
               {
@@ -8139,6 +8822,18 @@
               }
             ],
             "title": "Supplier"
+          },
+          "target_stock_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Stock Days"
           },
           "unit_cost": {
             "anyOf": [
@@ -8740,6 +9435,58 @@
         "title": "TaskDetail",
         "type": "object"
       },
+      "TaskLocation": {
+        "properties": {
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "image_alt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Alt"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "room_id": {
+            "format": "uuid",
+            "title": "Room Id",
+            "type": "string"
+          },
+          "room_number": {
+            "title": "Room Number",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "room_id",
+          "room_number",
+          "floor"
+        ],
+        "title": "TaskLocation",
+        "type": "object"
+      },
       "TaskPriority": {
         "enum": [
           "low",
@@ -8991,6 +9738,7 @@
           },
           "role_key": {
             "enum": [
+              "owner",
               "gm",
               "manager",
               "staff"
@@ -9100,6 +9848,7 @@
           },
           "role_key": {
             "enum": [
+              "owner",
               "gm",
               "manager",
               "staff"
@@ -9308,6 +10057,7 @@
             "anyOf": [
               {
                 "enum": [
+                  "owner",
                   "gm",
                   "manager",
                   "staff"
@@ -11804,6 +12554,249 @@
         ]
       }
     },
+    "/cards/ai-automation/facility-promo": {
+      "post": {
+        "operationId": "trigger_facility_promo_cards_ai_automation_facility_promo_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "facility_name",
+            "required": false,
+            "schema": {
+              "default": "Badminton Pavilion",
+              "title": "Facility Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "discount_pct",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 5,
+              "title": "Discount Pct",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Facility Promo Cards Ai Automation Facility Promo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Facility Promo",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
+    "/cards/ai-automation/guest-recovery": {
+      "post": {
+        "operationId": "trigger_guest_recovery_cards_ai_automation_guest_recovery_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Guest Recovery Cards Ai Automation Guest Recovery Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Guest Recovery",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
+    "/cards/ai-automation/kitchen-waste": {
+      "post": {
+        "operationId": "trigger_kitchen_waste_cards_ai_automation_kitchen_waste_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Kitchen Waste Cards Ai Automation Kitchen Waste Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Kitchen Waste",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
+    "/cards/ai-automation/run-all": {
+      "post": {
+        "description": "Runs all 4 AI automation engines and returns created/updated cards.",
+        "operationId": "trigger_all_automations_cards_ai_automation_run_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger All Automations Cards Ai Automation Run All Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger All Automations",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
+    "/cards/ai-automation/vision-audit": {
+      "post": {
+        "operationId": "trigger_vision_audit_cards_ai_automation_vision_audit_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "room_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "photo_url",
+            "required": false,
+            "schema": {
+              "default": "/landing/login-retreat.png",
+              "title": "Photo Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Vision Audit Cards Ai Automation Vision Audit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Vision Audit",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
+    "/cards/auto-execute-qualified": {
+      "post": {
+        "description": "Finds all actionable cards where risk < 40% and profit > 60% and auto-executes them.",
+        "operationId": "auto_execute_qualified_cards_cards_auto_execute_qualified_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Auto Execute Qualified Cards Cards Auto Execute Qualified Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Auto Execute Qualified Cards",
+        "tags": [
+          "action-cards"
+        ]
+      }
+    },
     "/cards/stats": {
       "get": {
         "operationId": "stats_cards_stats_get",
@@ -12261,7 +13254,7 @@
     },
     "/dashboard": {
       "get": {
-        "description": "Every tile on the General Manager dashboard in one call.\n\nThe caller's own token is forwarded to each service, so the dashboard shows exactly\nwhat this person is allowed to see rather than widening to a service principal.\nTiles that could not be loaded come back null and are named in `unavailable`.",
+        "description": "Every tile on the General Manager dashboard in one call.\n\n\n\nThe caller's own token is forwarded to each service, so the dashboard shows exactly\n\nwhat this person is allowed to see rather than widening to a service principal.\n\nTiles that could not be loaded come back null and are named in `unavailable`.",
         "operationId": "dashboard_dashboard_get",
         "parameters": [
           {
@@ -12413,6 +13406,81 @@
           }
         ],
         "summary": "Manager Overview",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/dashboard/digital-twin": {
+      "get": {
+        "description": "Read-only 14-day operational scenario for one department.",
+        "operationId": "digital_twin_dashboard_digital_twin_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Department Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rain_delta_mm",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 150,
+              "minimum": -50,
+              "title": "Rain Delta Mm",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "heat_delta_c",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 15,
+              "minimum": -15,
+              "title": "Heat Delta C",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Digital Twin Dashboard Digital Twin Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Digital Twin",
         "tags": [
           "dashboard"
         ]
@@ -12886,6 +13954,84 @@
           }
         ],
         "summary": "Rebuild Dna",
+        "tags": [
+          "guest-intel"
+        ]
+      }
+    },
+    "/guest-intel/goodies/dispatch": {
+      "post": {
+        "operationId": "dispatch_goodie_guest_intel_goodies_dispatch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dispatch Goodie Guest Intel Goodies Dispatch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dispatch Goodie",
+        "tags": [
+          "guest-intel"
+        ]
+      }
+    },
+    "/guest-intel/hub/overview": {
+      "get": {
+        "operationId": "guest_relations_hub_overview_guest_intel_hub_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guest Relations Hub Overview Guest Intel Hub Overview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Guest Relations Hub Overview",
         "tags": [
           "guest-intel"
         ]
@@ -13738,6 +14884,7 @@
     },
     "/guest/amenities": {
       "get": {
+        "description": "Guest amenities catalogue. Public or Guest Stay Token.",
         "operationId": "guest_amenities_guest_amenities_get",
         "responses": {
           "200": {
@@ -13755,11 +14902,6 @@
             "description": "Successful Response"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Guest Amenities",
         "tags": [
           "guest-qr"
@@ -13814,6 +14956,7 @@
     },
     "/guest/menu": {
       "get": {
+        "description": "In-room dining menu with live prices and recipe availability.",
         "operationId": "guest_menu_guest_menu_get",
         "responses": {
           "200": {
@@ -13827,11 +14970,6 @@
             "description": "Successful Response"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Guest Menu",
         "tags": [
           "guest-qr"
@@ -13908,6 +15046,55 @@
           }
         ],
         "summary": "Raise Request",
+        "tags": [
+          "guest-qr"
+        ]
+      }
+    },
+    "/guest/requests/{request_id}": {
+      "get": {
+        "description": "The status of a single request, strictly scoped to the active stay.",
+        "operationId": "get_my_request_guest_requests__request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Request",
         "tags": [
           "guest-qr"
         ]
@@ -15003,6 +16190,114 @@
         ]
       }
     },
+    "/inventory/items/{item_id}/reorder-analysis": {
+      "get": {
+        "operationId": "reorder_analysis_inventory_items__item_id__reorder_analysis_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReorderAnalysis"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reorder Analysis",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/reorder-alerts": {
+      "get": {
+        "operationId": "reorder_alerts_inventory_reorder_alerts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReorderAlert"
+                  },
+                  "title": "Response Reorder Alerts Inventory Reorder Alerts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reorder Alerts",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/reorder-analysis": {
+      "get": {
+        "operationId": "all_reorder_analysis_inventory_reorder_analysis_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReorderAnalysis"
+                  },
+                  "title": "Response All Reorder Analysis Inventory Reorder Analysis Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "All Reorder Analysis",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
     "/inventory/requisitions": {
       "get": {
         "operationId": "department_requisitions_inventory_requisitions_get",
@@ -15101,6 +16396,135 @@
           }
         ],
         "summary": "Submit Requisition",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/requisitions/auto-submit": {
+      "post": {
+        "description": "Compatibility response: scheduled replenishment owns request creation.",
+        "operationId": "auto_submit_requisition_inventory_requisitions_auto_submit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequisitionDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Auto Submit Requisition Inventory Requisitions Auto Submit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Auto Submit Requisition",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/requisitions/catalog": {
+      "get": {
+        "description": "Staff requisition choices; stock catalog visibility is separate from ledger access.",
+        "operationId": "requisition_catalog_inventory_requisitions_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RequisitionCatalogItemOut"
+                  },
+                  "title": "Response Requisition Catalog Inventory Requisitions Catalog Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Requisition Catalog",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/requisitions/draft": {
+      "post": {
+        "description": "Generate a reviewable request suggestion for this staff member's department.",
+        "operationId": "draft_requisition_inventory_requisitions_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequisitionDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Draft Requisition Inventory Requisitions Draft Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Draft Requisition",
         "tags": [
           "inventory"
         ]
@@ -20219,9 +21643,10 @@
         ]
       }
     },
-    "/tasks/{task_id}/claim": {
+    "/tasks/{task_id}/evidence": {
       "post": {
-        "operationId": "claim_tasks__task_id__claim_post",
+        "description": "Save an assignee's photo, ask vision AI to verify, then complete and assign onward.",
+        "operationId": "submit_task_evidence_tasks__task_id__evidence_post",
         "parameters": [
           {
             "in": "path",
@@ -20234,12 +21659,24 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_submit_task_evidence_tasks__task_id__evidence_post"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskDetail"
+                  "additionalProperties": true,
+                  "title": "Response Submit Task Evidence Tasks  Task Id  Evidence Post",
+                  "type": "object"
                 }
               }
             },
@@ -20261,7 +21698,56 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Claim",
+        "summary": "Submit Task Evidence",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/tasks/{task_id}/location": {
+      "get": {
+        "description": "Reveal only the location of work visible to this staff member.",
+        "operationId": "task_location_tasks__task_id__location_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskLocation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Task Location",
         "tags": [
           "tasks"
         ]
@@ -20722,6 +22208,62 @@
           }
         ],
         "summary": "Decide Leave",
+        "tags": [
+          "workforce"
+        ]
+      }
+    },
+    "/workforce/my-team": {
+      "get": {
+        "description": "Return names and shifts for only the caller's assigned department.",
+        "operationId": "my_team_roster_workforce_my_team_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "week_start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week Start"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTeamRosterOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Team Roster",
         "tags": [
           "workforce"
         ]

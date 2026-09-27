@@ -56,15 +56,17 @@ def main():
 
     task = None
     for _ in range(20):
-        board = call("GET", "/tasks", token=staff)
+        board = call("GET", "/tasks", token=manager)
         task = next((t for t in board["tasks"] if t.get("source_ref") == request_id), None)
         if task:
             break
         time.sleep(0.5)
     assert task, "guest request did not reach the staff task pool"
     task_id = task["id"]
-    claimed = call("POST", f"/tasks/{task_id}/claim", token=staff)
-    assert claimed["status"] == "in_progress"
+    call("PUT", f"/tasks/{task_id}/assignee", token=manager,
+         json={"assignee_id": staff_me["id"]})
+    call("PUT", f"/tasks/{task_id}/status", token=staff,
+         json={"status": "in_progress"})
     call("PUT", f"/tasks/{task_id}/status", token=staff,
          json={"status": "done"})
     print("staff task completed", task_id)

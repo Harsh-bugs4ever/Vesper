@@ -336,8 +336,8 @@ make seed                        # rooms, staff, bookings, orders and connected 
 
 `python scripts/seed.py` is the single command for the complete demo. It creates
 rooms, staff, attendance, stock, menu, bookings, active stays, food orders, linked
-staff tasks, one assigned task for every demo staff account, claimable department
-work, requisitions, guest requests, issue reports and manager scenarios.
+staff tasks, one assigned task for every demo staff account, department-wise
+inventory, requisitions, guest requests, issue reports and manager scenarios.
 Set `DEEPSEEK_API_KEY` in `.env` for the seeder's AI task pack. It uses
 `deepseek-flash` by default; `DEEPSEEK_MODEL` overrides the model.
 `--refresh-ai` requests a new pack and replaces the DeepSeek cache.
@@ -348,10 +348,9 @@ and workflow examples, and recovers the food-order seed if an earlier run stoppe
 before creating any orders. It also repairs old placeholder room references when exactly
 one historical booking matches; ambiguous rows are reported and left as they are.
 It does not duplicate the base resort or delete data.
-To add only staff work to an existing demo, run `python scripts/seed_staff_tasks.py`.
-It writes and commits assigned tasks for every demo staff account plus six unassigned,
-claimable tasks each for housekeeping, F&B, front office, maintenance, store and
-security. Existing demo staff in those departments gain the pool-read permission.
+To add assigned staff work to an existing demo, run
+`python scripts/seed_staff_assignments.py`. To populate or repair department-wise stock
+without rerunning the full demo seed, run `python scripts/seed_department_inventory.py`.
 `--reset --confirm-reset` is destructive and only for a
 disposable database.
 

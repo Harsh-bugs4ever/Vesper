@@ -2002,19 +2002,11 @@ def main() -> int:
             )
 
         if existing_id is not None:
-            from scripts.seed_existing import (
-                enrich_existing_demo,
-            )
-
-            from scripts.seed_staff_tasks import (
-                seed_claimable_work,
-                seed_staff_tasks,
-            )
-
-            from scripts.seed_workflow import (
-                seed_workflow,
-            )
-
+            from scripts.seed_existing import enrich_existing_demo
+            from scripts.seed_department_inventory import seed_department_inventory
+            from scripts.seed_staff_assignments import seed_staff_tasks
+            from scripts.seed_inventory_reorder import seed_inventory_reorder
+            from scripts.seed_workflow import seed_workflow
             import vesper_models.guest as guest
 
             ai_content = _load_ai_content(
@@ -2058,57 +2050,26 @@ def main() -> int:
                 )
 
                 if not has_food_orders:
-                    from scripts.seed_fnb import (
-                        seed_fnb_data,
-                    )
-
-                    seed_fnb_data(
-                        db,
-                        property_id=(
-                            existing_id
-                        ),
-                    )
-
-                enrich_existing_demo(
-                    db,
-                    existing_id,
-                )
-
-                seed_staff_tasks(
-                    db,
-                    existing_id,
-                )
-
-                seed_claimable_work(
-                    db,
-                    existing_id,
-                )
-
-                seed_workflow(
-                    db,
-                    existing_id,
-                    apply=True,
-                )
-
-                from scripts.seed_inventory_reorder import seed_inventory_reorder
+                    from scripts.seed_fnb import seed_fnb_data
+                    food_counts = seed_fnb_data(db, property_id=existing_id)
+                    print(f"Recovered missing food-order seed: {food_counts['fnb_orders_total']} orders")
+                enrichment = enrich_existing_demo(db, existing_id)
+                inventory_counts = seed_department_inventory(db, existing_id)
+                assignments = seed_staff_tasks(db, existing_id)
+                result = seed_workflow(db, existing_id, apply=True)
                 reorder_counts = seed_inventory_reorder(db, existing_id)
-
-                added_ai = (
-                    _seed_existing_ai_tasks(
-                        db,
-                        existing_id,
-                        ai_content,
-                    )
-                )
-
-            print(
-                "Demo resort already exists. "
-                f"Added {added_ai} new "
-                "AI-generated task rows. "
-                f"Added {reorder_counts['consumption_movements']} inventory usage rows. "
-                "No base data was reset."
-            )
-
+                added_ai = _seed_existing_ai_tasks(db, existing_id, ai_content)
+            print(f"Demo resort already exists. Added {result['created']} workflow rows; "
+                  f"{result['already_present']} already present.")
+            for label, count in enrichment.items():
+                print(f"  {label:<22} {count}")
+            for label, count in inventory_counts.items():
+                print(f"  inventory_{label:<13} {count}")
+            for label, count in assignments.items():
+                print(f"  {label:<22} {count}")
+            print(f"  inventory_usage_rows  {reorder_counts['consumption_movements']}")
+            print(f"  ai_tasks_added        {added_ai}")
+            print("No base data was reset.")
             return 0
 
     if args.reset:
@@ -2700,14 +2661,6 @@ def _seed(
             "store",
             "security",
         }:
-            grants.add(
-                "tasks:pool_read"
-            )
-
-        if (
-            department
-            == "store"
-        ):
             grants.add(
                 "stock:read"
             )
@@ -3322,6 +3275,11 @@ def _seed(
         ] = row
 
     db.flush()
+    from scripts.seed_department_inventory import seed_department_inventory
+    counts.update({
+        f"department_inventory_{key}": value
+        for key, value in seed_department_inventory(db, pid).items()
+    })
 
     counts[
         "stock_items"
@@ -5560,10 +5518,7 @@ def _seed(
         fnb_counts
     )
 
-    from scripts.seed_staff_tasks import (
-        seed_claimable_work,
-        seed_staff_tasks,
-    )
+    from scripts.seed_staff_assignments import seed_staff_tasks
 
     assigned = seed_staff_tasks(
         db,
@@ -5574,19 +5529,6 @@ def _seed(
         "assigned_staff_tasks"
     ] = assigned[
         "tasks_added"
-    ]
-
-    claimable = (
-        seed_claimable_work(
-            db,
-            pid,
-        )
-    )
-
-    counts[
-        "claimable_staff_tasks"
-    ] = claimable[
-        "claimable_added"
     ]
 
     from scripts.seed_workflow import (

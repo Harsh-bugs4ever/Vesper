@@ -8,6 +8,8 @@ export type TaskLocation = {
   room_id: string;
   room_number: string;
   floor: number;
+  image_url: string | null;
+  image_alt: string | null;
 };
 
 export function StaffTaskLocation({ location, title }: { location: TaskLocation; title: string }) {
@@ -24,16 +26,20 @@ export function StaffTaskLocation({ location, title }: { location: TaskLocation;
           </span>
         </div>
         <figure aria-label={`Task location: floor ${location.floor}, room ${location.room_number}`} className="relative h-52 overflow-hidden rounded-xl bg-sand-100 sm:h-64">
-          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center [perspective:850px]">
-            <div className="relative h-32 w-60 rounded-lg border-2 border-sand-400 bg-sand-200 shadow-[12px_18px_0_0_#b5aa96] [transform:rotateX(54deg)_rotateZ(-35deg)] sm:h-40 sm:w-80">
-              <span className="absolute left-4 top-3 text-xs font-semibold text-sand-700">FLOOR {location.floor}</span>
-              <div className="absolute bottom-5 right-6 flex h-16 w-24 items-center justify-center rounded-md border-2 border-sage-700 bg-sage-500 text-lg font-bold text-white shadow-[5px_7px_0_0_#315341] sm:h-20 sm:w-28">
-                {location.room_number}
+          {location.image_url ? (
+            <img src={location.image_url} alt={location.image_alt || `Room ${location.room_number}`} className="h-full w-full object-cover" />
+          ) : (
+            <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center [perspective:850px]">
+              <div className="relative h-32 w-60 rounded-lg border-2 border-sand-400 bg-sand-200 shadow-[12px_18px_0_0_#b5aa96] [transform:rotateX(54deg)_rotateZ(-35deg)] sm:h-40 sm:w-80">
+                <span className="absolute left-4 top-3 text-xs font-semibold text-sand-700">FLOOR {location.floor}</span>
+                <div className="absolute bottom-5 right-6 flex h-16 w-24 items-center justify-center rounded-md border-2 border-sage-700 bg-sage-500 text-lg font-bold text-white shadow-[5px_7px_0_0_#315341] sm:h-20 sm:w-28">
+                  {location.room_number}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <figcaption className="absolute bottom-3 left-3 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-sand-800 shadow-sm">
-            Only this task’s floor and room are shown
+            Floor {location.floor} · Room {location.room_number}
           </figcaption>
         </figure>
       </PanelBody>

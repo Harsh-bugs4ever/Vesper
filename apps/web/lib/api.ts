@@ -741,7 +741,6 @@ export const staffTasks = {
     priority?: string;
     due_at?: string;
   }) => api.post<StaffTask>("/tasks", body),
-  claim: (id: string) => api.post<StaffTask>(`/tasks/${id}/claim`),
   setStatus: (id: string, status: string) =>
     api.put<StaffTask>(`/tasks/${id}/status`, { status }),
 };

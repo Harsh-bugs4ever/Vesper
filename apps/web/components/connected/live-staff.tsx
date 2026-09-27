@@ -21,13 +21,13 @@ type Task = {
 type Attendance = { id: string; checked_in_at: string; checked_out_at: string | null; work_date: string; is_late: boolean };
 type TaskEvidence = { url: string; verification: "approved" | "rejected" | "needs_review"; verifier?: "ai" | "demo_sample" | "manager_review"; note: string; uploaded_at: string };
 type Room = { id: string; number: string };
-type Tab = "mine" | "pool" | "team" | "attendance" | "report" | "requisitions";
+type Tab = "mine" | "team" | "attendance" | "report" | "requisitions";
 
 function failure(error: unknown) {
   return error instanceof Error ? error.message : "The request failed.";
 }
 
-function TaskCard({ task, label, onAction, onShowLocation, busy, locationSelected }: { task: Task; label?: string; onAction?: () => void; onShowLocation?: () => void; busy: boolean; locationSelected?: boolean }) {
+function TaskCard({ task, onStart, busy, onShowLocation, locationSelected }: { task: Task; onStart?: () => void; busy: boolean; onShowLocation?: () => void; locationSelected?: boolean }) {
   const items = Array.isArray(task.meta?.items) ? task.meta.items : [];
   const priority = task.priority.toLowerCase();
   const status = task.status.replaceAll("_", " ");
@@ -61,7 +61,7 @@ function TaskCard({ task, label, onAction, onShowLocation, busy, locationSelecte
           </div>
           {task.room_id && onShowLocation && <button type="button" onClick={onShowLocation} aria-pressed={locationSelected} className="mt-3 min-h-11 text-sm font-medium text-sage-800 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sage-700">{locationSelected ? "Location shown" : "Show room location"}</button>}
         </div>
-        {label && onAction && <Button disabled={busy} onClick={onAction} className="shrink-0 self-center">{label}</Button>}
+        {task.status === "assigned" && onStart && <Button disabled={busy} onClick={onStart} className="shrink-0 self-center">Start task</Button>}
       </div>
       {latestEvidence && <div className="mt-4 flex items-start gap-3 rounded-xl border border-sand-200 bg-sand-50/70 p-3">
         {evidenceImage && <img src={evidenceImage} alt="Uploaded task completion evidence" className="h-16 w-16 rounded-lg object-cover" />}
@@ -125,12 +125,6 @@ export function LiveStaff() {
   const scope = [user?.propertyId, user?.id, user?.departmentId];
   const canRead = Boolean(user && hasPermission("tasks:read"));
   const mine = useQuery({ queryKey: ["staff", "mine", ...scope], queryFn: () => api.get<Task[]>("/tasks/mine", { include_done: true }), enabled: canRead, refetchInterval: 15000 });
-  const pool = useQuery({
-    queryKey: ["staff", "pool", ...scope],
-    queryFn: () => api.get<{ tasks: Task[] }>("/tasks", { department_id: user?.departmentId }),
-    enabled: Boolean(canRead && user?.departmentId && hasPermission("tasks:pool_read") && tab === "pool"),
-    refetchInterval: 15000,
-  });
   const attendance = useQuery({ queryKey: ["staff", "attendance", ...scope], queryFn: () => api.get<Attendance[]>("/attendance/me", { days: 14 }), enabled: Boolean(user), refetchInterval: 30000 });
   const rooms = useQuery({ queryKey: ["staff", "rooms", user?.propertyId], queryFn: () => api.get<Room[]>("/rooms"), enabled: Boolean(user && tab === "report" && category === "room_defect") });
   const refresh = () => Promise.all([
@@ -138,8 +132,7 @@ export function LiveStaff() {
     client.invalidateQueries({ queryKey: ["staff-header-attendance", user?.id] }),
   ]);
   const taskAction = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "claim" | "in_progress" }) => action === "claim"
-      ? api.post<Task>(`/tasks/${id}/claim`) : api.put<Task>(`/tasks/${id}/status`, { status: action }),
+    mutationFn: (id: string) => api.put<Task>(`/tasks/${id}/status`, { status: "in_progress" }),
     onSuccess: () => { void refresh(); showToast({ title: "Task saved", description: "The server recorded the change.", type: "success" }); },
     onError: (error) => { void refresh(); showToast({ title: "Task update failed", description: failure(error), type: "error" }); },
   });
@@ -160,14 +153,13 @@ export function LiveStaff() {
     onError: (error) => showToast({ title: "Report failed", description: failure(error), type: "error" }),
   });
   const activeAttendance = attendance.data?.find((row) => !row.checked_out_at);
-  const claimable = pool.data?.tasks.filter((task) => !task.assignee_id && task.status === "open") ?? [];
-  const visibleTasks = tab === "mine" ? mine.data ?? [] : tab === "pool" ? claimable : [];
+  const visibleTasks = mine.data ?? [];
   const selectedTask = visibleTasks.find((task) => task.id === selectedTaskId && task.room_id)
     ?? visibleTasks.find((task) => task.room_id);
   const location = useQuery({
     queryKey: ["staff", "task-location", user?.propertyId, selectedTask?.id],
     queryFn: () => api.get<TaskLocation>(`/tasks/${selectedTask?.id}/location`),
-    enabled: Boolean(user && selectedTask && (tab === "mine" || tab === "pool")),
+    enabled: Boolean(user && selectedTask && tab === "mine"),
   });
   const openTasks = mine.data?.filter((task) => !["done", "completed"].includes(task.status.toLowerCase())) ?? [];
   const overdueTasks = openTasks.filter((task) => task.is_overdue).length;
@@ -176,7 +168,6 @@ export function LiveStaff() {
 
   const tabs = [
     { id: "mine" as const, label: "My tasks", icon: ClipboardCheck, count: openTasks.length },
-    ...(user.departmentId && hasPermission("tasks:pool_read") ? [{ id: "pool" as const, label: "Claimable", icon: Users, count: claimable.length }] : []),
     ...(user.departmentId ? [{ id: "team" as const, label: "My team", icon: Users }] : []),
     { id: "attendance" as const, label: "Attendance", icon: Clock3 },
     { id: "report" as const, label: "Report issue", icon: AlertTriangle },
@@ -225,7 +216,7 @@ export function LiveStaff() {
       <Button variant="outline" onClick={() => void refresh()} className="self-end rounded-xl sm:self-auto"><RefreshCw className="h-4 w-4" /> Refresh</Button>
     </div>
 
-    {(tab === "mine" || tab === "pool") && selectedTask && (
+    {tab === "mine" && selectedTask && (
       location.isPending ? <p role="status" className="px-4 text-sm text-sand-700">Loading task location…</p>
         : location.isError ? <p role="alert" className="rounded-2xl border border-rose-200 bg-white p-4 text-sm text-rose-700">Room location unavailable: {failure(location.error)}</p>
           : location.data && <StaffTaskLocation location={location.data} title={selectedTask.title} />
@@ -233,12 +224,7 @@ export function LiveStaff() {
 
     {tab === "mine" && <Panel className="overflow-hidden rounded-3xl shadow-[0_14px_40px_-32px_rgba(35,57,45,.65)]"><PanelBody className="space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-serif text-2xl text-sage-950">Your tasks</h2><p className="mt-1 text-sm text-sand-500">Work assigned to you, updated automatically.</p></div>{overdueTasks > 0 && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700"><AlertTriangle className="h-3.5 w-3.5" />{overdueTasks} need attention</span>}</div>
-      {mine.isPending ? <div role="status" className="space-y-3"><div className="h-24 animate-pulse rounded-2xl bg-sand-100" /><div className="h-24 animate-pulse rounded-2xl bg-sand-100" /></div> : mine.isError ? <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{failure(mine.error)}</div> : mine.data?.length === 0 ? <div className="rounded-2xl border border-dashed border-sage-200 bg-sage-50/50 px-5 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sage-700 shadow-sm"><CheckCircle2 className="h-5 w-5" /></span><p className="mt-3 font-serif text-lg text-sage-950">You're all caught up</p><p className="mt-1 text-sm text-sand-600">New tasks will appear here when they are assigned.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{mine.data?.map((task) => <TaskCard key={task.id} task={task} busy={taskAction.isPending} locationSelected={selectedTask?.id === task.id} onShowLocation={() => setSelectedTaskId(task.id)} label={task.status === "assigned" ? "Start task" : undefined} onAction={task.status === "assigned" && hasPermission("tasks:complete") ? () => taskAction.mutate({ id: task.id, action: "in_progress" }) : undefined} />)}</div>}
-    </PanelBody></Panel>}
-
-    {tab === "pool" && <Panel className="overflow-hidden rounded-3xl shadow-[0_14px_40px_-32px_rgba(35,57,45,.65)]"><PanelBody className="space-y-4 p-4 sm:p-6">
-      <div><h2 className="font-serif text-2xl text-sage-950">Claimable work</h2><p className="mt-1 text-sm text-sand-500">Open tasks available to your department.</p></div>
-      {pool.isPending ? <p role="status" className="text-sm text-sand-600">Loading claimable tasks…</p> : pool.isError ? <p role="alert" className="text-sm text-rose-700">{failure(pool.error)}</p> : claimable.length === 0 ? <p className="text-sm text-sand-500">No claimable tasks in your department.</p> : <div className="grid gap-3 lg:grid-cols-2">{claimable.map((task) => <TaskCard key={task.id} task={task} busy={taskAction.isPending} locationSelected={selectedTask?.id === task.id} onShowLocation={() => setSelectedTaskId(task.id)} label="Claim" onAction={() => taskAction.mutate({ id: task.id, action: "claim" })} />)}</div>}
+      {mine.isPending ? <div role="status" className="space-y-3"><div className="h-24 animate-pulse rounded-2xl bg-sand-100" /><div className="h-24 animate-pulse rounded-2xl bg-sand-100" /></div> : mine.isError ? <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{failure(mine.error)}</div> : mine.data?.length === 0 ? <div className="rounded-2xl border border-dashed border-sage-200 bg-sage-50/50 px-5 py-10 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sage-700 shadow-sm"><CheckCircle2 className="h-5 w-5" /></span><p className="mt-3 font-serif text-lg text-sage-950">You're all caught up</p><p className="mt-1 text-sm text-sand-600">New tasks will appear here when they are assigned.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{mine.data?.map((task) => <TaskCard key={task.id} task={task} busy={taskAction.isPending} locationSelected={selectedTask?.id === task.id} onShowLocation={() => setSelectedTaskId(task.id)} onStart={hasPermission("tasks:complete") ? () => taskAction.mutate(task.id) : undefined} />)}</div>}
     </PanelBody></Panel>}
 
     {tab === "team" && <StaffTeam />}

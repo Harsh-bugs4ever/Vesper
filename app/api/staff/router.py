@@ -220,9 +220,7 @@ def list_tasks(
         include_done=include_done,
     )
     if principal.role == Role.STAFF:
-        tasks = [task for task in tasks if str(task.assignee_id) == principal.id or (
-            task.assignee_id is None and principal.can(Perm.TASKS_POOL_READ)
-        )]
+        tasks = [task for task in tasks if str(task.assignee_id) == principal.id]
     counts: dict[str, int] = {}
     for task in tasks:
         counts[task.status] = counts.get(task.status, 0) + 1
@@ -269,18 +267,19 @@ def task_location(
     """Reveal only the location of work visible to this staff member."""
     task = service.get_task(db, UUID(principal.property_id), task_id)
     principal.require_object(task)
-    if principal.role == Role.STAFF and not (
-        str(task.assignee_id) == principal.id or
-        (task.assignee_id is None and principal.can(Perm.TASKS_POOL_READ))
-    ):
+    if principal.role == Role.STAFF and str(task.assignee_id) != principal.id:
         raise NotFound("Task not found")
     if task.room_id is None:
         raise NotFound("Task has no room location")
     room = db.get(Room, task.room_id)
     if room is None or room.property_id != task.property_id:
         raise NotFound("Task room not found")
+    images = room.images or (room.category.images if room.category else [])
+    image = next((item for item in images if item.is_primary), images[0] if images else None)
     return TaskLocation(task_id=task.id, room_id=room.id,
-                        room_number=room.number, floor=room.floor)
+                        room_number=room.number, floor=room.floor,
+                        image_url=image.url if image else None,
+                        image_alt=image.alt_text if image else None)
 
 
 @tasks_router.get("/progress/{department_id}", response_model=TeamProgress)
@@ -293,29 +292,6 @@ def progress(
     principal.require_department(department_id)
     return TeamProgress(
         **service.department_progress(db, UUID(principal.property_id), department_id)
-    )
-
-
-@tasks_router.post("/{task_id}/claim", response_model=TaskDetail)
-def claim(
-    task_id: UUID,
-    principal: Principal = Depends(requires(Perm.TASKS_READ)),
-    db: Session = Depends(get_session),
-) -> TaskDetail:
-    if principal.role != Role.STAFF:
-        raise Forbidden("Task claiming is for assigned staff")
-    task = service.get_task(db, UUID(principal.property_id), task_id)
-    principal.require_object(task)
-    if task.assignee_id is None:
-        principal.require(Perm.TASKS_POOL_READ)
-    elif str(task.assignee_id) != principal.id:
-        raise Forbidden("Task belongs to another staff member")
-    return _detail(
-        service.claim_task(
-            db, UUID(principal.property_id), task_id, UUID(principal.id),
-            department_ids={UUID(item) for item in principal.department_ids},
-            can_claim_pool=principal.can(Perm.TASKS_POOL_READ),
-        )
     )
 
 

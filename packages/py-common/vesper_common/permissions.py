@@ -35,7 +35,6 @@ class Perm(StrEnum):
     TASKS_READ = "tasks:read"
     TASKS_ASSIGN = "tasks:assign"
     TASKS_COMPLETE = "tasks:complete"
-    TASKS_POOL_READ = "tasks:pool_read"
     REPORTS_WRITE = "reports:write"
     REPORTS_READ = "reports:read"
     REPORTS_APPROVE = "reports:approve"
@@ -99,6 +98,7 @@ STAFF_PERMS: set[str] = {
     Perm.TASKS_COMPLETE,
     Perm.REPORTS_WRITE,
     Perm.REQUISITION_WRITE,
+    Perm.STOCK_READ,
     Perm.STAFF_REVIEW_READ_OWN,
 }
 
@@ -108,7 +108,6 @@ MANAGER_PERMS: set[str] = {
     Perm.TASKS_READ,
     Perm.TASKS_ASSIGN,
     Perm.TASKS_COMPLETE,
-    Perm.TASKS_POOL_READ,
     Perm.REPORTS_READ,
     Perm.REPORTS_APPROVE,
     Perm.ROOMS_STATUS_WRITE,
@@ -205,7 +204,6 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
 }
 
 STAFF_DEPARTMENTAL_EXTRAS: set[str] = {
-    Perm.TASKS_POOL_READ,
     Perm.BOOKINGS_READ,
     Perm.BOOKINGS_WRITE,
     Perm.GUESTS_READ,

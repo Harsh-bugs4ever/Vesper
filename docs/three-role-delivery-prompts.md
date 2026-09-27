@@ -12,7 +12,7 @@ Use these prompts in three separate working copies or branches. Give each develo
 | 4 GM Cockpit | None | None | Forecast, exception radar, concise briefing, approvals | Approvals change downstream persisted state |
 | WOW | Concierge, recovery, local discovery, offers | Cross-team ripple tasks, eco operations | One coordinated ripple action, recovery risk, eco and revenue impact | One incident produces traceable actions across roles |
 
-Current code has Next.js pages for `/guest`, `/staff`, `/admin`, plus FastAPI modules for these domains. Existing `docs/feature-implementation-prompts.md` and `docs/frontend-implementation-prompts.md` describe fuller phase work. The September 24 source review and `apps/web/PHASE3_API_GAPS.md` / `PHASE5_API_GAPS.md` record specific defects and missing contracts. Recheck each finding in the current branch before treating it as current fact. In particular, guest requests, staff claimable tasks, requisitions/budgets, access scope, event delivery, migration history and action idempotency need verification before claiming a real workflow.
+Current code has Next.js pages for `/guest`, `/staff`, `/admin`, plus FastAPI modules for these domains. Existing `docs/feature-implementation-prompts.md` and `docs/frontend-implementation-prompts.md` describe fuller phase work. The September 24 source review and `apps/web/PHASE3_API_GAPS.md` / `PHASE5_API_GAPS.md` record specific defects and missing contracts. Recheck each finding in the current branch before treating it as current fact. In particular, guest requests, manager task assignment, requisitions/budgets, access scope, event delivery, migration history and action idempotency need verification before claiming a real workflow.
 
 ## Shared contract: paste before each role prompt
 
@@ -43,11 +43,11 @@ Acceptance: separate guest and staff browser sessions complete request -> assign
 ```text
 Own apps/web/app/staff, relevant staff API clients, and app/api/staff/workforce operational paths. Coordinate any shared request, inventory or maintenance contract before changing it.
 
-Build a mobile-first work queue sourced from the backend: my assigned tasks, authorized claimable tasks, urgency/SLA, room and guest-safe context, claim/accept/start/complete, attendance and breaks, issue/repair reporting, and permitted supply requests. A staff member sees only their property, department and assignments. Use the same persisted task/status model the guest and manager tracks consume. Make conflicting claims and offline/error states explicit. Avoid exposing guest private data beyond task need.
+Build a mobile-first work queue sourced from the backend: my assigned tasks, urgency/SLA, room and guest-safe context, start/complete, attendance and breaks, issue/repair reporting, and permitted supply requests. Managers assign incoming work to eligible staff. A staff member sees only their property, department and assignments. Use the same persisted task/status model the guest and manager tracks consume. Make assignment conflicts and offline/error states explicit. Avoid exposing guest private data beyond task need.
 
 Implement the PDF transitions: repair completion should trigger the room Ready transition through a verified state machine; stock-out creates a runner task; a manager-approved ripple plan fans out into the right departments without duplicate tasks. Voice-to-work-order/translation can be added after the typed core works and must produce a reviewable draft before submission.
 
-Acceptance: an order/request submitted in a separate guest browser arrives in staff work; one staff member claims and completes it; another cannot double-claim; guest and manager see the result after reload. Staff can clock in/out and submit a real shortage/defect report. Verify forbidden access to another department/property and preserve an audit trail for state changes.
+Acceptance: an order/request submitted in a separate guest browser arrives in the manager's department queue; the manager assigns it to staff, who starts and completes it; guest and manager see the result after reload. Staff can clock in/out and submit a real shortage/defect report. Verify forbidden access to another department/property and preserve an audit trail for state changes.
 ```
 
 ## Prompt 3: Manager and GM owner

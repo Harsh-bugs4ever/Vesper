@@ -79,13 +79,16 @@ def main():
     assert order["status"] == "raised" and order["total_amount"] != 0
     task = None
     for _ in range(25):
-        board = call("GET", "/tasks", token=cook)
+        board = call("GET", "/tasks", token=chef)
         task = next((row for row in board["tasks"] if row.get("source_ref") == order["id"]), None)
         if task:
             break
         time.sleep(0.4)
     assert task, "Room-service order did not reach F&B"
-    call("POST", f"/tasks/{task['id']}/claim", token=cook)
+    cook_id = call("GET", "/auth/me", token=cook)["id"]
+    call("PUT", f"/tasks/{task['id']}/assignee", token=chef,
+         json={"assignee_id": cook_id})
+    call("PUT", f"/tasks/{task['id']}/status", token=cook, json={"status": "in_progress"})
     call("PUT", f"/tasks/{task['id']}/status", token=cook, json={"status": "done"})
     for _ in range(25):
         with psycopg.connect(DB) as db:
