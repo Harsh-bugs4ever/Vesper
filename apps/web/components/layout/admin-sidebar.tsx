@@ -17,6 +17,7 @@ import {
   Package,
   Settings,
   Shield,
+  SlidersHorizontal,
   Sprout,
   Tags,
   Users,
@@ -58,6 +59,7 @@ const NAV: NavGroup[] = [
   {
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutGrid },
+      { name: "Management Control", href: "/admin/management-control", icon: SlidersHorizontal, roles: ["owner", "general_manager"] },
       { name: "Owner Overview", href: "/admin/owner", icon: Shield, roles: ["owner", "general_manager"] },
     ],
   },
