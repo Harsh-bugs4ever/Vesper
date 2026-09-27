@@ -87,12 +87,22 @@ def create_app(
     )
     app.state.service_name = name
 
+    cors_origins = settings.cors_origin_list
+    allow_origin_regex = None
+    if "*" in cors_origins:
+        cors_origins = []
+        allow_origin_regex = r".*"
+    else:
+        allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app|.*\.netlify\.app|.*\.onrender\.com)(:\d+)?$"
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
+        allow_origins=cors_origins,
+        allow_origin_regex=allow_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
     install_error_handlers(app)
 
