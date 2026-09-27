@@ -389,6 +389,38 @@ make seed
 make dev                         # uvicorn app.main:app --reload on :8000
 ```
 
+### Upstash Redis
+
+The backend uses Redis Streams consumer groups, Pub/Sub, and Redis leases through
+`redis-py`. In Upstash, create a Redis database near the backend (Singapore for the
+Render service above), then copy its **Connect → TCP** connection string into the
+backend's `VESPER_REDIS_URL` secret. It should look like:
+
+```text
+rediss://default:<TOKEN>@<ENDPOINT>:<PORT>
+```
+
+Use the TCP URL, not the Upstash REST URL/token. The REST API is a different protocol
+and cannot serve the app's blocking Streams consumers. Keep TLS enabled with `rediss://`.
+If the token contains reserved URL characters, percent-encode it before putting it in
+the URL. Do not commit the real connection string.
+
+For Render, set `VESPER_REDIS_URL` in the service environment (the Blueprint declares
+it as an unsynced secret). Leave `VESPER_REDIS_POOL_MAX_CONNECTIONS` at `8` unless the
+backend needs more concurrent Redis operations. Each backend instance starts one
+blocking Redis connection per event consumer (currently 12), in addition to the bounded
+publisher and rate-limiter pools. Size the Upstash plan's simultaneous-connection limit
+for all instances and leave headroom for deploy overlap and operations. A quick check is
+to open `/ready`; it reports the database and Redis connection status.
+
+Docker Compose can use the same external Upstash TCP URL by setting it in the root
+`.env` file or in the shell before `docker compose up`; without an override it keeps
+using the bundled local Redis service.
+
+Official guides: [Upstash TCP connection setup](https://upstash.com/docs/redis/overall/getstarted),
+[TLS URL format](https://upstash.com/docs/redis/troubleshooting/econn_reset), and
+[maximum concurrent connections](https://upstash.com/docs/redis/troubleshooting/max_concurrent_connections).
+
 | Surface | URL |
 |---|---|
 | Website | http://localhost:3000 |

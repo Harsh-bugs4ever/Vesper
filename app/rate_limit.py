@@ -58,6 +58,7 @@ class RateLimiter:
                 socket_connect_timeout=1.0,
                 socket_timeout=1.0,
                 retry_on_timeout=False,
+                max_connections=settings.redis_pool_max_connections,
             )
         return self._client
 
@@ -83,6 +84,11 @@ class RateLimiter:
             # Trip circuit breaker for 300s so subsequent requests don't block
             self._circuit_open_until = time.monotonic() + 300.0
             log.warning("rate limiter redis unavailable; failing over to in-memory rate limiting")
+            if self._client is not None:
+                try:
+                    self._client.close()
+                except redis.RedisError:
+                    pass
             self._client = None
             return self._check_memory(identity, kind, limit, window, reset_in)
 

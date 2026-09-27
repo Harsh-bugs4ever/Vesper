@@ -6,6 +6,7 @@ unchanged.
 """
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,24 @@ class Settings(BaseSettings):
     # One PostgreSQL database in development, one schema per bounded context.
     database_url: str = "postgresql+psycopg://vesper:vesper@localhost:5432/vesper"
     redis_url: str = "redis://localhost:6379/0"
+    redis_pool_max_connections: int = 8
+
+    @field_validator("redis_url")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        if not value.startswith(("redis://", "rediss://")):
+            raise ValueError(
+                "VESPER_REDIS_URL must be a Redis TCP URL (redis:// or rediss://); "
+                "Upstash REST URLs and tokens are not supported by the Streams event bus"
+            )
+        return value
+
+    @field_validator("redis_pool_max_connections")
+    @classmethod
+    def validate_redis_pool_max_connections(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("VESPER_REDIS_POOL_MAX_CONNECTIONS must be at least 1")
+        return value
 
     jwt_secret: str = "dev-only-change-me"
     jwt_algorithm: str = "HS256"

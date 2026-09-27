@@ -139,6 +139,7 @@ class EventBus:
                 decode_responses=True,
                 socket_timeout=SOCKET_TIMEOUT_SECONDS,
                 socket_connect_timeout=SOCKET_TIMEOUT_SECONDS,
+                max_connections=settings.redis_pool_max_connections,
             )
         return self._client
 
@@ -223,6 +224,9 @@ class EventBus:
             decode_responses=True,
             socket_timeout=block_ms / 1000 + SOCKET_TIMEOUT_SECONDS,
             socket_connect_timeout=SOCKET_TIMEOUT_SECONDS,
+            # Each blocking consumer owns one socket. Bound the pool so accidental
+            # extra commands in this thread cannot multiply Upstash connections.
+            max_connections=1,
         )
 
         def run() -> None:

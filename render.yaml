@@ -19,5 +19,11 @@ services:
         value: "Asia/Kolkata"
       - key: VESPER_CURRENCY
         value: "INR"
+      # Set this in Render to the Upstash Connect -> TCP URL (rediss://...).
+      # REST credentials do not support this app's Redis Streams consumers.
+      - key: VESPER_REDIS_URL
+        sync: false
+      - key: VESPER_REDIS_POOL_MAX_CONNECTIONS
+        value: "8"
       - key: PORT
         value: "8000"
