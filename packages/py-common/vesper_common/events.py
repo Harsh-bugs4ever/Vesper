@@ -157,7 +157,12 @@ class EventBus:
                 COOLDOWN_SECONDS,
             )
             self._failures = 0
-            # Drop the client so the next attempt reconnects cleanly.
+            # Explicitly close the old client so socket connections are freed on Redis Cloud
+            if self._client is not None:
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
             self._client = None
 
     def _record_success(self) -> None:

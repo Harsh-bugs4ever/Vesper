@@ -66,6 +66,8 @@ class InProcessTransport(httpx.BaseTransport):
         return future.result(timeout=CALL_TIMEOUT_SECONDS)
 
     async def _dispatch(self, request: httpx.Request) -> httpx.Response:
+        # In-process internal calls stay in memory; bypass GZip compression to avoid decompression conflicts
+        request.headers["accept-encoding"] = "identity"
         response = await self._asgi.handle_async_request(request)
         try:
             body = await response.aread()
