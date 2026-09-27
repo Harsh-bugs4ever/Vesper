@@ -75,6 +75,27 @@ def open_session(
     return GuestSession(**session)
 
 
+@guest_router.get("/demo-room-qr")
+def demo_room_qr(db: Session = Depends(get_session)) -> dict:
+    """Return an active checked-in room's QR credentials for instant demo scanning."""
+    try:
+        return service.get_or_create_demo_room(db)
+    except Exception:
+        return service.DEFAULT_DEMO_ROOM
+
+
+@guest_router.get("/demo-rooms")
+def demo_rooms(db: Session = Depends(get_session)) -> list[dict]:
+    """Return all active checked-in rooms available for demo testing."""
+    try:
+        rooms = service.list_active_checked_in_rooms(db)
+        if not rooms:
+            return [service.DEFAULT_DEMO_ROOM]
+        return rooms
+    except Exception:
+        return [service.DEFAULT_DEMO_ROOM]
+
+
 @guest_router.get("/menu", response_model=MenuOut)
 def guest_menu(
     request: Request, db: Session = Depends(get_session)

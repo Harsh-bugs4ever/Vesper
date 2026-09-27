@@ -30,6 +30,11 @@ export default function GuestQrPortalPage() {
 
         <GuestRoomQrCard
           onOpenSession={(session) => {
+            try {
+              window.sessionStorage.setItem("vesper_guest_room", JSON.stringify(session));
+            } catch {
+              /* ignore */
+            }
             router.push("/guest/room");
           }}
         />

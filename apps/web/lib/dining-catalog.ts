@@ -11,6 +11,7 @@ export interface MenuItem {
   aiRationale?: string;
   calories?: string;
   preparationTimeMinutes: number;
+  imageUrl?: string;
 }
 
 export const FALLBACK_MENU_ITEMS: MenuItem[] = [
@@ -342,4 +343,48 @@ export function getAiDiningRecommendations(
     explanation: "Curated signature dishes from Vesper's kitchen. Place your first order to unlock deeply tailored AI palate recommendations!",
     recommendations: topSignatures.length >= 2 ? topSignatures : fallbackSignatures,
   };
+}
+
+export function getFoodImage(name: string, category?: string): string {
+  const n = (name || "").toLowerCase();
+  const c = (category || "").toLowerCase();
+
+  if (n.includes("sandwich") || n.includes("club") || n.includes("burger")) {
+    return "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("tikka") || n.includes("kebab") || n.includes("tandoor")) {
+    return "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("biryani") || n.includes("rice") || n.includes("pulao") || n.includes("gosht")) {
+    return "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("butter chicken") || n.includes("murgh") || n.includes("chicken") || n.includes("curry")) {
+    return "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("salmon") || n.includes("fish") || n.includes("sea bass")) {
+    return "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("prawn") || n.includes("shrimp") || n.includes("seafood")) {
+    return "https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("dal") || n.includes("lentil") || n.includes("naan")) {
+    return "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("risotto") || n.includes("mushroom") || n.includes("pasta")) {
+    return "https://images.unsplash.com/photo-1633964913295-ceb43826e7c9?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("burrata") || n.includes("salad") || n.includes("tomato")) {
+    return "https://images.unsplash.com/photo-1592417817098-8f3d6ef23a28?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("cake") || n.includes("lava") || n.includes("chocolate") || n.includes("brownie")) {
+    return "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("tart") || n.includes("mango") || n.includes("dessert") || c.includes("dessert")) {
+    return "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop&q=80";
+  }
+  if (n.includes("juice") || n.includes("orange") || n.includes("beverage") || n.includes("latte") || n.includes("coffee") || c.includes("beverage")) {
+    return "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop&q=80";
+  }
+
+  return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&auto=format&fit=crop&q=80";
 }

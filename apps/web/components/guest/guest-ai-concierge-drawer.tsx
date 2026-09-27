@@ -255,9 +255,9 @@ export function GuestAiConciergeDrawer({
         <button
           type="button"
           onClick={() => setEffectiveOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-sage-800 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-sage-950/20 transition-all hover:bg-sage-900 active:scale-95"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2 rounded-full bg-sage-800 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-semibold text-white shadow-xl shadow-sage-950/20 transition-all hover:bg-sage-900 active:scale-95"
         >
-          <Bot className="h-5 w-5 text-amber-300" />
+          <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-amber-300" />
           <span>AI Concierge</span>
         </button>
       )}
@@ -266,7 +266,7 @@ export function GuestAiConciergeDrawer({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-300 data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
         <Dialog.Content
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-full flex-col bg-sand-50/95 shadow-2xl backdrop-blur-md transition duration-300 ease-out sm:max-w-lg",
+            "fixed inset-y-0 right-0 z-50 flex h-full h-[100dvh] w-full max-w-full flex-col bg-sand-50/95 shadow-2xl backdrop-blur-md transition duration-300 ease-out sm:max-w-lg",
             "border-l border-sand-200/80 data-[state=closed]:translate-x-full data-[state=open]:translate-x-0"
           )}
         >

@@ -303,25 +303,28 @@ export function getAmenityImage(key: string, name?: string): string {
   const normalized = (key + " " + (name || "")).toLowerCase();
 
   if (normalized.includes("pool_bar") || normalized.includes("pool bar") || normalized.includes("bar")) {
-    return MARRIOTT_IMAGES.pool_bar[0].url;
+    return "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1000&q=80";
   }
-  if (normalized.includes("pool") || normalized.includes("swimming")) {
-    return MARRIOTT_IMAGES.rooftop_pool[0].url;
+  if (normalized.includes("pool") || normalized.includes("swimming") || normalized.includes("sky pool")) {
+    return "/landing/pool.jpg";
   }
-  if (normalized.includes("spa") || normalized.includes("quan") || normalized.includes("massage")) {
-    return MARRIOTT_IMAGES.spa[0].url;
+  if (normalized.includes("spa") || normalized.includes("quan") || normalized.includes("massage") || normalized.includes("wellness")) {
+    return "/landing/spa.jpg";
   }
-  if (normalized.includes("fitness") || normalized.includes("gym") || normalized.includes("yoga")) {
-    return MARRIOTT_IMAGES.fitness[0].url;
+  if (normalized.includes("fitness") || normalized.includes("gym") || normalized.includes("technogym") || normalized.includes("workout")) {
+    return "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1000&q=80";
   }
-  if (normalized.includes("dining") || normalized.includes("restaurant") || normalized.includes("food") || normalized.includes("breakfast")) {
-    return MARRIOTT_IMAGES.dining[0].url;
+  if (normalized.includes("beach") || normalized.includes("boardwalk") || normalized.includes("sea") || normalized.includes("lounger")) {
+    return "/landing/beach.jpg";
+  }
+  if (normalized.includes("dining") || normalized.includes("restaurant") || normalized.includes("lounge") || normalized.includes("club") || normalized.includes("food")) {
+    return "/landing/dining.jpg";
   }
   if (normalized.includes("valet") || normalized.includes("parking") || normalized.includes("limousine") || normalized.includes("car")) {
-    return MARRIOTT_IMAGES.valet[0].url;
+    return "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1000&q=80";
   }
 
-  return MARRIOTT_IMAGES.rooftop_pool[0].url;
+  return "/landing/pool.jpg";
 }
 
 /**

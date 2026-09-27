@@ -14,6 +14,7 @@ import {
   MenuItem,
   OrderItemHistorySummary,
   getAiDiningRecommendations,
+  getFoodImage,
 } from "@/lib/dining-catalog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -112,52 +113,63 @@ export function GuestAiDiningRecommendations({
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {aiResult.recommendations.map((item) => {
           const inCartCount = cart[item.id] ?? 0;
+          const foodImg = item.imageUrl || getFoodImage(item.name, item.category);
           return (
             <div
               key={item.id}
-              className="flex flex-col justify-between rounded-2xl border border-sand-200/90 bg-white p-4 shadow-2xs hover:border-amber-300 hover:shadow-sm transition-all"
+              className="flex flex-col justify-between rounded-2xl border border-sand-200/90 bg-white p-3.5 shadow-2xs hover:border-amber-300 hover:shadow-sm transition-all"
             >
               <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded-xs border p-0.5",
-                        item.is_veg
-                          ? "border-emerald-600"
-                          : "border-rose-600"
+                <div className="flex items-start gap-3">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-sand-200 bg-sand-100 shadow-2xs">
+                    <img
+                      src={foodImg}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={cn(
+                            "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border p-0.5",
+                            item.is_veg ? "border-emerald-600" : "border-rose-600"
+                          )}
+                          title={item.is_veg ? "Vegetarian" : "Non-Vegetarian"}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              item.is_veg ? "bg-emerald-600" : "bg-rose-600"
+                            )}
+                          />
+                        </span>
+                        <span className="font-serif text-sm font-bold text-sage-950 truncate">
+                          {item.name}
+                        </span>
+                      </div>
+
+                      {item.tag && (
+                        <span className="shrink-0 rounded bg-amber-100/80 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 border border-amber-200">
+                          {item.tag}
+                        </span>
                       )}
-                      title={item.is_veg ? "Vegetarian" : "Non-Vegetarian"}
-                    >
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full",
-                          item.is_veg ? "bg-emerald-600" : "bg-rose-600"
-                        )}
-                      />
-                    </span>
-                    <span className="font-serif text-sm font-bold text-sage-950 line-clamp-1">
-                      {item.name}
-                    </span>
-                  </div>
+                    </div>
 
-                  {item.tag && (
-                    <span className="shrink-0 rounded bg-sand-100 px-1.5 py-0.5 text-[10px] font-semibold text-sage-800">
-                      {item.tag}
-                    </span>
-                  )}
+                    <p className="mt-1 text-[11px] text-sand-600 line-clamp-1 leading-snug">
+                      {item.description}
+                    </p>
+
+                    {item.aiRationale && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-800">
+                        <Sparkles className="h-3 w-3 text-amber-600 shrink-0" />
+                        <span className="line-clamp-1">{item.aiRationale}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                <p className="mt-1.5 text-xs text-sand-600 line-clamp-2 leading-relaxed">
-                  {item.description}
-                </p>
-
-                {item.aiRationale && (
-                  <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-amber-800">
-                    <Sparkles className="h-3 w-3 text-amber-600 shrink-0" />
-                    <span className="line-clamp-1">{item.aiRationale}</span>
-                  </div>
-                )}
               </div>
 
               <div className="mt-3 flex items-center justify-between border-t border-sand-100 pt-2.5">

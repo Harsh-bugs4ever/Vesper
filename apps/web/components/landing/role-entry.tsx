@@ -56,7 +56,7 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
     >
       <div className="mx-auto grid w-full max-w-7xl overflow-hidden rounded-[1.75rem] border border-sand-200 bg-white shadow-elevated lg:min-h-[690px] lg:grid-cols-[1.08fr_0.92fr]">
         {/* Left Visual Panel */}
-        <div className="relative min-h-[350px] overflow-hidden bg-sage-950 sm:min-h-[460px] lg:min-h-full">
+        <div className="relative min-h-[220px] sm:min-h-[350px] lg:min-h-full overflow-hidden bg-sage-950">
           <Image
             src="/landing/login-retreat.png"
             alt="Quiet resort garden and reflecting pool beside the sea at sunrise"
@@ -65,38 +65,38 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
             className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-sage-950/85 via-sage-950/20 to-transparent" />
-          <div className="absolute bottom-9 left-7 right-7 text-white sm:bottom-12 sm:left-12 sm:right-12">
-            <p className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-gold-200">
-              <Sparkles className="h-4 w-4" aria-hidden="true" /> Vesper
+          <div className="absolute bottom-6 left-5 right-5 text-white sm:bottom-12 sm:left-12 sm:right-12">
+            <p className="mb-2 sm:mb-3 flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-[0.28em] text-gold-200">
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" /> Vesper
             </p>
-            <p className="max-w-md font-serif text-4xl leading-tight sm:text-5xl">
+            <p className="max-w-md font-serif text-2xl sm:text-4xl lg:text-5xl leading-tight">
               A calmer way to care for every stay.
             </p>
-            <p className="mt-4 text-sm text-white/85 max-w-md">
+            <p className="mt-2 sm:mt-4 text-xs sm:text-sm text-white/85 max-w-md">
               Authenticated access to real-time resort operations, front desk, housekeeping, and inventory.
             </p>
           </div>
         </div>
 
         {/* Right Form Panel */}
-        <div className="flex flex-col justify-center px-6 py-10 sm:px-12 sm:py-14 lg:px-14">
+        <div className="flex flex-col justify-center px-4 py-8 sm:px-12 sm:py-14 lg:px-14">
           {standalone && (
             <Link
               href="/"
-              className="mb-8 self-start text-xs text-sage-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
+              className="mb-6 sm:mb-8 self-start text-xs text-sage-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
             >
               ← Back to Vesper
             </Link>
           )}
 
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-gold-800">
+            <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.28em] text-gold-800">
               Operational Access
             </p>
-            <h2 id="role-entry-title" className="mt-3 font-serif text-3xl sm:text-4xl text-sage-950">
+            <h2 id="role-entry-title" className="mt-2 sm:mt-3 font-serif text-2xl sm:text-4xl text-sage-950">
               Sign in to Vesper.
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-sage-700">
+            <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm leading-relaxed text-sage-700">
               Connect to live resort operations with your staff or management credentials.
             </p>
           </div>

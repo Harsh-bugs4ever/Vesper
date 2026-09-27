@@ -409,7 +409,7 @@ export default function LandingPage() {
                 }}
                 data-scene={index}
                 aria-labelledby={`scene-title-${index}`}
-                className="relative flex min-h-screen min-h-[100svh] scroll-mt-0 items-center px-6 py-32 outline-none sm:px-10 lg:px-16"
+                className="relative flex min-h-screen min-h-[100svh] scroll-mt-0 items-center px-4 py-20 outline-none sm:px-10 sm:py-28 lg:px-16 lg:py-32"
               >
                 <div
                   className={`mx-auto w-full max-w-7xl ${index > 0 && index % 2 === 0 ? "flex justify-end" : ""}`}
@@ -417,19 +417,19 @@ export default function LandingPage() {
                   <div
                     className={
                       index === 0
-                        ? "max-w-3xl rounded-2xl border border-white/15 bg-black/30 p-6 text-white backdrop-blur-sm sm:p-10"
-                        : "max-w-xl rounded-2xl border border-white/60 bg-sand-50/90 p-7 text-sage-950 shadow-2xl backdrop-blur-xl sm:p-12"
+                        ? "max-w-3xl rounded-2xl border border-white/15 bg-black/30 p-5 sm:p-10 text-white backdrop-blur-sm"
+                        : "max-w-xl rounded-2xl border border-white/60 bg-sand-50/90 p-5 sm:p-10 lg:p-12 text-sage-950 shadow-2xl backdrop-blur-xl"
                     }
                   >
                     <p
-                      className={`mb-7 text-[11px] font-medium uppercase tracking-[0.24em] ${index === 0 ? "text-gold-200" : "text-gold-800"}`}
+                      className={`mb-4 sm:mb-7 text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.24em] ${index === 0 ? "text-gold-200" : "text-gold-800"}`}
                     >
                       0{index + 1} · {photo.scene}
                     </p>
                     {index === 0 ? (
                       <h1
                         id="scene-title-0"
-                        className="max-w-[650px] font-serif text-5xl font-normal leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl"
+                        className="max-w-[650px] font-serif text-3xl font-normal leading-[1.08] tracking-tight sm:text-5xl lg:text-7xl"
                       >
                         One operating layer for the{" "}
                         <em className="font-normal text-gold-200">
@@ -439,13 +439,13 @@ export default function LandingPage() {
                     ) : (
                       <h2
                         id={`scene-title-${index}`}
-                        className="font-serif text-4xl font-normal leading-[1.08] sm:text-5xl"
+                        className="font-serif text-2xl font-normal leading-[1.12] sm:text-4xl lg:text-5xl"
                       >
                         {scene.title}
                       </h2>
                     )}
                     <p
-                      className={`mt-6 max-w-lg text-base leading-relaxed ${index === 0 ? "text-white" : "text-sage-800"}`}
+                      className={`mt-4 sm:mt-6 max-w-lg text-sm sm:text-base leading-relaxed ${index === 0 ? "text-white" : "text-sage-800"}`}
                     >
                       {scene.description}
                       <span className="hidden md:inline">
@@ -454,7 +454,7 @@ export default function LandingPage() {
                     </p>
                     {index === 0 ? (
                       <>
-                        <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+                        <div className="mt-6 sm:mt-9 flex flex-col gap-3 sm:flex-row">
                           <Link
                             href="/login"
                             className={`${button} bg-sage-700 text-white hover:bg-sage-800`}
