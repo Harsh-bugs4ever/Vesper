@@ -45,6 +45,7 @@ export function toUiRole(user: BackendUser, departmentKey?: string): UserRole {
       if (departmentKey === HOUSEKEEPING) return "dept_manager_hk";
       if (departmentKey === FNB) return "dept_manager_fb";
       if (departmentKey === FRONT_OFFICE) return "dept_manager_frontdesk";
+      if (departmentKey === "maintenance") return "dept_manager_maint";
       // A manager in any other department (Engineering, Security, …)
       // uses the staff view. Their effective permissions come from the backend response,
       // not this role label — so they can reach exactly what they are allowed to.
@@ -52,6 +53,7 @@ export function toUiRole(user: BackendUser, departmentKey?: string): UserRole {
     case "guest":
       return "guest";
     default:
+      if (user.email === "chiefeng@vesper.demo" || (user as any).role === "maintenance") return "dept_manager_maint";
       return "employee";
   }
 }

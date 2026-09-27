@@ -188,6 +188,21 @@ export const FALLBACK_MENU_ITEMS: MenuItem[] = [
     preparationTimeMinutes: 10,
   },
 
+  {
+    id: "barolo-reserve-2018",
+    name: "Barolo DOCG 2018 Vintage Reserve",
+    category: "beverages",
+    categoryLabel: "Artisanal Beverages",
+    price: 4800,
+    description: "Piedmont vintage reserve aged 38 months in Slavonian oak. (Depleted: 0 btl · AI Auto-Order PO-2026-904 in transit · Concealed from guest menu by AI Shield)",
+    is_veg: true,
+    is_available: false,
+    tag: "Sommelier Pick",
+    aiRationale: "Exclusive vintage reserve. Automatically concealed from guest room menu while replenishment is in transit.",
+    calories: "120 kcal",
+    preparationTimeMinutes: 5,
+  },
+
   // --- GOURMET DESSERTS ---
   {
     id: "dark-chocolate-fondant",

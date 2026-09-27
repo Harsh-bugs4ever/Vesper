@@ -511,14 +511,17 @@ export default function GuestRoomPage() {
                 onAddToCart={handleAddToCartFromAi}
               />
 
-              {/* Menu Categories */}
-              {Object.entries(menuCategories).map(([category, items]) => (
+              {/* Menu Categories (AI Guest Shield: Automatically conceals 0-stock / depleted items) */}
+              {Object.entries(menuCategories).map(([category, items]) => {
+                const visibleItems = items.filter((item) => item.is_available !== false);
+                if (visibleItems.length === 0) return null;
+                return (
                 <div key={category} className="space-y-3">
                   <h3 className="border-b border-sand-200 pb-1.5 text-xs font-semibold uppercase tracking-wider text-sage-800">
                     {category.replaceAll("_", " ")}
                   </h3>
                   <div className="divide-y divide-sand-100">
-                    {items.map((item) => {
+                    {visibleItems.map((item) => {
                       const isSoldOut = !item.is_available;
                       return (
                         <div
@@ -598,7 +601,8 @@ export default function GuestRoomPage() {
                     })}
                   </div>
                 </div>
-              ))}
+              );
+              })}
 
               <div className="mt-6 border-t border-sand-200 pt-5">
                 <label className="block text-sm font-medium text-sage-800">

@@ -259,6 +259,410 @@ const DEFAULT_PLANNER_TASKS: PlannerTask[] = [
   },
 ];
 
+
+export const DEPARTMENT_PLANNER_TASKS: Record<string, PlannerTask[]> = {
+  front_office: [
+    {
+      id: "fo-task-1",
+      rank: 1,
+      title: "Pre-Allocate Platinum Elite VIP Arrival Suites (Room 201 & Room 501)",
+      department: "frontdesk",
+      departmentLabel: "Front Desk & Concierge",
+      urgency: "critical",
+      complexity: "medium",
+      impactEstimate: "Protects ₹2,43,000 VIP stay & brand advocacy",
+      estimatedMinutes: 5,
+      problemSummary: "Two Platinum VIP guests arriving at 1:30 PM with special requests for upper-floor sea-facing suites.",
+      problemDetails: "Suite 201 and Suite 501 are currently inspected and ready. Pre-allocating them in the PMS prevents double-assignment during afternoon check-in rushes and enables pre-arrival keycard coding.",
+      actionSteps: [
+        "Open Front Desk Room Status grid.",
+        "Verify Suite 201 and Suite 501 are vacant and inspected.",
+        "Assign VIP profiles and dispatch welcome tea amenity to the floor butler.",
+      ],
+      targetUrl: "/admin/front-desk?tab=room-status",
+      targetSection: "Front Desk · Room Status & Occupancy Grid",
+    },
+    {
+      id: "fo-task-2",
+      rank: 2,
+      title: "Prepare for Friday Peak 2:00 PM – 5:00 PM Arrival Window (45 Check-ins)",
+      department: "frontdesk",
+      departmentLabel: "Front Desk Operations",
+      urgency: "critical",
+      complexity: "low",
+      impactEstimate: "Keeps lobby check-in wait time under 3 minutes",
+      estimatedMinutes: 8,
+      problemSummary: "Flight arrival clusters from Mumbai and Delhi will produce 45 arrivals between 2:00 PM and 5:00 PM.",
+      problemDetails: "Current front desk roster has 4 agents on duty. With 45 arrivals arriving in a 3-hour cluster, queue times will exceed 9 minutes unless 2 greeting agents are positioned at the lobby lounge.",
+      actionSteps: [
+        "Review today's arrivals schedule and filter by afternoon time slots.",
+        "Position 2 mobile tablet check-in agents in the main greeting rotunda.",
+        "Offer signature welcome cold towels and iced kokum cooler to waiting guests.",
+      ],
+      targetUrl: "/admin/front-desk?tab=arrivals",
+      targetSection: "Front Desk · Today's Arrivals Schedule",
+    },
+    {
+      id: "fo-task-3",
+      rank: 3,
+      title: "Resolve Outstanding Folio Balance for Departing Corporate Guest (Room 103)",
+      department: "frontdesk",
+      departmentLabel: "Front Desk Cashiering",
+      urgency: "high",
+      complexity: "low",
+      impactEstimate: "Finalizes ₹28,900 billing before express checkout",
+      estimatedMinutes: 4,
+      problemSummary: "Guest Priya Singhania scheduled checkout at 12:00 PM with unbilled laundry and room service charges.",
+      problemDetails: "Unposted F&B charge of ₹4,200 from night needs to be posted to the folio before corporate GST invoice generation.",
+      actionSteps: [
+        "Open Front Desk In-House ledger.",
+        "Select Room 103 stay record and inspect pending ledger postings.",
+        "Click 'Check Out' or finalize corporate GST invoice.",
+      ],
+      targetUrl: "/admin/front-desk?tab=in-house",
+      targetSection: "Front Desk · In-House Folios",
+    },
+    {
+      id: "fo-task-4",
+      rank: 4,
+      title: "Approve Early Check-in Requests for Morning Flight Arrivals",
+      department: "frontdesk",
+      departmentLabel: "Guest Reservations",
+      urgency: "medium",
+      complexity: "low",
+      impactEstimate: "Elevates guest sentiment rating from 4.2 to 4.9",
+      estimatedMinutes: 3,
+      problemSummary: "3 incoming guests requested early check-in between 10:00 AM and 11:30 AM.",
+      problemDetails: "Rooms 101, 105, and 108 are clean and inspected from night's vacant pool. We can grant complimentary early access.",
+      actionSteps: [
+        "Open Reservations list and filter by today's date.",
+        "Approve early check-in badge and notify guest via WhatsApp concierge.",
+      ],
+      targetUrl: "/admin/front-desk?tab=list",
+      targetSection: "Front Desk · Reservations Ledger",
+    },
+    {
+      id: "fo-task-5",
+      rank: 5,
+      title: "Sync with Housekeeping on Priority Turnover for Room 104 & Room 205",
+      department: "frontdesk",
+      departmentLabel: "Inter-Department SLA",
+      urgency: "high",
+      complexity: "low",
+      impactEstimate: "Ensures clean room ready for 1:00 PM early arrival",
+      estimatedMinutes: 3,
+      problemSummary: "Dirty turnover status on Room 104 and Room 205 blocks 1:00 PM scheduled arrivals.",
+      problemDetails: "Housekeeping floor sweep is currently on Floor 3. Re-routing an attendant to Floor 1 expedites turnover by 40 minutes.",
+      actionSteps: [
+        "Check room status grid to confirm dirty status.",
+        "Send express turnover ping to Executive Housekeeper Sunita Pillai.",
+      ],
+      targetUrl: "/admin/front-desk?tab=room-status",
+      targetSection: "Front Desk · Turnover Matrix",
+    },
+  ],
+  housekeeping: [
+    {
+      id: "hk-task-1",
+      rank: 1,
+      title: "Expedite Morning Turnover on 12 Priority Checkout Rooms Before 2:00 PM",
+      department: "frontdesk",
+      departmentLabel: "Housekeeping Operations",
+      urgency: "critical",
+      complexity: "high",
+      impactEstimate: "Guarantees 100% arrival readiness for afternoon check-in wave",
+      estimatedMinutes: 10,
+      problemSummary: "12 departures this morning have incoming arrivals assigned for 2:00 PM.",
+      problemDetails: "Turnover queue currently shows 12 dirty rooms on Floors 1, 2, and 4. Housekeeping teams must prioritize these over stay-over cleanings.",
+      actionSteps: [
+        "Open Room Status Matrix and filter by Dirty / Turnover.",
+        "Dispatch dual-attendant express pairs to priority rooms.",
+        "Sign off inspection checklist as each room reaches Ready status.",
+      ],
+      targetUrl: "/admin/rooms",
+      targetSection: "Room Status & Turnaround Matrix",
+    },
+    {
+      id: "hk-task-2",
+      rank: 2,
+      title: "Reallocate 4 Floor Attendants to South Wing Presidential Suites",
+      department: "inventory",
+      departmentLabel: "Housekeeping Staffing",
+      urgency: "high",
+      complexity: "medium",
+      impactEstimate: "Guarantees deep inspection compliance for incoming VIP guests",
+      estimatedMinutes: 5,
+      problemSummary: "VIP Presidential Suite requires intensive 45-point luxury inspection checklist.",
+      problemDetails: "Shift roster shows North Wing is overstaffed by 3 attendants while South Wing has 2 vacant suite turnarounds.",
+      actionSteps: [
+        "Open Staff Roster solver.",
+        "Shift 2 attendants from North Wing to South Wing luxury block.",
+        "Send task notification to mobile staff app.",
+      ],
+      targetUrl: "/admin/roster",
+      targetSection: "Staff Roster · Shift Allocation",
+    },
+    {
+      id: "hk-task-3",
+      rank: 3,
+      title: "Activate AI Alternate Path for 400TC King Linen Par Buffer",
+      department: "inventory",
+      departmentLabel: "Linen & Laundry Control",
+      urgency: "high",
+      complexity: "low",
+      impactEstimate: "Protects weekend room turnover without linen stockout",
+      estimatedMinutes: 4,
+      problemSummary: "Safety par breached: 14 King sets remaining against 50 minimum buffer.",
+      problemDetails: "AI Auto-Order PO-HK-2026-402 is in transit. In the interim, AI Alternate Path recommends releasing 35 sets from Central Pool Buffer.",
+      actionSteps: [
+        "Open Department Inventory & AI Management tab.",
+        "Review AI Alternate Path Contingency note.",
+        "Confirm 35 reserve sets issued to floor pantries.",
+      ],
+      targetUrl: "/admin/inventory?tab=maintenance-ai",
+      targetSection: "Inventory · 14-Day AI Management",
+    },
+    {
+      id: "hk-task-4",
+      rank: 4,
+      title: "Inspect Deep-Clean Turnaround in Deluxe Suite 204",
+      department: "frontdesk",
+      departmentLabel: "Quality Assurance",
+      urgency: "medium",
+      complexity: "low",
+      impactEstimate: "100% Quality Assurance sign-off for guest arrival",
+      estimatedMinutes: 6,
+      problemSummary: "Suite 204 turnover completed by attendant; supervisor inspection pending.",
+      problemDetails: "Inspection pending status prevents Front Desk from checking in arriving guest Mr. Rohan Mehra.",
+      actionSteps: [
+        "Inspect spatial 3D room status for Room 204.",
+        "Change status from Inspection to Ready.",
+      ],
+      targetUrl: "/admin/rooms",
+      targetSection: "Room Spatial Schematic",
+    },
+    {
+      id: "hk-task-5",
+      rank: 5,
+      title: "Review & Sign Off 4 Pending Shift Handover Checklist Reports",
+      department: "engineering",
+      departmentLabel: "Shift Governance",
+      urgency: "high",
+      complexity: "low",
+      impactEstimate: "Handover compliance archived before afternoon shift rotation",
+      estimatedMinutes: 4,
+      problemSummary: "4 morning shift attendants submitted digital room turnover checklists.",
+      problemDetails: "Manager sign-off required to archive daily room hygiene compliance.",
+      actionSteps: [
+        "Open Department Dashboard.",
+        "Inspect submitted shift reports.",
+        "Click 'Approve Report' to approve and archive.",
+      ],
+      targetUrl: "/admin",
+      targetSection: "Department Dashboard · Shift Handover Reports",
+    },
+  ],
+  fnb: [
+    {
+      id: "fnb-task-1",
+      rank: 1,
+      title: "Verify AI Guest Menu Shield: Barolo 2018 Vintage Auto-Concealed from Tablets",
+      department: "inventory",
+      departmentLabel: "F&B Guest Experience",
+      urgency: "critical",
+      complexity: "low",
+      impactEstimate: "100% order accuracy; prevents guest disappointment during 0-stock",
+      estimatedMinutes: 3,
+      problemSummary: "Barolo 2018 Vintage reserve wine reached 0 bottles in on-hand cellar inventory.",
+      problemDetails: "Vesper AI Guest Menu Shield automatically concealed the item from the guest in-room tablet menu so guests cannot order it. Sommelier recommends 2019 Brunello di Montalcino as seamless alternate.",
+      actionSteps: [
+        "Open Department Inventory tab to inspect AI Guest Menu Shield status.",
+        "Confirm AI Auto-Order PO-FNB-2026-904 is in transit with wine merchant.",
+        "Brief restaurant sommeliers on Brunello di Montalcino reserve vintage recommendation.",
+      ],
+      targetUrl: "/admin/inventory?tab=maintenance-ai",
+      targetSection: "Inventory · AI Guest Menu Shield",
+    },
+    {
+      id: "fnb-task-2",
+      rank: 2,
+      title: "Pre-Order 25 kg Premium Black Angus Ribeye for Saturday Banquet Gala",
+      department: "inventory",
+      departmentLabel: "Kitchen Supply Chain",
+      urgency: "critical",
+      complexity: "medium",
+      impactEstimate: "Safeguards ₹3,80,000 banquet dinner revenue",
+      estimatedMinutes: 5,
+      problemSummary: "Saturday Grand Banquet Gala has 190 confirmed covers with 65% beef main selections.",
+      problemDetails: "On-hand stock of Black Angus ribeye is 6 kg against required 30 kg. Lead time from cold-chain distributor is 24 hours.",
+      actionSteps: [
+        "Open Department Inventory & Requisitions.",
+        "Simulate AI Auto-Order for Angus Ribeye chilled vacuum pack.",
+        "Charge against F&B food cost operating budget.",
+      ],
+      targetUrl: "/admin/inventory",
+      targetSection: "Inventory · Purchase Orders",
+    },
+    {
+      id: "fnb-task-3",
+      rank: 3,
+      title: "Roster +4 Banquet Stewards for Saturday Destination Wedding Event",
+      department: "revenue",
+      departmentLabel: "Brigade Scheduling",
+      urgency: "high",
+      complexity: "low",
+      impactEstimate: "Prevents service bottlenecks during peak dinner rush (205 covers)",
+      estimatedMinutes: 6,
+      problemSummary: "14-Day AI Forecast predicts 205 banquet covers on Saturday, 10 Oct.",
+      problemDetails: "Current roster has 14 stewards scheduled against 19 needed to sustain a 15-minute course turnaround SLA.",
+      actionSteps: [
+        "Open Staff Roster solver.",
+        "Add 4 on-call banquet stewards to Saturday evening shift.",
+        "Publish updated roster to team mobile app.",
+      ],
+      targetUrl: "/admin/roster",
+      targetSection: "Staff Roster · Department Schedule",
+    },
+    {
+      id: "fnb-task-4",
+      rank: 4,
+      title: "Review In-Room Breakfast Delivery Turnaround & Guest Satisfaction",
+      department: "guest",
+      departmentLabel: "Service SLAs",
+      urgency: "medium",
+      complexity: "low",
+      impactEstimate: "Elevates in-room dining rating to 4.8/5.0",
+      estimatedMinutes: 4,
+      problemSummary: "Morning room service breakfast delivery average time was 28 minutes (SLA: 25 mins).",
+      problemDetails: "Toasting station bottleneck identified between 8:15 AM and 8:45 AM. Adding a dual-conveyor toaster resolves delay.",
+      actionSteps: [
+        "Open Guest Requests queue and filter by In-Room Dining.",
+        "Review closed orders and kitchen ticket delivery timestamps.",
+      ],
+      targetUrl: "/admin/requests",
+      targetSection: "Guest Requests · Service SLAs",
+    },
+    {
+      id: "fnb-task-5",
+      rank: 5,
+      title: "Approve Shift Handover Report for Morning Breakfast Brigade",
+      department: "engineering",
+      departmentLabel: "Kitchen Compliance",
+      urgency: "medium",
+      complexity: "low",
+      impactEstimate: "Ensures smooth handover to afternoon sous chef team",
+      estimatedMinutes: 3,
+      problemSummary: "Breakfast sous chef submitted shift log with notes on pastry prep par.",
+      problemDetails: "Shift report notes 40 croissants prep par for tomorrow's executive lounge buffet.",
+      actionSteps: [
+        "Open Department Dashboard.",
+        "Review submitted handover notes and click 'Approve Report'.",
+      ],
+      targetUrl: "/admin",
+      targetSection: "Department Dashboard · Shift Handover Reports",
+    },
+  ],
+  maintenance: [
+    {
+      id: "eng-task-1",
+      rank: 1,
+      title: "Deploy Universal Dual-Stage Filter on Chiller Plant (AI Alternate Path)",
+      department: "engineering",
+      departmentLabel: "Chiller Plant Operations",
+      urgency: "critical",
+      complexity: "medium",
+      impactEstimate: "Prevents chiller head pressure thermal trip & saves ₹45,000 VIP comfort",
+      estimatedMinutes: 8,
+      problemSummary: "HVAC Primary MERV 13 filters depleted (2 on hand / 8 minimum buffer).",
+      problemDetails: "AI Auto-Order PO-ENG-2026-104 is in transit with OEM supplier. In the interim, AI Alternate Path recommends mounting universal dual-stage washable bypass cartridge from local reserve store.",
+      actionSteps: [
+        "Open Maintenance & 14-Day Spares Automation tab.",
+        "Dispatch technician with universal bypass cartridge to central chiller riser.",
+        "Verify differential air pressure drops below 0.35 in WG.",
+      ],
+      targetUrl: "/admin/maintenance",
+      targetSection: "Maintenance · 14-Day Ahead Spares Automation",
+    },
+    {
+      id: "eng-task-2",
+      rank: 2,
+      title: "Expedite AC Compressor Thermal Repair in Room 302",
+      department: "engineering",
+      departmentLabel: "Room Defect Interventions",
+      urgency: "critical",
+      complexity: "high",
+      impactEstimate: "Releases room from Out-of-Order hold for afternoon check-in",
+      estimatedMinutes: 12,
+      problemSummary: "Room 302 HVAC tripped on high head pressure (thermal cutoff at 29°C).",
+      problemDetails: "Work order #WO-412 assigned to technician Suresh Nair. Capacitor replacement required to restore cooling before 2:00 PM.",
+      actionSteps: [
+        "Open Maintenance Work Orders log.",
+        "Check status of Work Order #WO-412 and confirm capacitor install.",
+        "Test thermostatic cycle and release room from Out-of-Order hold.",
+      ],
+      targetUrl: "/admin/maintenance",
+      targetSection: "Maintenance · Room Defects & Work Orders",
+    },
+    {
+      id: "eng-task-3",
+      rank: 3,
+      title: "Inspect Guest Elevator #2 Safety Interlocks & Hydraulic Leveling",
+      department: "engineering",
+      departmentLabel: "Vertical Transport Safety",
+      urgency: "high",
+      complexity: "medium",
+      impactEstimate: "Mandatory monthly compliance audit passed without guest disruption",
+      estimatedMinutes: 7,
+      problemSummary: "Scheduled preventive maintenance due on Guest Elevator #2 door sensor.",
+      problemDetails: "Optical door curtain intermittently recalibrating on Floor 3. Minor optical sensor realignment required.",
+      actionSteps: [
+        "Review authorized work orders in Maintenance panel.",
+        "Execute 10-minute off-peak elevator inspection window (2:00 PM - 2:30 PM).",
+      ],
+      targetUrl: "/admin/maintenance",
+      targetSection: "Maintenance · Authorized Work Orders",
+    },
+    {
+      id: "eng-task-4",
+      rank: 4,
+      title: "Verify Autonomous Reorder for Brass Thermostatic Mixing Valves",
+      department: "inventory",
+      departmentLabel: "Engineering Spares",
+      urgency: "medium",
+      complexity: "low",
+      impactEstimate: "Guarantees zero plumbing downtime across guest suites",
+      estimatedMinutes: 3,
+      problemSummary: "Safety threshold reached on 3/4\" brass thermostatic mixing valves (1 remaining).",
+      problemDetails: "Autonomous purchase order PO-ENG-2026-108 generated. Delivery ETA in 24 hours.",
+      actionSteps: [
+        "Open 14-Day Spares Automation tab in Maintenance.",
+        "Verify supplier ETA and acknowledge tracking number.",
+      ],
+      targetUrl: "/admin/maintenance",
+      targetSection: "Maintenance · 14-Day Spares Automation",
+    },
+    {
+      id: "eng-task-5",
+      rank: 5,
+      title: "Review 14-Day Plant Electrical & Thermal Stress Projections",
+      department: "engineering",
+      departmentLabel: "Preventive Engineering",
+      urgency: "high",
+      complexity: "medium",
+      impactEstimate: "Balances chiller load circuits ahead of Friday temperature spike",
+      estimatedMinutes: 5,
+      problemSummary: "Weather forecast predicts 36°C heat wave on Day 6 & Day 13.",
+      problemDetails: "Peak thermal load will require both Chiller Circuits A and B to run in tandem. Stage 2 secondary pump must be tested.",
+      actionSteps: [
+        "Open Room Status & Spatial Matrix.",
+        "Inspect central cooling telemetry and schedule secondary pump test.",
+      ],
+      targetUrl: "/admin/rooms",
+      targetSection: "Resort 3D Spatial Schematic",
+    },
+  ],
+};
+
 export function GmAiPlanner() {
   const router = useRouter();
   const { user } = useAuth();
@@ -272,8 +676,24 @@ export function GmAiPlanner() {
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Only display for General Manager or Owner roles
   const isGmOrOwner = user?.role === "general_manager" || user?.role === "owner" || !user?.role;
+  const deptKey = (user?.departmentKey || "").toLowerCase();
+  
+  // Resolve whether user is a departmental manager
+  const isDeptManager = !isGmOrOwner && Boolean(
+    user?.role === "dept_manager_fb" ||
+    user?.role === "dept_manager_hk" ||
+    user?.role === "dept_manager_frontdesk" ||
+    user?.role === "dept_manager_maint" ||
+    deptKey === "fnb" ||
+    deptKey === "housekeeping" ||
+    deptKey === "front_office" ||
+    deptKey === "maintenance" ||
+    user?.email === "fom@vesper.demo" ||
+    user?.email === "exec@vesper.demo" ||
+    user?.email === "chef@vesper.demo" ||
+    user?.email === "chiefeng@vesper.demo"
+  );
 
   // Time-aware greeting
   const greeting = useMemo(() => {
@@ -283,11 +703,26 @@ export function GmAiPlanner() {
     return "Good evening";
   }, []);
 
-  const managerName = user?.name ? user.name.split(" ")[0] : "General Manager";
+  const managerName = user?.name ? user.name.split(" ")[0] : "Manager";
 
-  // Filter and sort tasks
+  // Resolve department key for 5 tailored commands
+  const activeDeptKey =
+    deptKey === "front_office" || user?.role === "dept_manager_frontdesk" || user?.email === "fom@vesper.demo"
+      ? "front_office"
+      : deptKey === "housekeeping" || user?.role === "dept_manager_hk" || user?.email === "exec@vesper.demo"
+      ? "housekeeping"
+      : deptKey === "maintenance" || user?.role === "dept_manager_maint" || user?.email === "chiefeng@vesper.demo"
+      ? "maintenance"
+      : "fnb";
+
+  // Filter and sort tasks: 10 tasks for GM/Owner, exactly 5 tailored tasks for Department Managers
   const displayedTasks = useMemo(() => {
-    let list = [...DEFAULT_PLANNER_TASKS];
+    let list: PlannerTask[];
+    if (isGmOrOwner) {
+      list = [...DEFAULT_PLANNER_TASKS];
+    } else {
+      list = [...(DEPARTMENT_PLANNER_TASKS[activeDeptKey] || DEPARTMENT_PLANNER_TASKS.fnb)];
+    }
 
     if (filterDept !== "all") {
       list = list.filter((t) => t.department === filterDept);
@@ -316,7 +751,7 @@ export function GmAiPlanner() {
     }
 
     return list;
-  }, [filterDept, searchQuery, sortBy]);
+  }, [activeDeptKey, filterDept, isGmOrOwner, searchQuery, sortBy]);
 
   const toggleTaskCompletion = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -325,8 +760,8 @@ export function GmAiPlanner() {
     } else {
       setCompletedTaskIds((prev) => [...prev, taskId]);
       showToast({
-        title: "✓ Task Marked as Resolved",
-        description: "Great progress! Your daily GM priority list has been updated.",
+        title: "✓ Priority Marked as Resolved",
+        description: "Great progress! Your daily priority list has been updated.",
         type: "success",
       });
     }
@@ -343,7 +778,9 @@ export function GmAiPlanner() {
     router.push(task.targetUrl);
   };
 
-  if (!isGmOrOwner) return null;
+  // Only display for GM, Owner, or Department Managers
+  if (!isGmOrOwner && !isDeptManager) return null;
+
 
   return (
     <aside aria-label="Vesper AI Executive Planner" className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
@@ -376,7 +813,7 @@ export function GmAiPlanner() {
           </p>
 
           <p className="mt-1 text-[11px] text-sand-500">
-            I analyzed today&apos;s hotel telemetry: <strong>3 critical issues</strong> and <strong>10 ranked priorities</strong> require your leadership.
+            I analyzed today&apos;s operational telemetry: <strong>{isGmOrOwner ? "10 ranked executive priorities" : "5 department priority commands"}</strong> require your action.
           </p>
 
           {/* Quick Action Prompt Chips */}
@@ -403,7 +840,7 @@ export function GmAiPlanner() {
               className="inline-flex items-center gap-1 rounded-lg border border-sand-200 bg-sand-50 px-2.5 py-1 text-[11px] font-semibold text-sand-800 hover:bg-sand-100 transition-colors"
             >
               <ListOrdered className="h-3 w-3 text-sage-600" />
-              View 10-Task Daily Plan
+              {isGmOrOwner ? 'View 10-Task Daily Plan' : 'View 5 Department Commands'}
             </button>
           </div>
         </div>
@@ -421,7 +858,7 @@ export function GmAiPlanner() {
           title="Open Vesper AI Executive Planner"
         >
           <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-xs animate-bounce">
-            10
+            {displayedTasks.length}
           </div>
           <div className="relative">
             <Bot className="h-6 w-6 text-amber-300 transition-transform group-hover:rotate-6" />
@@ -442,14 +879,14 @@ export function GmAiPlanner() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-serif text-base font-bold tracking-tight text-white">
-                    Vesper AI Executive Planner
+                    {isGmOrOwner ? "Vesper AI Executive Planner" : `Vesper AI · ${activeDeptKey === "front_office" ? "Front Desk" : activeDeptKey === "housekeeping" ? "Housekeeping" : activeDeptKey === "maintenance" ? "Engineering" : "F&B"} Planner`}
                   </h3>
                   <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold tracking-wider text-emerald-300 uppercase border border-emerald-500/30">
-                    GM Rank 1–10
+                    {isGmOrOwner ? "GM Rank 1–10" : "Top 5 Department Commands"}
                   </span>
                 </div>
                 <p className="text-[11px] text-sand-300">
-                  Autonomous operational roadmap calibrated for General Managers
+                  {isGmOrOwner ? "Autonomous operational roadmap calibrated for General Managers" : `Autonomous operational priorities calibrated for ${activeDeptKey === "front_office" ? "Front Desk" : activeDeptKey === "housekeeping" ? "Housekeeping" : activeDeptKey === "maintenance" ? "Engineering & Maintenance" : "Food & Beverage"} Manager`}
                 </p>
               </div>
             </div>
@@ -470,18 +907,18 @@ export function GmAiPlanner() {
                 {greeting}, {managerName}! Here is your prioritized plan:
               </p>
               <p className="text-[11px] text-sand-500">
-                {completedTaskIds.length} of 10 tasks completed today
+                {completedTaskIds.length} of {displayedTasks.length} priorities resolved today
               </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-2 w-20 rounded-full bg-sand-200 overflow-hidden">
                 <div
                   className="h-full bg-emerald-600 transition-all"
-                  style={{ width: `${(completedTaskIds.length / 10) * 100}%` }}
+                  style={{ width: `${(completedTaskIds.length / Math.max(1, displayedTasks.length)) * 100}%` }}
                 />
               </div>
               <span className="text-[11px] font-bold font-mono text-sand-800">
-                {Math.round((completedTaskIds.length / 10) * 100)}%
+                {Math.round((completedTaskIds.length / Math.max(1, displayedTasks.length)) * 100)}%
               </span>
             </div>
           </div>
@@ -494,7 +931,7 @@ export function GmAiPlanner() {
                 onClick={() => setSelectedTask(null)}
                 className="text-xs font-semibold text-sage-700 hover:text-sage-900 flex items-center gap-1 transition-colors"
               >
-                ← Back to Full 10-Rank Plan
+                ← Back to Priority List
               </button>
 
               {/* Task Header */}

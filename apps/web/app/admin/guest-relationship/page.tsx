@@ -490,7 +490,7 @@ export default function GuestRelationshipPage() {
           <PanelHeader
             title="Service Requests Queue"
             description="Real-time delivery requests dispatched from guest room tablets and mobile QR sessions."
-            actions={
+            action={
               <div className="flex flex-wrap gap-1.5">
                 {["open", "overdue", "raised", "accepted", "in_progress", "delivered", "all"].map((val) => (
                   <button
@@ -728,7 +728,7 @@ export default function GuestRelationshipPage() {
           <PanelHeader
             title="In-House VIP & Elite Profiles"
             description="Guest CRM insights: loyalty tier, historical spend, personal stay preferences, and 1-click dynamic perk dispatch."
-            actions={
+            action={
               <div className="relative">
                 <Search className="h-3.5 w-3.5 text-sand-400 absolute left-3 top-2.5" />
                 <Input

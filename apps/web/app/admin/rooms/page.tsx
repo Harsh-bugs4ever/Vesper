@@ -72,12 +72,20 @@ const STATUS_CONFIG: Record<
 export default function RoomsSpatialPage() {
   const { user } = useAuth();
 
-  // Role Gate: Restrict Resort 3D / Spatial access strictly to Managers & GM
+  // Role Gate: Access granted to Departmental Managers (Front Desk, Maintenance, Housekeeping, F&B) & GM
   const isManagerOrGm =
     user?.role === "general_manager" ||
+    user?.role === "owner" ||
     user?.role === "dept_manager_hk" ||
     user?.role === "dept_manager_fb" ||
-    Boolean(user?.roleTitle?.toLowerCase().includes("manager"));
+    user?.role === "dept_manager_frontdesk" ||
+    user?.role === "dept_manager_maint" ||
+    user?.departmentKey === "maintenance" ||
+    user?.departmentKey === "front_office" ||
+    Boolean(user?.roleTitle?.toLowerCase().includes("manager")) ||
+    Boolean(user?.roleTitle?.toLowerCase().includes("engineer")) ||
+    user?.email === "chiefeng@vesper.demo" ||
+    user?.email === "fom@vesper.demo";
 
   const [selectedFloorNum, setSelectedFloorNum] = useState<number | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<BackendRoom | null>(null);

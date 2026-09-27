@@ -72,7 +72,7 @@ interface Card {
   auto_recipient?: string | null;
 }
 
-export function getCardRiskAndProfit(card: Card) {
+function getCardRiskAndProfit(card: Card) {
   const conf = card.confidence ?? 0.75;
   const impact = Number(card.impact_amount) || 0;
 

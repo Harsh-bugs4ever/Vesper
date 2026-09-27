@@ -83,6 +83,7 @@ const NAV: NavGroup[] = [
         roles: ["owner", "general_manager", "dept_manager_fb"],
       },
       { name: "Maintenance", href: "/admin/maintenance", icon: Wrench, permission: "workorder:approve" },
+      { name: "Room Status", href: "/admin/rooms", icon: Boxes },
       { name: "Guest Requests", href: "/admin/requests", icon: ClipboardList, permission: "requests:read" },
       { name: "Guest Communications", href: "/admin/communications", icon: MessageSquare, permission: "guests:read" },
     ],
@@ -97,9 +98,9 @@ const NAV: NavGroup[] = [
   {
     label: "People",
     items: [
-      { name: "Staff Roster", href: "/admin/roster", icon: UsersRound, permission: "roster:approve" },
-      { name: "Attendance", href: "/admin/staff", icon: Users, permission: "tasks:assign" },
-      { name: "Performance", href: "/admin/performance", icon: Award, permission: "staff_review:read" },
+      { name: "Staff Roster", href: "/admin/roster", icon: UsersRound },
+      { name: "Attendance", href: "/admin/staff", icon: Users },
+      { name: "Performance", href: "/admin/performance", icon: Award },
     ],
   },
   {
