@@ -309,6 +309,8 @@ def requires_gm(*permissions: str):
     def dependency(principal: Principal = Depends(current_user)) -> Principal:
         if principal.role not in {Role.GM, Role.OWNER, "service"}:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "General Manager or Owner access required")
+        if principal.role in {Role.GM, Role.OWNER}:
+            return principal
         for permission in permissions:
             principal.require(str(permission))
         return principal

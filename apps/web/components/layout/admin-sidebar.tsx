@@ -11,6 +11,7 @@ import {
   ClipboardList,
   ConciergeBell,
   Contact,
+  HeartHandshake,
   LayoutGrid,
   LineChart,
   MessageSquare,
@@ -60,6 +61,7 @@ const NAV: NavGroup[] = [
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutGrid },
       { name: "Management Control", href: "/admin/management-control", icon: SlidersHorizontal, roles: ["owner", "general_manager"] },
+      { name: "Guest Relationship", href: "/admin/guest-relationship", icon: HeartHandshake, roles: ["owner", "general_manager"] },
       { name: "Owner Overview", href: "/admin/owner", icon: Shield, roles: ["owner", "general_manager"] },
     ],
   },
@@ -123,6 +125,40 @@ const NAV: NavGroup[] = [
   },
 ];
 
+const GM_NAV: NavGroup[] = [
+  {
+    items: [
+      { name: "Dashboard", href: "/admin", icon: LayoutGrid },
+      { name: "Management Control", href: "/admin/management-control", icon: SlidersHorizontal },
+      { name: "Guest Relationship", href: "/admin/guest-relationship", icon: HeartHandshake },
+      { name: "Owner Overview", href: "/admin/owner", icon: Shield },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { name: "Reservations", href: "/admin/reservations", icon: CalendarDays },
+      { name: "Action Queue", href: "/admin/actions", icon: Zap },
+    ],
+  },
+  {
+    label: "Executive Intelligence",
+    items: [
+      { name: "Executive Reports", href: "/admin/reports", icon: LineChart },
+      { name: "Rate Management", href: "/admin/rates", icon: Tags },
+    ],
+  },
+  {
+    label: "Property & Governance",
+    items: [
+      { name: "Room Status", href: "/admin/rooms", icon: Boxes },
+      { name: "Inventory", href: "/admin/inventory", icon: Package },
+      { name: "Budgets & CapEx", href: "/admin/budgets", icon: Wallet },
+      { name: "Property Settings", href: "/admin/settings", icon: Settings },
+    ],
+  },
+];
+
 const OWNER_NAV: NavGroup[] = [
   {
     items: [
@@ -145,7 +181,8 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const { role, hasPermission } = useAuth();
 
   const isOwner = role === "owner";
-  const navSource = isOwner ? OWNER_NAV : NAV;
+  const isGM = role === "general_manager";
+  const navSource = isOwner ? OWNER_NAV : isGM ? GM_NAV : NAV;
 
   const groups = navSource
     .map((group) => ({
