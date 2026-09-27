@@ -38,8 +38,8 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
     }
   };
 
-  const setPreset = (presetEmail: string) => {
-    setEmail(presetEmail);
+  const selectDemoAccount = (account: string) => {
+    setEmail(account);
     setPassword("vesper123");
   };
 
@@ -150,63 +150,83 @@ export function RoleEntry({ standalone = false }: { standalone?: boolean }) {
               {submitting ? "Authenticating with server…" : "Sign in to live operations"}
             </button>
 
-            <div className="pt-2">
-              <p className="text-[11px] font-medium text-sand-500 mb-1.5">Quick Demo Fill:</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("gm@vesper.demo");
-                    setPassword("vesper123");
-                  }}
-                  className="rounded-lg border border-sand-200 bg-sand-50 px-2.5 py-1 text-xs font-medium text-sand-700 hover:bg-sand-100 hover:text-sand-900 transition-colors"
-                >
-                  ⚡ GM (gm@vesper.demo)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("owner@vesper.demo");
-                    setPassword("vesper123");
-                  }}
-                  className="rounded-lg border border-sand-200 bg-sand-50 px-2.5 py-1 text-xs font-medium text-sand-700 hover:bg-sand-100 hover:text-sand-900 transition-colors"
-                >
-                  ⚡ Owner (owner@vesper.demo)
-                </button>
-              </div>
-            </div>
           </form>
 
-          {/* Quick Demo Credentials Presets */}
-          <div className="mt-6 rounded-xl border border-sand-200/80 bg-sand-50/70 p-4">
-            <p className="text-xs font-semibold text-sand-800 mb-2.5">Quick Demo Accounts</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setPreset("owner@vesper.demo")}
-                className="flex flex-col items-start rounded-lg border border-gold-300/60 bg-gold-50/50 p-2 text-left transition-colors hover:bg-gold-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
-              >
-                <span className="text-xs font-bold text-gold-950">Property Owner</span>
-                <span className="text-[10px] text-gold-800/80 font-mono">owner@vesper.demo</span>
-              </button>
+          <div className="mt-6 rounded-xl border border-sand-200/80 bg-sand-50/70 p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-sand-900">Demo accounts by role</p>
+                <p className="mt-1 text-xs text-sand-600">Select a card to fill the email and password. Numbered groups fill the first account shown.</p>
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setPreset("gm@vesper.demo")}
-                className="flex flex-col items-start rounded-lg border border-sage-300/60 bg-sage-50/50 p-2 text-left transition-colors hover:bg-sage-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600"
-              >
-                <span className="text-xs font-bold text-sage-950">General Manager</span>
-                <span className="text-[10px] text-sage-800/80 font-mono">gm@vesper.demo</span>
-              </button>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Leadership</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    ["Property Owner", "owner@vesper.demo"],
+                    ["General Manager", "gm@vesper.demo"],
+                  ].map(([role, account]) => (
+                    <button type="button" key={account} onClick={() => selectDemoAccount(account)} className="min-w-0 rounded-lg border border-sand-200 bg-white p-3 text-left transition-colors hover:border-sage-400 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600">
+                      <p className="text-xs font-semibold text-sage-950">{role}</p>
+                      <code className="mt-1 block break-all text-[11px] text-sage-700">{account}</code>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setPreset("fom@vesper.demo")}
-                className="flex flex-col items-start rounded-lg border border-sand-300/60 bg-white p-2 text-left transition-colors hover:bg-sand-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sand-500"
-              >
-                <span className="text-xs font-bold text-sand-900">Front Office Mgr</span>
-                <span className="text-[10px] text-sand-600 font-mono">fom@vesper.demo</span>
-              </button>
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Department managers</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    ["Front Office Manager", "fom@vesper.demo"],
+                    ["Housekeeping Manager", "exec@vesper.demo"],
+                    ["Food & Beverage Manager", "chef@vesper.demo"],
+                  ].map(([role, account]) => (
+                    <button type="button" key={account} onClick={() => selectDemoAccount(account)} className="min-w-0 rounded-lg border border-sand-200 bg-white p-3 text-left transition-colors hover:border-sage-400 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600">
+                      <p className="text-xs font-semibold text-sage-950">{role}</p>
+                      <code className="mt-1 block break-all text-[11px] text-sage-700">{account}</code>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Named staff accounts</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    ["Housekeeping", "hk1@vesper.demo"],
+                    ["Engineering", "chiefeng@vesper.demo"],
+                    ["Store", "store@vesper.demo"],
+                    ["Security", "security@vesper.demo"],
+                  ].map(([role, account]) => (
+                    <button type="button" key={account} onClick={() => selectDemoAccount(account)} className="min-w-0 rounded-lg border border-sand-200 bg-white p-3 text-left transition-colors hover:border-sage-400 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600">
+                      <p className="text-xs font-semibold text-sage-950">{role}</p>
+                      <code className="mt-1 block break-all text-[11px] text-sage-700">{account}</code>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-sand-500">Department staff accounts</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    ["Housekeeping", "housekeeping1–62@vesper.demo"],
+                    ["Food & Beverage", "fnb1–54@vesper.demo"],
+                    ["Front Office", "front_office1–24@vesper.demo"],
+                    ["Engineering", "maintenance1–18@vesper.demo"],
+                    ["Store", "store1–8@vesper.demo"],
+                    ["Security", "security1–14@vesper.demo"],
+                  ].map(([role, accounts]) => (
+                    <button type="button" key={accounts} onClick={() => selectDemoAccount(accounts.split("–")[0] + "@vesper.demo")} className="min-w-0 rounded-lg border border-sand-200 bg-white p-3 text-left transition-colors hover:border-sage-400 hover:bg-sage-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-600">
+                      <p className="text-xs font-semibold text-sage-950">{role} staff</p>
+                      <code className="mt-1 block break-all text-[11px] text-sage-700">{accounts}</code>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

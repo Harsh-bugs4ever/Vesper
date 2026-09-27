@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "packages" / "py-common"))
 
 from sqlalchemy import select  # noqa: E402
 from vesper_common.clock import utcnow  # noqa: E402
-from vesper_common.db import import_all_models, session_scope  # noqa: E402
+from vesper_common.db import session_scope  # noqa: E402
 
 
 ALLOCATIONS = {
@@ -98,7 +98,10 @@ def main() -> int:
     parser.add_argument("--property-id", type=UUID)
     parser.add_argument("--apply", action="store_true", help="Write only missing monthly budgets")
     args = parser.parse_args()
-    import_all_models(str(ROOT / "app" / "api"))
+    # Importing app.api loads its model modules in the application's normal order.
+    # Calling import_all_models first and then importing app.api registers the same
+    # tables twice on Base.metadata.
+    from app.api import MODULES  # noqa: F401
     from app.api.property.models import Property
 
     db = session_scope()
