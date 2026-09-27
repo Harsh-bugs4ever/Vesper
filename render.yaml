@@ -1,0 +1,23 @@
+# Render Blueprint for Vesper Backend
+services:
+  - type: web
+    name: vesper-backend
+    runtime: docker
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    region: singapore
+    plan: starter
+    healthCheckPath: /ready
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: VESPER_ENVIRONMENT
+        value: "production"
+      - key: VESPER_SERVICE_NAME
+        value: "vesper-backend"
+      - key: VESPER_PROPERTY_TIMEZONE
+        value: "Asia/Kolkata"
+      - key: VESPER_CURRENCY
+        value: "INR"
+      - key: PORT
+        value: "8000"
