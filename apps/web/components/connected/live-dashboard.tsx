@@ -746,6 +746,31 @@ export function GmDashboard() {
                         </span>
                       </div>
 
+                      {/* Risk and Profit Calculation Display */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className={cn(
+                          "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold border",
+                          ((reward as any).risk_pct ?? 20) < 40
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : "bg-rose-50 text-rose-800 border-rose-200"
+                        )}>
+                          Risk: {(reward as any).risk_pct ?? 20}%
+                        </span>
+                        <span className={cn(
+                          "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold border",
+                          ((reward as any).profit_pct ?? 80) > 60
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : "bg-amber-50 text-amber-800 border-amber-200"
+                        )}>
+                          Profit / Return: {(reward as any).profit_pct ?? 80}%
+                        </span>
+                        {(((reward as any).risk_pct ?? 20) < 40 && ((reward as any).profit_pct ?? 80) > 60) && (
+                          <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold bg-sand-900 text-gold-300">
+                            ⚡ AI Auto-Eligible
+                          </span>
+                        )}
+                      </div>
+
                       <div className="bg-sand-50 rounded-lg p-2 text-sand-800 font-semibold flex items-start gap-1.5">
                         <Gift className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
                         <div>
@@ -759,24 +784,26 @@ export function GmDashboard() {
                       </p>
 
                       <div className="pt-1.5 flex items-center justify-end">
-                        <Button
-                          size="sm"
-                          disabled={reward.status === "dispatched" || dispatchGoodieMutation.isPending}
-                          onClick={() => {
-                            dispatchGoodieMutation.mutate({
-                              room_number: reward.room_number,
-                              title: reward.title,
-                            });
-                          }}
-                          className={cn(
-                            "h-6 text-[10px] font-semibold px-2.5 rounded-lg",
-                            reward.status === "dispatched"
-                              ? "bg-sand-100 text-sand-500 border border-sand-200 cursor-not-allowed"
-                              : "bg-sand-900 text-sand-50 hover:bg-sand-800"
-                          )}
-                        >
-                          {reward.status === "dispatched" ? "✓ Sent to Guest" : "Dispatch Goodie (1-Click)"}
-                        </Button>
+                        {(((reward as any).risk_pct ?? 20) < 40 && ((reward as any).profit_pct ?? 80) > 60) || reward.status === "auto_dispatched" || reward.status === "dispatched" ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-300 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                            ⚡ AI Auto-Provided (Risk &lt; 40% &amp; Profit &gt; 60%)
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={dispatchGoodieMutation.isPending}
+                            onClick={() => {
+                              dispatchGoodieMutation.mutate({
+                                room_number: reward.room_number,
+                                title: reward.title,
+                              });
+                            }}
+                            className="h-6 text-[10px] font-semibold px-2.5 rounded-lg bg-sand-900 text-sand-50 hover:bg-sand-800"
+                          >
+                            Manual Approval (Risk ≥ 40%)
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

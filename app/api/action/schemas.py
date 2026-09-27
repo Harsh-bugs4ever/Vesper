@@ -63,6 +63,10 @@ class CardOut(ORMModel):
     was_shadow: bool
     expires_at: datetime | None = None
     created_at: datetime
+    risk_pct: float | None = None
+    profit_pct: float | None = None
+    is_auto_dispatched: bool | None = None
+    auto_recipient: str | None = None
 
 
 class CardDetail(CardOut):

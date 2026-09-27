@@ -358,8 +358,8 @@ def guest_relations_hub_overview(
         {"day": "Today", "date": today.isoformat(), "rating": 4.85, "reviews_count": 11},
     ]
 
-    # AI Goodies & Weekly Rewards Engine recommendations
-    goodies_and_rewards = [
+    # AI Goodies & Weekly Rewards Engine recommendations with Risk & Profit calculation
+    raw_goodies = [
         {
             "id": "rew-badminton-1",
             "room_number": "Room 204",
@@ -368,8 +368,9 @@ def guest_relations_hub_overview(
             "title": "Badminton Pavilion Morning Perk",
             "trigger_reason": "AI watched 18% court utilization tomorrow 08:00 - 11:00 AM & guest indicated sports interest",
             "perk": "Complimentary Court Booking + Yonex Rackets & Fresh Juice Bar",
-            "status": "ready",
             "cadence": "Daily Dynamic Perk",
+            "risk_pct": 18,
+            "profit_pct": 82,
         },
         {
             "id": "rew-loyalty-2",
@@ -379,8 +380,9 @@ def guest_relations_hub_overview(
             "title": "Weekly Platinum Delight: Truffle Degustation & Spa",
             "trigger_reason": "Rated 5.0 for 3 consecutive days during 7-day extended vacation",
             "perk": "Chef's Artisanal Truffle Degustation Box + 60m Aromatherapy Spa Courtesy",
-            "status": "ready",
             "cadence": "Weekly Milestone Reward",
+            "risk_pct": 24,
+            "profit_pct": 76,
         },
         {
             "id": "rew-recovery-3",
@@ -390,21 +392,33 @@ def guest_relations_hub_overview(
             "title": "Executive Courtesy Package (Dining Delay)",
             "trigger_reason": "Day rating dropped to 3.5 after 28m room dining delivery delay",
             "perk": "Sommelier Reserve Pinot Noir + Handwritten GM Courtesy Letter",
-            "status": "ready",
             "cadence": "Instant Churn Recovery",
+            "risk_pct": 32,
+            "profit_pct": 68,
         },
         {
             "id": "rew-celebration-4",
             "room_number": "Villa 12",
             "guest_name": "Ananya & Rohan Joshi",
             "type": "welcome_goodie",
-            "title": "Anniversary Sunset High-Tea",
+            "title": "Anniversary Sunset Mountain High-Tea",
             "trigger_reason": "Anniversary milestone detected from booking profile notes",
-            "perk": "Signature 3-Tier Mountain High-Tea & Orchid Bouquet",
-            "status": "dispatched",
+            "perk": "Signature 3-Tier Mountain High-Tea & Exotic Orchid Bouquet",
             "cadence": "Milestone Welcome",
+            "risk_pct": 45,
+            "profit_pct": 55,
         },
     ]
+
+    goodies_and_rewards = []
+    for g in raw_goodies:
+        # If risk < 40% and profit > 60%, AI automatically provides it to the respected guest
+        auto_qualifies = g["risk_pct"] < 40 and g["profit_pct"] > 60
+        goodies_and_rewards.append({
+            **g,
+            "status": "auto_dispatched" if auto_qualifies else "pending_review",
+            "is_auto_dispatched": auto_qualifies,
+        })
 
     return {
         "in_house_guests": in_house_count,

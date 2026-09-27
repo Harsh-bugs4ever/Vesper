@@ -129,30 +129,26 @@ const GM_NAV: NavGroup[] = [
   {
     items: [
       { name: "Dashboard", href: "/admin", icon: LayoutGrid },
-      { name: "Management Control", href: "/admin/management-control", icon: SlidersHorizontal },
-      { name: "Guest Relationship", href: "/admin/guest-relationship", icon: HeartHandshake },
-      { name: "Owner Overview", href: "/admin/owner", icon: Shield },
+      { name: "Action Queue", href: "/admin/actions", icon: Zap },
     ],
   },
   {
     label: "Operations",
     items: [
       { name: "Reservations", href: "/admin/reservations", icon: CalendarDays },
-      { name: "Action Queue", href: "/admin/actions", icon: Zap },
+      { name: "Inventory", href: "/admin/inventory", icon: Package },
     ],
   },
   {
     label: "Executive Intelligence",
     items: [
-      { name: "Executive Reports", href: "/admin/reports", icon: LineChart },
+      { name: "Reports", href: "/admin/reports", icon: LineChart },
       { name: "Rate Management", href: "/admin/rates", icon: Tags },
     ],
   },
   {
     label: "Property & Governance",
     items: [
-      { name: "Room Status", href: "/admin/rooms", icon: Boxes },
-      { name: "Inventory", href: "/admin/inventory", icon: Package },
       { name: "Budgets & CapEx", href: "/admin/budgets", icon: Wallet },
       { name: "Property Settings", href: "/admin/settings", icon: Settings },
     ],
