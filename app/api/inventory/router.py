@@ -1,4 +1,7 @@
 from uuid import UUID
+from decimal import Decimal
+import json
+import logging
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -6,10 +9,12 @@ from sqlalchemy.orm import Session
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, current_user, requires
-from vesper_common.errors import Forbidden, NotFound
+from vesper_common.errors import Conflict, Forbidden, NotFound
+from vesper_common.config import settings
 
 from . import procurement, reorder, service
 from .models import DepartmentBudget, StockItem
+from app.api.property.models import Department
 from .schemas import (
     InventorySummary,
     PurchaseApprove,
@@ -19,6 +24,7 @@ from .schemas import (
     RequisitionCreate,
     RequisitionDecision,
     RequisitionOut,
+    RequisitionLineCreate,
     BudgetWrite,
     BudgetAllocationUpdate,
     BudgetOut,
@@ -30,10 +36,13 @@ from .schemas import (
     StockMovementOut,
     ReorderAnalysis,
     ReorderAlert,
+    RequisitionCatalogItemOut,
+    RequisitionDraftRequest,
 )
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 purchase_router = APIRouter(prefix="/purchase-orders", tags=["purchase-orders"])
+log = logging.getLogger(__name__)
 
 
 def _po_access(principal: Principal, order) -> None:
@@ -56,12 +65,7 @@ def _request_manager(principal: Principal, row) -> None:
 def submit_requisition(body: RequisitionCreate,
                        principal: Principal = Depends(requires(Perm.REQUISITION_WRITE)),
                        db: Session = Depends(get_session)) -> RequisitionOut:
-    if principal.role != Role.STAFF:
-        raise Forbidden("Staff account required to submit a requisition")
-    department_id = principal.scoped_department(None)
-    principal.require_department_record(db, department_id)
-    return RequisitionOut.model_validate(procurement.create_request(
-        db, UUID(principal.property_id), department_id, UUID(principal.id), body))
+    raise Forbidden("Department replenishment is automatic. Use the inventory view to check stock levels.")
 
 
 @router.get("/requisitions/mine", response_model=list[RequisitionOut])
@@ -69,6 +73,107 @@ def my_requisitions(principal: Principal = Depends(requires(Perm.REQUISITION_WRI
                     db: Session = Depends(get_session)) -> list[RequisitionOut]:
     rows = procurement.list_requests(db, UUID(principal.property_id), requester_id=UUID(principal.id))
     return [RequisitionOut.model_validate(row) for row in rows]
+
+
+@router.get("/requisitions/catalog", response_model=list[RequisitionCatalogItemOut])
+def requisition_catalog(principal: Principal = Depends(requires(Perm.REQUISITION_WRITE)),
+                        db: Session = Depends(get_session)) -> list[RequisitionCatalogItemOut]:
+    """Staff requisition choices; stock catalog visibility is separate from ledger access."""
+    if principal.role != Role.STAFF:
+        raise Forbidden("Staff account required")
+    rows = service.list_items(db, UUID(principal.property_id))
+    return [RequisitionCatalogItemOut.model_validate(row) for row in rows]
+
+
+@router.post("/requisitions/draft", response_model=dict)
+def draft_requisition(body: RequisitionDraftRequest,
+                      principal: Principal = Depends(requires(Perm.REQUISITION_WRITE)),
+                      db: Session = Depends(get_session)) -> dict:
+    """Generate a reviewable request suggestion for this staff member's department."""
+    if principal.role != Role.STAFF:
+        raise Forbidden("Staff account required")
+    department_id = principal.scoped_department(None)
+    principal.require_department_record(db, department_id)
+    department = db.get(Department, department_id)
+    department_name = department.name if department else "your department"
+    items = service.list_items(db, UUID(principal.property_id))
+    if not items:
+        return {"source": "inventory_rules", "reason": "No stock items are available yet.", "items": []}
+
+    department_key = department.key if department else ""
+    relevant_categories = {
+        "housekeeping": {"linen", "toiletries", "cleaning", "beds"},
+        "fnb": {"food", "beverage"},
+        "maintenance": {"spare_parts", "cleaning"},
+        "front_office": {"toiletries"},
+        "security": {"spare_parts", "cleaning"},
+    }.get(department_key, {item.category for item in items})
+    department_items = [item for item in items if item.category in relevant_categories]
+    automatic = bool(body.need and body.need.startswith("[AUTO_REPLENISH]"))
+    draft_items = [item for item in department_items if item.is_low] if automatic else department_items
+    by_sku = {item.sku: item for item in draft_items}
+    suggestions: list[dict] = []
+    suggested_ids: set[UUID] = set()
+    source = "inventory_rules"
+    reason = f"Suggested replenishment for {department_name} based on current stock."
+    if settings.groq_api_key and draft_items:
+        try:
+            import groq
+            client = groq.Groq(api_key=settings.groq_api_key, timeout=20.0, max_retries=1)
+            catalog = [{"sku": item.sku, "name": item.name, "category": item.category,
+                        "unit": item.unit, "on_hand": float(item.quantity),
+                        "minimum": float(item.minimum_quantity), "reorder": float(item.reorder_quantity)}
+                       for item in draft_items]
+            prompt = (
+                "Create a small inventory requisition draft for hotel staff. Use only catalog SKUs. "
+                "Return JSON with reason and items [{sku, quantity, reason}]. Choose at most 4 relevant "
+                "items; quantity must be positive and no more than 100. It is only a draft for a human to review.\n"
+                f"Department: {department_name}\nNeed/context: {body.need or 'routine shift replenishment'}\n"
+                f"Catalog: {json.dumps(catalog, ensure_ascii=False)}"
+            )
+            response = client.chat.completions.create(
+                model=settings.concierge_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            content = response.choices[0].message.content or "{}"
+            result = json.loads(content)
+            for row in result.get("items", [])[:4]:
+                item = by_sku.get(str(row.get("sku", "")))
+                quantity = float(row.get("quantity", 0))
+                if item and item.id not in suggested_ids and 0 < quantity <= 100:
+                    suggested_ids.add(item.id)
+                    suggestions.append({"item_id": str(item.id), "sku": item.sku, "name": item.name,
+                                        "quantity": quantity, "reason": str(row.get("reason", "Shift replenishment"))[:240]})
+            if suggestions:
+                source = "ai"
+                reason = str(result.get("reason") or reason)[:500]
+        except Exception:
+            log.warning("AI requisition draft failed; using stock rules", exc_info=True)
+
+    if not suggestions:
+        candidates = sorted(
+            (item for item in draft_items if item.is_low) if automatic else draft_items,
+            key=lambda item: (not item.is_low, float(item.quantity) / max(float(item.minimum_quantity), 1.0)),
+        )
+        for item in candidates[:3]:
+            quantity = max(1.0, min(100.0, float(item.reorder_quantity or 1)))
+            suggestions.append({"item_id": str(item.id), "sku": item.sku, "name": item.name,
+                                "quantity": quantity, "reason": "Replenish for the upcoming shift"})
+    if not suggestions:
+        reason = f"No suitable stock items are available for {department_name} yet."
+    return {"source": source, "reason": reason, "items": suggestions}
+
+
+@router.post("/requisitions/auto-submit", response_model=dict, status_code=status.HTTP_201_CREATED)
+def auto_submit_requisition(body: RequisitionDraftRequest,
+                             principal: Principal = Depends(requires(Perm.REQUISITION_WRITE)),
+                             db: Session = Depends(get_session)) -> dict:
+    """Compatibility response: scheduled replenishment owns request creation."""
+    return {"created": False, "source": "inventory_rules",
+            "message": "Department stock is monitored automatically. Replenishment requests appear in the department dashboard.",
+            "request": None}
 
 
 @router.get("/requisitions", response_model=list[RequisitionOut])
@@ -96,32 +201,21 @@ def get_requisition(request_id: UUID, principal: Principal = Depends(current_use
 
 @router.post("/requisitions/{request_id}/approve", response_model=RequisitionOut)
 def approve_requisition(request_id: UUID, body: RequisitionDecision,
-        principal: Principal = Depends(requires(Perm.REQUISITION_APPROVE)),
-        db: Session = Depends(get_session)) -> RequisitionOut:
-    row = procurement.get_request(db, UUID(principal.property_id), request_id)
-    _request_manager(principal, row)
-    return RequisitionOut.model_validate(procurement.decide_request(
-        db, UUID(principal.property_id), request_id, UUID(principal.id),
-        approve=True, reason=body.reason))
+        principal: Principal = Depends(current_user)) -> RequisitionOut:
+    raise Forbidden("Stock replenishment is automated; department stock requests are read-only.")
 
 
 @router.post("/requisitions/{request_id}/reject", response_model=RequisitionOut)
 def reject_requisition(request_id: UUID, body: RequisitionDecision,
-        principal: Principal = Depends(requires(Perm.REQUISITION_APPROVE)),
-        db: Session = Depends(get_session)) -> RequisitionOut:
-    row = procurement.get_request(db, UUID(principal.property_id), request_id)
-    _request_manager(principal, row)
-    return RequisitionOut.model_validate(procurement.decide_request(
-        db, UUID(principal.property_id), request_id, UUID(principal.id),
-        approve=False, reason=body.reason))
+        principal: Principal = Depends(current_user)) -> RequisitionOut:
+    raise Forbidden("Stock replenishment is automated; department stock requests are read-only.")
 
 
 @router.post("/requisitions/{request_id}/cancel", response_model=RequisitionOut)
 def cancel_requisition(request_id: UUID, body: RequisitionDecision,
         principal: Principal = Depends(requires(Perm.REQUISITION_WRITE)),
         db: Session = Depends(get_session)) -> RequisitionOut:
-    return RequisitionOut.model_validate(procurement.cancel_request(
-        db, UUID(principal.property_id), request_id, UUID(principal.id), body.reason))
+    raise Forbidden("Automatic department stock requests are read-only.")
 
 
 @router.post("/budgets", response_model=BudgetOut, status_code=status.HTTP_201_CREATED)

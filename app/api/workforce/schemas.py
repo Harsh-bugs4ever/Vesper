@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +32,31 @@ class RosterOut(ORMModel):
 
 class RosterDetail(RosterOut):
     entries: list[RosterEntryOut]
+
+
+class MyTeamShiftOut(BaseModel):
+    work_date: date
+    shift_key: str
+    shift_name: str
+    starts_at: time | None = None
+    ends_at: time | None = None
+
+
+class MyTeamMemberOut(BaseModel):
+    user_id: UUID
+    full_name: str
+    role_title: str
+    employee_code: str | None = None
+    shifts: list[MyTeamShiftOut] = Field(default_factory=list)
+
+
+class MyTeamRosterOut(BaseModel):
+    department_id: UUID
+    department_name: str
+    week_start: date
+    roster_status: str | None = None
+    roster_method: str | None = None
+    members: list[MyTeamMemberOut]
 
 
 class GenerateRosterRequest(BaseModel):

@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # actually serve.
     groq_api_key: str | None = None
     concierge_model: str = "llama-3.3-70b-versatile"
+    task_image_model: str = "qwen/qwen3.8-27b"
 
     # Sentiment and retrieval embeddings run locally, not through Groq: they score every
     # rating and every passage, which would burn the free tier's request budget in

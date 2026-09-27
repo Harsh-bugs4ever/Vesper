@@ -75,7 +75,7 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         raise ValueError("Seed at least three in-house stays before adding workflow scenarios")
     stock_items = {item.sku: item for item in db.scalars(select(inventory.StockItem).where(
         inventory.StockItem.property_id == property_id))}
-    required_stock = {"LN-TOWEL", "TL-DENTAL", "FD-EGGS", "FD-BREAD", "SP-AC"}
+    required_stock = {"LN-TOWEL", "TL-DENTAL", "FD-EGGS", "FD-BREAD", "SP-AC", "TL-SOAP", "TL-SHAMPOO"}
     if required_stock - stock_items.keys():
         raise ValueError("Demo property is missing stock items needed for staff requisitions")
     now = utcnow()
@@ -216,6 +216,61 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         status=staff.TaskStatus.ASSIGNED, priority=staff.TaskPriority.NORMAL,
         source=staff.TaskSource.MANUAL, due_at=now + timedelta(hours=2))
 
+    # Each demo staff department has a task that can exercise photo evidence and AI
+    # completion. The housekeeping task also exposes one safe sample photo in the UI.
+    evidence_tasks = [
+        ("housekeeping", "hk1@vesper.demo", "Restock linen and guest amenities in the room",
+         "Make the bed neatly and place fresh towels and guest toiletries.",
+         {"demo_image_url": "/demo/task-completion-housekeeping.png"}),
+        ("fnb", "fnb1@vesper.demo", "Set up the breakfast service station",
+         "Arrange clean serviceware and prepare the station for the next service." , {}),
+        ("maintenance", "chiefeng@vesper.demo", "Repair the room corridor wall light",
+         "Replace the damaged light cover and leave the fitting secure." , {}),
+        ("front_office", "front_office1@vesper.demo", "Prepare guest welcome packs",
+         "Set out complete welcome amenities for the next arrivals." , {}),
+        ("store", "store@vesper.demo", "Restock the linen dispatch shelf",
+         "Arrange clean towel bundles so the next shift can issue them quickly." , {}),
+        ("security", "security@vesper.demo", "Complete the lobby safety walkthrough",
+         "Check that guest routes and emergency exits are clear." , {}),
+    ]
+    for department_key, email, title, description, task_meta in evidence_tasks:
+        add(staff.Task, f"task:evidence:{department_key}",
+            department_id=dept[department_key].id, assignee_id=users[email].id,
+            title=title, description=description,
+            status=staff.TaskStatus.ASSIGNED, priority=staff.TaskPriority.NORMAL,
+            source=staff.TaskSource.MANUAL, due_at=now + timedelta(hours=3), meta=task_meta)
+    for department_key, title in [
+        ("store", "Prepare the linen issue trolley for the next shift"),
+        ("security", "Check the staff entrance access log"),
+    ]:
+        add(staff.Task, f"task:evidence-next:{department_key}",
+            department_id=dept[department_key].id, title=title,
+            description="Complete the assigned department task and attach a photo for verification.",
+            status=staff.TaskStatus.OPEN, priority=staff.TaskPriority.NORMAL,
+            source=staff.TaskSource.MANUAL, due_at=now + timedelta(hours=5))
+
+    # Ensure every named demo staff account (including the full generated team)
+    # has an individual task on their own dashboard, not only the six showcase logins.
+    department_work = {
+        "housekeeping": ("Refresh a guest room", "Reset the room, replace used linen, and confirm amenities are ready."),
+        "fnb": ("Prepare a service station", "Set out clean serviceware and confirm the station is ready for service."),
+        "front_office": ("Prepare an arrival handover", "Review arrivals and leave clear notes for the next front desk shift."),
+        "maintenance": ("Complete a property safety check", "Inspect your assigned work area and report any repair that needs follow-up."),
+        "store": ("Check a stock shelf", "Confirm the shelf count and report any item below its minimum quantity."),
+        "security": ("Walk the guest areas", "Check that guest routes and emergency exits are clear."),
+    }
+    department_by_id = {department.id: key for key, department in dept.items()}
+    for user in users.values():
+        department_key = department_by_id.get(user.department_id)
+        if user.role.key != "staff" or department_key not in department_work:
+            continue
+        title, description = department_work[department_key]
+        add(staff.Task, f"task:individual:{user.email}",
+            department_id=dept[department_key].id, assignee_id=user.id,
+            title=title, description=description,
+            status=staff.TaskStatus.ASSIGNED, priority=staff.TaskPriority.NORMAL,
+            source=staff.TaskSource.MANUAL, due_at=now + timedelta(days=1))
+
     # Story 4: a low stock special is visible in the guest menu and in procurement.
     # Existing stock is never edited; its on-hand quantity and ledger stay consistent.
     stock_id = add(inventory.StockItem, "stock:special", department_id=dept["store"].id,
@@ -223,6 +278,44 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
         quantity=Decimal("0"), minimum_quantity=Decimal("4"),
         reorder_quantity=Decimal("12"), unit_cost=Decimal("480"),
         supplier="Demo Kitchen Supplier", lead_time_days=2)
+    # Give every department its own stock catalog so staff and managers see a
+    # useful, correctly scoped inventory view instead of an empty store-only list.
+    department_stock = {
+        "housekeeping": [
+            ("HK-LINEN-KIT", "Housekeeping linen bundle", "linen", "bundle", "18", "12", "30", "950", "Linen Mills"),
+            ("HK-SOAP-CASE", "Guest soap case", "toiletries", "case", "4", "6", "12", "540", "Amenity Co"),
+        ],
+        "fnb": [
+            ("FNB-EGGS-TRAY", "Breakfast eggs", "food", "tray", "18", "12", "30", "210", "Juhu Poultry"),
+            ("FNB-TEA-TIN", "Restaurant tea leaves", "beverage", "kg", "3", "6", "15", "890", "Assam Direct"),
+        ],
+        "front_office": [
+            ("FO-WELCOME-KIT", "Guest welcome amenity kit", "toiletries", "kit", "24", "12", "36", "180", "Amenity Co"),
+            ("FO-KEY-SLEEVE", "Room key card sleeves", "cleaning", "pack", "16", "8", "24", "95", "PrintWorks Mumbai"),
+        ],
+        "maintenance": [
+            ("MT-AC-FILTER", "Room AC replacement filter", "spare_parts", "piece", "2", "4", "10", "850", "CoolTech"),
+            ("MT-LED-BULB", "Warm LED replacement bulb", "spare_parts", "piece", "28", "12", "36", "120", "Elektra"),
+        ],
+        "store": [
+            ("ST-CLEANER", "Multi-surface cleaner", "cleaning", "bottle", "42", "18", "48", "190", "CleanPro"),
+            ("ST-TORCH-BATTERY", "Inspection torch batteries", "spare_parts", "pair", "14", "8", "24", "110", "Elektra"),
+        ],
+        "security": [
+            ("SEC-TORCH-BATTERY", "Security torch batteries", "spare_parts", "pair", "2", "6", "18", "110", "Elektra"),
+            ("SEC-GLOVES", "Safety gloves", "cleaning", "pair", "22", "10", "30", "75", "SafeHands"),
+        ],
+    }
+    requisition_stock = {sku: (item.id, item.unit_cost) for sku, item in stock_items.items()}
+    requisition_stock["DEMO-SAFFRON"] = (stock_id, Decimal("480"))
+    for department_key, rows in department_stock.items():
+        for sku, name, category, unit, quantity, minimum, reorder, cost, supplier in rows:
+            item_id = add(inventory.StockItem, f"stock:department:{sku.lower()}",
+                department_id=dept[department_key].id, sku=sku, name=name,
+                category=category, unit=unit, quantity=Decimal(quantity),
+                minimum_quantity=Decimal(minimum), reorder_quantity=Decimal(reorder),
+                unit_cost=Decimal(cost), supplier=supplier, lead_time_days=2)
+            requisition_stock[sku] = (item_id, Decimal(cost))
     add(guest.MenuItem, "menu:special", category="Dessert", name="Demo Saffron Dessert",
         description="Demo special; currently unavailable while the ingredient is replenished.",
         price=Decimal("690"), is_veg=True, prep_minutes=15,
@@ -278,52 +371,96 @@ def seed_workflow(db, property_id: UUID, *, apply: bool = False) -> dict[str, ob
                  "item_id": str(stock_id), "quantity": 12, "editable_fields": ["quantity"]},
         dedupe_key=f"purchase:{stock_id}", expires_at=now + timedelta(days=3))
 
-    # Staff My Requests and managers' approval queues show the same persisted
-    # requisitions. Leave them submitted so a human can decide; never seed an
-    # approved status without the decision and purchase-order transition.
+    # Department dashboards display read-only stock requests created by the
+    # replenishment workflow; the requests are not waiting on a manager action.
     def staff_requisition(key: str, department: str, requester: str, reason: str,
                           lines: list[tuple[str, str, str]]) -> None:
         requester_id = users[requester].id
         request_id = add(inventory.InventoryRequest, f"requisition:{key}",
             department_id=dept[department].id, requested_by=requester_id,
-            responsible_manager_id=dept[department].head_user_id,
+            responsible_manager_id=dept[department].head_user_id or gm.id,
             currency=resort.currency, status="submitted", reason=reason)
         for sku, quantity, line_reason in lines:
-            item = stock_items[sku]
+            item_id, unit_cost = requisition_stock[sku]
             add_related(inventory.InventoryRequestLine, f"requisition-line:{key}:{sku}",
-                request_id=request_id, item_id=item.id, quantity=Decimal(quantity),
-                unit_cost=item.unit_cost, reason=line_reason)
+                request_id=request_id, item_id=item_id, quantity=Decimal(quantity),
+                unit_cost=unit_cost, reason=line_reason)
         add_related(inventory.InventoryRequestAudit, f"requisition-audit:{key}",
             request_id=request_id, actor_id=requester_id, action="submitted",
             reason=reason, created_at=now)
 
     staff_requisition("housekeeping", "housekeeping", "hk1@vesper.demo",
         "Replenish linen and guest amenity carts for the next shift.", [
-            ("LN-TOWEL", "24", "Replace towels used by occupied rooms."),
-            ("TL-DENTAL", "36", "Refill guest amenity carts."),
+            ("HK-LINEN-KIT", "12", "Replace linen bundles used by occupied rooms."),
+            ("HK-SOAP-CASE", "6", "Refill guest amenity carts."),
         ])
     staff_requisition("fnb", "fnb", "fnb1@vesper.demo",
         "Replenish breakfast station supplies.", [
-            ("FD-EGGS", "6", "Cover the next breakfast service."),
-            ("FD-BREAD", "8", "Cover sandwiches and breakfast service."),
+            ("FNB-EGGS-TRAY", "6", "Cover the next breakfast service."),
+            ("FNB-TEA-TIN", "8", "Cover the next restaurant service."),
         ])
     staff_requisition("maintenance", "maintenance", "chiefeng@vesper.demo",
         "Keep replacement filters available for room AC work.", [
-            ("SP-AC", "4", "Replace filters during approved maintenance work."),
+            ("MT-AC-FILTER", "4", "Keep replacement filters available for room AC work."),
+        ])
+    staff_requisition("front-office", "front_office", "front_office1@vesper.demo",
+        "Prepare guest amenity packs for the upcoming arrivals.", [
+            ("FO-WELCOME-KIT", "24", "Prepare amenity kits for expected check-ins."),
+            ("FO-KEY-SLEEVE", "8", "Keep arrival key sleeves available."),
+        ])
+    staff_requisition("store", "store", "store@vesper.demo",
+        "Replenish shared cleaning and inspection supplies.", [
+            ("ST-CLEANER", "18", "Refill the common supply shelves."),
+            ("ST-TORCH-BATTERY", "8", "Keep inspection batteries available."),
+        ])
+    staff_requisition("security", "security", "security@vesper.demo",
+        "Replenish safety walkthrough supplies.", [
+            ("SEC-TORCH-BATTERY", "12", "Keep patrol torches ready for each shift."),
+            ("SEC-GLOVES", "10", "Restock safety gloves for the team."),
         ])
 
     # Staff absence creates a visible staffing constraint without publishing a roster.
-    next_week = today + timedelta(days=(7 - today.weekday()) % 7)
-    add(workforce.LeaveRequest, "leave:housekeeping", user_id=hk.id,
+    next_week = today + timedelta(days=7 - today.weekday())
+    add(workforce.LeaveRequest, f"leave:housekeeping:{next_week.isoformat()}", user_id=hk.id,
         from_date=next_week, to_date=next_week + timedelta(days=1),
         reason="Demo approved leave for staffing coverage review",
         status=workforce.LeaveStatus.APPROVED, decided_by=gm.id,
         decided_at=now - timedelta(days=1))
-    add(workforce.Roster, "roster:housekeeping", department_id=dept["housekeeping"].id,
+    add(workforce.Roster, f"roster:housekeeping:{next_week.isoformat()}", department_id=dept["housekeeping"].id,
         week_start=next_week, status=workforce.RosterStatus.DRAFT,
         method="greedy", objective="coverage",
         gaps=[{"date": next_week.isoformat(), "shift": "morning", "count": 1}],
         notes="Demo draft: review leave and fill one morning coverage gap before publishing.")
+
+    # Give each department's staff view a real, clearly unpublished example schedule.
+    # These are review drafts for the upcoming week; staff are told to follow only a
+    # manager-published roster. The housekeeping draft above retains its leave gap.
+    roster_week = next_week
+    shift_keys = ("morning", "evening", "night")
+    for department_key, department in dept.items():
+        if department_key == "housekeeping":
+            roster_id = scenario_id(property_id, f"roster:housekeeping:{roster_week.isoformat()}")
+        else:
+            roster_id = add(workforce.Roster, f"roster:staff-demo:{department_key}:{roster_week.isoformat()}",
+                department_id=department.id, week_start=roster_week,
+                status=workforce.RosterStatus.DRAFT, method="greedy", objective="coverage",
+                gaps=[], notes="Demo schedule draft: review assignments before publishing.")
+        members = sorted(
+            (user for user in users.values()
+             if user.department_id == department.id and user.role.key == "staff"),
+            key=lambda user: user.email,
+        )
+        for member_index, member in enumerate(members):
+            for day_offset in range(7):
+                work_date = roster_week + timedelta(days=day_offset)
+                if (department_key == "housekeeping" and member.email == "hk1@vesper.demo"
+                        and work_date <= roster_week + timedelta(days=1)):
+                    continue  # Respect the seeded leave request and preserve the coverage gap.
+                add_related(workforce.RosterEntry,
+                    f"roster-entry:staff-demo:{department_key}:{roster_week.isoformat()}:{member.email}:{work_date.isoformat()}",
+                    roster_id=roster_id, property_id=property_id, user_id=member.id,
+                    department_id=department.id, work_date=work_date,
+                    shift_key=shift_keys[(member_index + day_offset) % len(shift_keys)])
 
     if apply:
         db.commit()

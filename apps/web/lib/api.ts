@@ -840,6 +840,9 @@ export interface PurchaseOrderOut {
 }
 
 export const requisitions = {
+  catalog: () => api.get<RequisitionCatalogItem[]>("/inventory/requisitions/catalog"),
+  draft: (need?: string) => api.post<{ source: "ai" | "inventory_rules"; reason: string; items: Array<{ item_id: string; sku: string; name: string; quantity: number; reason: string }> }>("/inventory/requisitions/draft", { need }),
+  autoSubmit: (need?: string) => api.post<{ created: boolean; source: "ai" | "inventory_rules"; message: string; request: RequisitionOut | null }>("/inventory/requisitions/auto-submit", { need }),
   submit: (body: { reason?: string; items: Array<{ item_id: string; quantity: number; reason: string }> }) =>
     api.post<RequisitionOut>("/inventory/requisitions", body),
   mine: () => api.get<RequisitionOut[]>("/inventory/requisitions/mine"),
@@ -853,6 +856,14 @@ export const requisitions = {
   cancel: (id: string, reason: string) =>
     api.post<RequisitionOut>(`/inventory/requisitions/${id}/cancel`, { reason }),
 };
+
+export interface RequisitionCatalogItem {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+}
 
 export const budgets = {
   list: (params?: { department_id?: string }) =>
@@ -1129,28 +1140,34 @@ export interface RosterDetail extends RosterOut {
   entries: RosterEntryOut[];
 }
 
-export interface TeamMemberShift {
+export interface MyTeamShift {
   work_date: string;
   shift_key: string;
   shift_name: string;
-  starts_at?: string;
-  ends_at?: string;
+  starts_at: string | null;
+  ends_at: string | null;
 }
 
-export interface TeamMember {
+export interface MyTeamMember {
   user_id: string;
   full_name: string;
   role_title: string;
-  employee_code?: string;
-  shifts: TeamMemberShift[];
+  employee_code: string | null;
+  shifts: MyTeamShift[];
 }
 
-export interface TeamRosterOut {
-  department_name?: string;
-  week_start?: string;
-  roster_status?: string;
-  members: TeamMember[];
+export interface MyTeamRoster {
+  department_id: string;
+  department_name: string;
+  week_start: string;
+  roster_status: "draft" | "published" | null;
+  roster_method: string | null;
+  members: MyTeamMember[];
 }
+
+export type TeamMemberShift = MyTeamShift;
+export type TeamMember = MyTeamMember;
+export type TeamRosterOut = MyTeamRoster;
 
 export interface StaffReportOut {
   id: string;
@@ -1206,6 +1223,8 @@ export const attendanceApi = {
 };
 
 export const workforceApi = {
+  myTeam: (week_start?: string) =>
+    api.get<MyTeamRoster>("/workforce/my-team", week_start ? { week_start } : undefined),
   currentRoster: (week_start?: string) =>
     api.get<RosterDetail | null>("/workforce/rosters/current", week_start ? { week_start } : undefined),
   listRosters: (status?: string) =>
@@ -1221,8 +1240,22 @@ export const workforceApi = {
     api.post<LeaveOut>("/workforce/leave", body),
   decideLeave: (leaveId: string, approve: boolean) =>
     api.post<LeaveOut>(`/workforce/leave/${leaveId}/decide`, { approve }),
-  myTeam: (week_start?: string) =>
-    api.get<TeamRosterOut>("/workforce/my-team", week_start ? { week_start } : undefined),
+};
+
+export interface TaskEvidenceResult {
+  task: { id: string; status: string; meta: Record<string, unknown> };
+  ai_status: "approved" | "rejected" | "needs_review";
+  ai_note: string;
+  verifier: "ai" | "demo_sample" | "manager_review";
+  next_task: { id: string; title: string; status: string } | null;
+}
+
+export const staffTasksApi = {
+  submitEvidence: (taskId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.upload<TaskEvidenceResult>(`/tasks/${taskId}/evidence`, form);
+  },
 };
 
 export const reportsApi = {
@@ -1264,5 +1297,4 @@ export const roomsApi = {
       as_of: string;
     }>("/property/occupancy"),
 };
-
 

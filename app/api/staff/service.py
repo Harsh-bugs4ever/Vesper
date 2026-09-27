@@ -114,7 +114,11 @@ def check_in(
         )
     ).first()
     if existing is not None:
-        raise Conflict("You are already checked in for this shift")
+        # Check-in is idempotent. Mobile clients can retry after a slow response, and
+        # returning the active attendance record lets them recover the real shift state.
+        if existing.checked_out_at is None:
+            return existing
+        raise Conflict("Your check-in for this shift has already been closed")
 
     late_by = max(0, int((now - start).total_seconds() // 60) - shift.grace_minutes)
     record = Attendance(
@@ -363,6 +367,32 @@ def claim_task(db: Session, property_id: UUID, task_id: UUID, user_id: UUID, *,
     bus.publish(
         Event.TASK_ASSIGNED, _task_payload(task), property_id=str(property_id), actor_id=str(user_id)
     )
+    return task
+
+
+def assign_next_task(db: Session, property_id: UUID, department_id: UUID,
+                     user_id: UUID, actor_id: str) -> Task | None:
+    """Give the just-finished staff member the next open task, if any."""
+    task = db.scalars(
+        select(Task)
+        .where(
+            Task.property_id == property_id,
+            Task.department_id == department_id,
+            Task.status == TaskStatus.OPEN,
+            Task.assignee_id.is_(None),
+        )
+        .order_by(Task.due_at.asc().nulls_last(), Task.created_at.asc())
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    ).first()
+    if task is None:
+        return None
+    task.assignee_id = user_id
+    task.status = TaskStatus.ASSIGNED
+    task.accepted_at = None
+    db.commit()
+    db.refresh(task)
+    bus.publish(Event.TASK_ASSIGNED, _task_payload(task), property_id=str(property_id), actor_id=actor_id)
     return task
 
 

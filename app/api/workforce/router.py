@@ -1,18 +1,22 @@
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 
 from vesper_common.db import get_session
 from vesper_common.permissions import Perm, Role
 from vesper_common.errors import Forbidden, NotFound
+from vesper_common.clock import local_today
 from app.api.identity.models import User
+from app.api.identity.models import UserAssignment
 from app.api.staff import metrics as staff_metrics
+from app.api.staff.models import Shift
 from app.api.staff.schemas import EmployeeOption
+from app.api.property.models import Department
 from app.api.action.models import ActionCard
-from .models import LeaveRequest
+from .models import LeaveRequest, Roster, RosterStatus
 from vesper_common.security import Principal, current_user, requires, requires_gm
 
 from . import service
@@ -22,6 +26,9 @@ from .schemas import (
     LeaveCreate,
     LeaveDecision,
     LeaveOut,
+    MyTeamMemberOut,
+    MyTeamRosterOut,
+    MyTeamShiftOut,
     RosterDetail,
     RosterEntryOut,
     RosterOut,
@@ -109,6 +116,84 @@ def current_roster(
     if roster and principal.role not in {Role.GM, "service"}:
         principal.require_object(roster)
     return _detail(roster) if roster else None
+
+
+@router.get("/my-team", response_model=MyTeamRosterOut)
+def my_team_roster(
+    week_start: date | None = None,
+    principal: Principal = Depends(requires(Perm.TASKS_READ)),
+    db: Session = Depends(get_session),
+) -> MyTeamRosterOut:
+    """Return names and shifts for only the caller's assigned department."""
+    if principal.department_id is None:
+        raise Forbidden("Your account is not assigned to a department")
+    department_id = UUID(principal.department_id)
+    principal.require_department_record(db, department_id)
+    department = db.get(Department, department_id)
+    if department is None:
+        raise Forbidden("Department is outside your assignment")
+
+    property_id = UUID(principal.property_id)
+    start = week_start or local_today()
+    monday = start - timedelta(days=start.weekday())
+    users = db.scalars(
+        select(User)
+        .join(UserAssignment, UserAssignment.user_id == User.id)
+        .where(
+            UserAssignment.property_id == property_id,
+            UserAssignment.department_id == department_id,
+            User.property_id == property_id,
+            User.is_active.is_(True),
+        )
+        .order_by(User.full_name)
+    ).unique().all()
+    rosters = db.scalars(
+        select(Roster)
+        .options(joinedload(Roster.entries))
+        .where(
+            Roster.property_id == property_id,
+            Roster.week_start == monday,
+            Roster.status.in_([RosterStatus.PUBLISHED, RosterStatus.DRAFT]),
+            (Roster.department_id == department_id) | (Roster.department_id.is_(None)),
+        )
+        .order_by(Roster.created_at.desc())
+    ).unique().all()
+    # A published roster always wins. Prefer a department roster over a property-wide
+    # roster, and never expose entries from another department.
+    roster = next((row for row in rosters if row.status == RosterStatus.PUBLISHED and row.department_id == department_id), None)
+    roster = roster or next((row for row in rosters if row.status == RosterStatus.PUBLISHED), None)
+    roster = roster or next((row for row in rosters if row.department_id == department_id), None)
+    roster = roster or next(iter(rosters), None)
+
+    shifts = {row.key: row for row in db.scalars(select(Shift).where(Shift.property_id == property_id))}
+    entries_by_user: dict[UUID, list[MyTeamShiftOut]] = {}
+    if roster:
+        for entry in roster.entries:
+            if entry.department_id != department_id or entry.work_date < monday or entry.work_date >= monday + timedelta(days=7):
+                continue
+            shift = shifts.get(entry.shift_key)
+            entries_by_user.setdefault(entry.user_id, []).append(MyTeamShiftOut(
+                work_date=entry.work_date,
+                shift_key=entry.shift_key,
+                shift_name=shift.name if shift else entry.shift_key.replace("_", " ").title(),
+                starts_at=shift.starts_at if shift else None,
+                ends_at=shift.ends_at if shift else None,
+            ))
+
+    return MyTeamRosterOut(
+        department_id=department_id,
+        department_name=department.name,
+        week_start=monday,
+        roster_status=str(roster.status) if roster else None,
+        roster_method=roster.method if roster else None,
+        members=[MyTeamMemberOut(
+            user_id=user.id,
+            full_name=user.full_name,
+            role_title=user.role.label,
+            employee_code=user.employee_code,
+            shifts=sorted(entries_by_user.get(user.id, []), key=lambda row: (row.work_date, row.shift_key)),
+        ) for user in users],
+    )
 
 
 @router.post("/roster/apply", response_model=dict)

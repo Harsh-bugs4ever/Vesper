@@ -36,6 +36,18 @@ class StockItemDetail(StockItemOut):
     days_to_expiry: int | None = None
 
 
+class RequisitionDraftRequest(BaseModel):
+    need: str | None = Field(default=None, max_length=500)
+
+
+class RequisitionCatalogItemOut(BaseModel):
+    id: UUID
+    sku: str
+    name: str
+    category: str
+    unit: str
+
+
 class StockItemCreate(BaseModel):
     sku: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=2, max_length=120)

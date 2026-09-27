@@ -95,19 +95,35 @@ export default function StaffReviewsPage() {
   const remaining = departing.filter((stay) => !done[stay.stayId]).length;
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-[#173a2d] via-[#244c3a] to-[#355b46] p-5 text-white shadow-[0_24px_60px_-35px_rgba(23,58,45,.8)] sm:p-8">
+        <div aria-hidden="true" className="absolute -right-16 -top-24 -z-10 h-56 w-56 rounded-full border border-white/10 bg-white/[0.035]" />
         <Link
           href="/staff"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-sand-500 hover:text-sand-800"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/65 transition-colors hover:text-white"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to my shift
         </Link>
 
-        <h1 className="mt-2 font-serif text-2xl font-semibold text-sand-950">{canReadOwn ? "My guest ratings" : "Review departing guests"}</h1>
-        {canReadOwn && <p className="mt-1 text-sm text-sand-600">Feedback guests gave about your work.</p>}
-      </div>
+        <h1 className="mt-5 font-serif text-3xl font-semibold text-white sm:text-4xl">
+          {canReviewDeparting ? "Review departing guests" : "My guest ratings"}
+        </h1>
+        {canReviewDeparting ? (
+          <>
+            <p className="mt-2 text-sm text-white/75">
+              {remaining === 0
+                ? "You have reviewed everyone departing from your floor."
+                : `${remaining} guest${remaining === 1 ? "" : "s"} you looked after ${remaining === 1 ? "is" : "are"} checking out.`}
+            </p>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 text-xs font-medium text-white/85">
+              <ShieldCheck className="h-4 w-4 text-gold-200" /> Confidential team handover
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-white/75">Feedback guests gave about your work.</p>
+        )}
+      </section>
 
       {!canReadOwn && !canReviewDeparting ? <p role="alert" className="rounded-xl border border-amber-200 bg-white p-4 text-sm text-sand-700">Your account cannot view personal ratings.</p>
         : !canReadOwn ? null
@@ -135,7 +151,7 @@ export default function StaffReviewsPage() {
             : `${remaining} guest${remaining === 1 ? "" : "s"} you looked after ${remaining === 1 ? "is" : "are"} checking out.`}</p>
         </div>
       {/* The rules, stated before the form rather than buried after it. */}
-      <div className="flex items-start gap-2.5 rounded-xl border border-sand-200 bg-sand-50/70 p-3.5">
+      <div className="flex items-start gap-2.5 rounded-2xl border border-sage-200/70 bg-white p-4 shadow-sm sm:p-5">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sage-600" />
         <p className="text-xs leading-relaxed text-sand-600">
           The guest never sees this, and neither do your colleagues. One review per guest
