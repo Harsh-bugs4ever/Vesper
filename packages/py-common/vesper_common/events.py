@@ -30,10 +30,9 @@ STREAM = "vesper:events"
 CHANNEL = "vesper:broadcast"
 MAXLEN = 50_000
 
-# Redis is on the same network as the service; half a second is generous. Without an
-# explicit timeout a publish blocks on the OS connect timeout instead — measured at
-# roughly two seconds each with Redis down, which a guest waits for.
-SOCKET_TIMEOUT_SECONDS = 0.5
+# For cloud Redis (e.g. Redis Cloud), allow sufficient socket timeout for WAN latency
+# while keeping local operation fast.
+SOCKET_TIMEOUT_SECONDS = 5.0
 # After this many consecutive failures, stop trying until the cooldown expires. Retrying
 # every publish turns one outage into latency on every single write in the product.
 FAILURE_THRESHOLD = 3
