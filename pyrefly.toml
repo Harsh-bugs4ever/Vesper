@@ -2,5 +2,20 @@
 preset = "basic"
 search-path = ["packages/py-common", "scripts"]
 
-# import_all_models creates these aliases at runtime; Groq is an optional extra.
-ignore-missing-imports = ["vesper_models.*", "groq"]
+# import_all_models creates these aliases at runtime; ML engine extras are optional.
+ignore-missing-imports = [
+    "vesper_models.*",
+    "groq",
+    "pandas",
+    "pandas.*",
+    "numpy",
+    "numpy.*",
+    "prophet",
+    "prophet.*",
+    "xgboost",
+    "xgboost.*",
+    "sklearn",
+    "sklearn.*",
+    "ortools",
+    "ortools.*",
+]
