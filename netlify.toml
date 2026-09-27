@@ -5,5 +5,10 @@
   command = "npm run build"
   publish = ".next"
 
+[build.environment]
+  # The browser uses the same-origin /backend proxy; target the deployed API at build time.
+  BACKEND_URL = "https://vesper-3o01.onrender.com"
+  NEXT_PUBLIC_API_URL = "/backend"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
