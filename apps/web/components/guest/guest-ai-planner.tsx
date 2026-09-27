@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Clock3, Compass, Loader2, MapPin, Sparkles } from "lucide-react";
-import { guestPlanner, type GuestPlannerResponse } from "@/lib/api";
+import { guestPlanner, guestTokens, type GuestPlannerResponse } from "@/lib/api";
+import { generateDemoDayPlan, getDemoGuestPersona } from "@/lib/demo/guest-demo";
 
 interface Props {
   stayId: string;
@@ -15,25 +16,51 @@ export function GuestAiPlanner({ stayId, disabled = false }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const isDemo =
+    stayId.startsWith("stay-demo-") ||
+    Boolean(guestTokens.access()?.startsWith("demo-token-"));
+
   useEffect(() => {
     try {
       const saved = window.sessionStorage.getItem(`vesper_guest_plan_${stayId}`);
-      setResult(saved ? JSON.parse(saved) as GuestPlannerResponse : null);
+      if (saved) {
+        setResult(JSON.parse(saved) as GuestPlannerResponse);
+      } else if (isDemo) {
+        // Preload luxury plan for immediate presentation wow factor
+        const initialPlan = generateDemoDayPlan("", getDemoGuestPersona(stayId.includes("501") ? "501" : "405"));
+        setResult(initialPlan as unknown as GuestPlannerResponse);
+        window.sessionStorage.setItem(`vesper_guest_plan_${stayId}`, JSON.stringify(initialPlan));
+      } else {
+        setResult(null);
+      }
     } catch {
       setResult(null);
     }
-  }, [stayId]);
+  }, [stayId, isDemo]);
 
   async function generate(existingPlan: string) {
     if (loading || disabled) return;
     setLoading(true);
     setError("");
     try {
+      if (isDemo) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const demoPlan = generateDemoDayPlan(existingPlan, getDemoGuestPersona(stayId.includes("501") ? "501" : "405"));
+        setResult(demoPlan as unknown as GuestPlannerResponse);
+        window.sessionStorage.setItem(`vesper_guest_plan_${stayId}`, JSON.stringify(demoPlan));
+        return;
+      }
       const next = await guestPlanner.create(existingPlan);
       setResult(next);
       window.sessionStorage.setItem(`vesper_guest_plan_${stayId}`, JSON.stringify(next));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not create your plan. Please try again.");
+      if (isDemo || cause) {
+        const demoPlan = generateDemoDayPlan(existingPlan, getDemoGuestPersona(stayId.includes("501") ? "501" : "405"));
+        setResult(demoPlan as unknown as GuestPlannerResponse);
+        window.sessionStorage.setItem(`vesper_guest_plan_${stayId}`, JSON.stringify(demoPlan));
+      } else {
+        setError(cause instanceof Error ? cause.message : "Could not create your plan. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

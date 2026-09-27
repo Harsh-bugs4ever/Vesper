@@ -14,7 +14,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <RoleGuard
-      allowedRoles={["owner", "general_manager", "dept_manager_fb", "dept_manager_hk", "dept_manager_frontdesk", "employee"]}
+      allowedRoles={[
+        "owner",
+        "general_manager",
+        "dept_manager_fb",
+        "dept_manager_hk",
+        "dept_manager_frontdesk",
+        "dept_manager_maint",
+        "employee",
+      ]}
       fallbackUrl="/access-denied"
     >
       <div className="flex min-h-screen bg-sand-50 relative">

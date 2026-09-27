@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Check, ChevronDown, LogOut, Menu } from "lucide-react";
+import { Building2, Check, ChevronDown, LogOut, Menu, Sparkles } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-context";
 
@@ -112,8 +113,19 @@ export function AdminTopBar({ onOpenSidebar }: AdminTopBarProps) {
           )}
         </div>
 
+        {/* Quick Link to Guest Demo Mode for Seamless End-to-End Demo Presentation */}
+        <Link
+          href="/guest"
+          target="_blank"
+          title="Open Guest Portal in Demo Mode (Suite 405 · Rohan Mehta)"
+          className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-gold-300/80 bg-gold-50/80 px-3 py-2 text-xs font-semibold text-gold-900 shadow-sm transition hover:bg-gold-100 active:scale-95"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-gold-600" />
+          <span>Guest Portal (Demo 405)</span>
+        </Link>
+
         {/* Profile */}
-        <div className="relative ml-auto">
+        <div className="relative ml-2 sm:ml-0">
           <button
             onClick={() => setOpenMenu(openMenu === "profile" ? null : "profile")}
             className="flex items-center gap-2.5 rounded-xl p-1 pr-2 transition-colors hover:bg-sand-100"

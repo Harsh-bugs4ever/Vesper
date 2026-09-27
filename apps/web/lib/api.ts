@@ -174,10 +174,21 @@ async function request<T>(path: string, options: RequestOptions = {}, retrying =
       path !== "/guest/session" &&
       path !== "/guest/amenities" &&
       path !== "/guest/menu");
+  const isGuestOptional = path === "/guest/amenities" || path === "/guest/menu";
   const token = guestRequest
     ? guestTokens.access()
-    : guestTokens.access() || tokens.access();
-  if (!anonymous && token) headers.Authorization = `Bearer ${token}`;
+    : isGuestOptional
+    ? (guestTokens.access() || tokens.access())
+    : tokens.access();
+
+  const isPublicUnauthenticated =
+    path === "/auth/login" ||
+    path === "/auth/refresh" ||
+    path === "/auth/logout" ||
+    path === "/guest/session" ||
+    path === "/property/public";
+
+  if (!anonymous && !isPublicUnauthenticated && token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
   try {
@@ -497,6 +508,7 @@ export interface GuestSession {
 
 export const auth = {
   async login(email: string, password: string): Promise<BackendUser> {
+    guestTokens.clear();
     const pair = await api.post<TokenPair>("/auth/login", { email, password });
     tokens.set(pair.access_token, pair.refresh_token);
     return auth.me();

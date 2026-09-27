@@ -22,6 +22,21 @@ import { GuestRoomQrCard } from "@/components/guest/guest-room-qr-card";
 import { GuestUpiPaymentModal } from "@/components/guest/guest-upi-payment-modal";
 import { GuestOrderConfirmationModal } from "@/components/guest/guest-order-confirmation-modal";
 import { GuestAiDiningRecommendations } from "@/components/guest/guest-ai-dining-recommendations";
+import { GuestDemoBanner } from "@/components/guest/guest-demo-banner";
+import {
+  DEMO_MENU_CATEGORIES,
+  DEMO_GUEST_PREFERENTIAL,
+  DEMO_GUEST_PRESIDENTIAL,
+  getDemoGuestPersona,
+  createGuestSessionFromPersona,
+  isDemoSession,
+  getStoredDemoRequests,
+  addDemoRequest,
+  rateDemoRequest,
+  resetDemoGuestData,
+  type GuestPersona,
+  type DemoRequestItem,
+} from "@/lib/demo/guest-demo";
 import {
   FALLBACK_MENU_ITEMS,
   getFoodImage,
@@ -66,6 +81,14 @@ export default function GuestRoomPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [orderNote, setOrderNote] = useState("");
 
+  // Demo presentation state
+  const isDemo = isDemoSession(session);
+  const [demoPersona, setDemoPersona] = useState<GuestPersona>(() =>
+    getDemoGuestPersona(session?.room_number || "405")
+  );
+  const [demoRequests, setDemoRequests] = useState<DemoRequestItem[]>([]);
+  const [isConciergeOpen, setIsConciergeOpen] = useState(false);
+
   // UPI Payment & Order Confirmation State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -83,20 +106,21 @@ export default function GuestRoomPage() {
     hasNonVeg: boolean;
   } | null>(null);
 
-
   // AI Order History tracking for food recommendations (e.g. Non-Veg preferences)
   const [orderHistory, setOrderHistory] = useState<OrderItemHistorySummary[]>([]);
   const [localRequests, setLocalRequests] = useState<Request[]>([]);
 
   const client = useQueryClient();
 
-  // Load session from URL parameters or session storage
+  // Load session from URL parameters, session storage, or auto-launch preferential demo
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const property = params.get("property_id");
-    const room = params.get("room_id");
+    const room = params.get("room_id") || params.get("room");
     const secret = params.get("qr_secret");
+    const isExplicitScan = params.get("scan") === "true";
+    const isExplicitDemo = params.get("demo") === "true" || params.get("demo") === "1" || room === "405" || room === "501";
 
     if (property && room && secret) {
       setOpening(true);
@@ -125,18 +149,56 @@ export default function GuestRoomPage() {
       try {
         const saved = window.sessionStorage.getItem(SESSION_KEY);
         if (saved) {
-          setSession(JSON.parse(saved) as GuestSession);
+          const parsed = JSON.parse(saved) as GuestSession;
+          setSession(parsed);
+          setOpening(false);
+          return;
         }
       } catch {
         window.sessionStorage.removeItem(SESSION_KEY);
       }
-      setOpening(false);
+
+      if (isExplicitScan && !isExplicitDemo) {
+        setSession(null);
+        setOpening(false);
+      } else {
+        // Auto-initialize Preferential VIP Guest demo session (Rohan Mehta · Suite 405)
+        // This guarantees that any presentation or demonstration is 100% turnkey!
+        const persona = getDemoGuestPersona(room || "405");
+        const demoSession = createGuestSessionFromPersona(persona);
+        guestTokens.set(demoSession.token);
+        window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(demoSession));
+        setSession(demoSession);
+        setDemoPersona(persona);
+        setDemoRequests(getStoredDemoRequests(persona.roomNumber));
+        setOpening(false);
+      }
     }
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Sync demo persona and requests when session room changes
+  useEffect(() => {
+    if (!session?.room_number) return;
+    if (isDemoSession(session)) {
+      const persona = getDemoGuestPersona(session.room_number);
+      setDemoPersona(persona);
+      setDemoRequests(getStoredDemoRequests(session.room_number));
+    }
+  }, [session?.room_number]);
+
+  // Subscribe to demo requests updates from anywhere in the window
+  useEffect(() => {
+    if (!session?.room_number) return;
+    const handleUpdate = () => {
+      setDemoRequests(getStoredDemoRequests(session.room_number));
+    };
+    window.addEventListener("vesper_demo_requests_updated", handleUpdate);
+    return () => window.removeEventListener("vesper_demo_requests_updated", handleUpdate);
+  }, [session?.room_number]);
 
   // Load taste history and stored orders when room is loaded
   useEffect(() => {
@@ -245,25 +307,37 @@ export default function GuestRoomPage() {
     guestTokens.clear();
     window.sessionStorage.removeItem(SESSION_KEY);
     setSession(null);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname + "?scan=true");
+    }
   };
 
+  const menuCategories = useMemo(() => {
+    if (menu.data?.categories && Object.keys(menu.data.categories).length > 0) {
+      return menu.data.categories;
+    }
+    return DEMO_MENU_CATEGORIES;
+  }, [menu.data?.categories]);
+
   const masterCatalog = useMemo(() => {
-    const fromApi = Object.entries(menu.data?.categories ?? {}).flatMap(([category, items]) =>
+    return Object.entries(menuCategories).flatMap(([category, items]) =>
       items.map((item) => ({
         id: item.id,
         name: item.name,
-        category: category.includes("dessert") ? "desserts" : category.includes("beverage") ? "beverages" : "mains",
+        category: category.toLowerCase().includes("dessert")
+          ? "desserts"
+          : category.toLowerCase().includes("beverage")
+          ? "beverages"
+          : "mains",
         categoryLabel: category.replaceAll("_", " "),
         description: item.description ?? "",
         price: Number(item.price),
         is_veg: item.is_veg,
         is_available: item.is_available,
-        preparationTimeMinutes: 25,
+        preparationTimeMinutes: (item as unknown as { preparationTimeMinutes?: number }).preparationTimeMinutes ?? 25,
       } as CatalogMenuItem))
     );
-    if (fromApi.length > 0) return fromApi;
-    return FALLBACK_MENU_ITEMS;
-  }, [menu.data?.categories]);
+  }, [menuCategories]);
 
   // Robust menu item finder by ID, lowercase ID, or name
   const getMenuItem = (id: string): MenuItem | undefined => {
@@ -284,26 +358,6 @@ export default function GuestRoomPage() {
 
     return undefined;
   };
-
-  const menuCategories = useMemo(() => {
-    if (menu.data?.categories && Object.keys(menu.data.categories).length > 0) {
-      return menu.data.categories;
-    }
-    const grouped: Record<string, MenuItem[]> = {};
-    for (const item of FALLBACK_MENU_ITEMS) {
-      const cat = item.category || "mains";
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        is_veg: item.is_veg,
-        is_available: item.is_available,
-      });
-    }
-    return grouped;
-  }, [menu.data?.categories]);
 
   const allMenuItems = masterCatalog;
 
@@ -326,7 +380,7 @@ export default function GuestRoomPage() {
     })
     .join(", ");
 
-  const allRequests = [...localRequests, ...(requests.data || [])];
+  const allRequests = isDemo ? (demoRequests as unknown as Request[]) : [...localRequests, ...(requests.data || [])];
 
   // Handle 1-click add to cart from AI recommendation cards
   const handleAddToCartFromAi = (item: CatalogMenuItem | MenuItem) => {
@@ -342,7 +396,55 @@ export default function GuestRoomPage() {
   };
 
   const handleConfirmOrder = () => {
-    if (!session || create.isPending) return;
+    if (!session) return;
+
+    if (isDemo) {
+      const orderedItems = cartItems.map((ci) => {
+        const item = getMenuItem(ci.menu_item_id);
+        return {
+          menu_item_id: ci.menu_item_id,
+          name: item?.name || "Menu item",
+          quantity: ci.quantity,
+          unit_price: Number(item?.price ?? 0),
+          is_veg: item?.is_veg ?? true,
+        };
+      });
+      const created = addDemoRequest(session.room_number, {
+        kind: "room_service",
+        note: orderNote.trim() || undefined,
+        items: orderedItems,
+        total_amount: cartTotal,
+      });
+      setConfirmedOrder({
+        id: created.id,
+        roomNumber: session.room_number,
+        guestName: session.guest_name ?? undefined,
+        items: orderedItems.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: (i.unit_price || 0) * i.quantity,
+          is_veg: i.is_veg,
+        })),
+        totalAmount: cartTotal,
+        txnId: `UPI-DEMO-${Date.now().toString().slice(-6)}`,
+        paymentMethod: "UPI Instant · Charged to Suite Folio",
+        placedAt: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        estimatedDeliveryTime: new Date(created.due_at).toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        note: orderNote.trim() || undefined,
+        hasNonVeg: orderedItems.some((item) => !item.is_veg),
+      });
+      setCart({});
+      setOrderNote("");
+      setIsPaymentModalOpen(false);
+      setIsConfirmationModalOpen(true);
+      setDemoRequests(getStoredDemoRequests(session.room_number));
+      return;
+    }
+
+    if (create.isPending) return;
     create.mutate(
       { kind: "room_service", note: orderNote.trim() || undefined, items: cartItems },
       {
@@ -401,6 +503,11 @@ export default function GuestRoomPage() {
           onOpenSession={(opened) => {
             window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(opened));
             setSession(opened);
+            if (isDemoSession(opened)) {
+              const persona = getDemoGuestPersona(opened.room_number);
+              setDemoPersona(persona);
+              setDemoRequests(getStoredDemoRequests(opened.room_number));
+            }
           }}
           sessionError={sessionError}
         />
@@ -411,6 +518,38 @@ export default function GuestRoomPage() {
   return (
     <main className="min-h-screen bg-sand-50/60 px-4 py-8 text-sage-950 sm:px-6">
       <div className="mx-auto max-w-3xl space-y-6">
+        {/* Preferential VIP Demo Banner */}
+        {isDemo && (
+          <GuestDemoBanner
+            persona={demoPersona}
+            onSwitchPersona={(nextPersona) => {
+              const nextSession = createGuestSessionFromPersona(nextPersona);
+              guestTokens.set(nextSession.token);
+              window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+              setSession(nextSession);
+              setDemoPersona(nextPersona);
+              setDemoRequests(getStoredDemoRequests(nextPersona.roomNumber));
+            }}
+            onResetDemo={() => {
+              resetDemoGuestData(session.room_number);
+              setDemoRequests(getStoredDemoRequests(session.room_number));
+              setCart({});
+              setOrderNote("");
+            }}
+            onExitDemo={handleLeaveSession}
+            onOpenConcierge={() => setIsConciergeOpen(true)}
+            onQuickAddJainMeal={() => {
+              setCart((prev) => ({
+                ...prev,
+                "dal-vesper-naan": (prev["dal-vesper-naan"] || 0) + 1,
+                "alphonso-mango-lassi": (prev["alphonso-mango-lassi"] || 0) + 1,
+              }));
+              const el = document.getElementById("menu-heading");
+              el?.scrollIntoView({ behavior: "smooth" });
+            }}
+          />
+        )}
+
         {/* Welcome Header */}
         <header className="relative overflow-hidden rounded-3xl bg-sage-800 p-5 sm:p-8 text-white shadow-lg shadow-sage-950/10">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -479,6 +618,15 @@ export default function GuestRoomPage() {
             className="mt-5 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
+              if (isDemo) {
+                addDemoRequest(session.room_number, {
+                  kind,
+                  note: note.trim() || undefined,
+                });
+                setNote("");
+                setDemoRequests(getStoredDemoRequests(session.room_number));
+                return;
+              }
               if (create.isPending) return;
               create.mutate({ kind, note: note.trim() || undefined });
             }}
@@ -511,14 +659,14 @@ export default function GuestRoomPage() {
 
             <button
               type="submit"
-              disabled={create.isPending || !!isSessionTerminated}
+              disabled={(create.isPending && !isDemo) || !!isSessionTerminated}
               className="rounded-xl bg-sage-800 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-sage-900 disabled:opacity-50"
             >
-              {create.isPending ? "Submitting request…" : "Send request"}
+              {create.isPending && !isDemo ? "Submitting request…" : "Send request"}
             </button>
           </form>
 
-          {create.isError && (
+          {create.isError && !isDemo && (
             <p
               role="alert"
               className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700"
@@ -543,16 +691,16 @@ export default function GuestRoomPage() {
               <p className="text-xs text-sand-600">Freshly prepared and delivered to your door</p>
             </div>
             <span className="text-xs font-semibold uppercase tracking-wider text-sage-800 bg-sand-100 px-2.5 py-1 rounded-full">
-              {menu.isError ? "Kitchen Standby (Demo Menu)" : "Kitchen Live"}
+              {menu.isError && !isDemo ? "Kitchen Standby (Demo Menu)" : "Kitchen Live"}
             </span>
           </div>
 
-          {menu.isLoading ? (
+          {menu.isLoading && !isDemo ? (
             <div className="mt-8 flex flex-col items-center justify-center gap-2 py-8 text-sand-500">
               <RefreshCw className="h-6 w-6 animate-spin text-sage-700" />
               <p className="text-xs font-medium">Loading live kitchen menu & availability…</p>
             </div>
-          ) : menu.isError && Object.keys(menuCategories).length === 0 ? (
+          ) : menu.isError && !isDemo && Object.keys(menuCategories).length === 0 ? (
             <p role="alert" className="mt-6 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">
               Could not load the current menu. Please try again before ordering.
             </p>
@@ -828,8 +976,15 @@ export default function GuestRoomPage() {
                             <button
                               key={rating}
                               type="button"
-                              disabled={rate.isPending}
-                              onClick={() => rate.mutate({ id: request.id, rating })}
+                              disabled={rate.isPending && !isDemo}
+                              onClick={() => {
+                                if (isDemo) {
+                                  rateDemoRequest(session.room_number, request.id, rating);
+                                  setDemoRequests(getStoredDemoRequests(session.room_number));
+                                  return;
+                                }
+                                rate.mutate({ id: request.id, rating });
+                              }}
                               className="rounded-lg border border-sand-300 px-2.5 py-1 text-xs font-semibold text-sand-700 hover:bg-sand-100 disabled:opacity-40"
                             >
                               {rating} ★
@@ -852,7 +1007,7 @@ export default function GuestRoomPage() {
             <p className="mt-4 text-sm text-sand-600">No requests placed during this stay yet.</p>
           )}
 
-          {rate.isError && (
+          {rate.isError && !isDemo && (
             <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
               {rate.error instanceof Error
                 ? rate.error.message
@@ -868,15 +1023,23 @@ export default function GuestRoomPage() {
         />
 
         {/* In-Room AI Concierge Drawer Trigger */}
-        <GuestAiConciergeDrawer />
+        <GuestAiConciergeDrawer
+          open={isConciergeOpen}
+          onOpenChange={setIsConciergeOpen}
+          roomNumber={session.room_number}
+          onOpenRoomService={() => {
+            const el = document.getElementById("menu-heading");
+            el?.scrollIntoView({ behavior: "smooth" });
+          }}
+        />
 
         {/* Dummy UPI Payment Scanner Modal */}
         <GuestUpiPaymentModal
           isOpen={isPaymentModalOpen}
           onClose={() => setIsPaymentModalOpen(false)}
           onConfirm={handleConfirmOrder}
-          isSubmitting={create.isPending}
-          error={create.isError ? (create.error instanceof Error ? create.error.message : "Could not place order.") : undefined}
+          isSubmitting={create.isPending && !isDemo}
+          error={!isDemo && create.isError ? (create.error instanceof Error ? create.error.message : "Could not place order.") : undefined}
           amount={cartTotal}
           roomNumber={session.room_number}
           itemsSummary={cartSummaryString}

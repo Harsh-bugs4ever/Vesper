@@ -340,6 +340,14 @@ export default function LandingPage() {
               </a>
             ))}
             <Link
+              href="/guest"
+              title="Preview Guest Portal in Demo Mode (Suite 405)"
+              className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-500/10 px-3.5 py-1.5 text-xs font-semibold text-gold-300 backdrop-blur transition hover:bg-gold-500/20"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-gold-400" />
+              <span>Guest Portal (Demo)</span>
+            </Link>
+            <Link
               href="/login"
               className={`${button} border ${pastHero ? "border-sage-700 bg-sage-700 text-white" : "border-white/40 bg-white/10"}`}
             >
@@ -379,6 +387,13 @@ export default function LandingPage() {
                   {label}
                 </a>
               ))}
+              <Link
+                href="/guest"
+                onClick={() => setMenuOpen(false)}
+                className={`block rounded-lg px-3 py-4 text-sm font-semibold text-gold-700 ${focus}`}
+              >
+                Guest Experience (Demo Suite 405)
+              </Link>
               <Link
                 href="/login"
                 onClick={() => setMenuOpen(false)}
@@ -464,6 +479,13 @@ export default function LandingPage() {
                               className="h-4 w-4"
                               aria-hidden="true"
                             />
+                          </Link>
+                          <Link
+                            href="/guest"
+                            className={`${button} border border-gold-400/70 bg-gold-500/20 text-gold-200 hover:bg-gold-500/30 backdrop-blur-sm`}
+                          >
+                            <Sparkles className="h-4 w-4 text-gold-300" aria-hidden="true" />
+                            Guest Portal (Demo 405)
                           </Link>
                           <a
                             href="#how-it-works"

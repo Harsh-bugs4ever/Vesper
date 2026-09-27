@@ -9,8 +9,9 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react";
-import { amenities as amenitiesApi, type GuestAmenity } from "@/lib/api";
+import { amenities as amenitiesApi, guestTokens, type GuestAmenity } from "@/lib/api";
 import { getAmenityImage } from "@/lib/marriott-images";
+import { DEMO_RESORT_AMENITIES } from "@/lib/demo/guest-demo";
 
 interface GuestAmenitiesSectionProps {
   className?: string;
@@ -83,12 +84,17 @@ export function GuestAmenitiesSection({
       const data = await amenitiesApi.list();
       if (data && data.length > 0) {
         setItems(data);
+      } else if (isGuestPortal || Boolean(guestTokens.access()?.startsWith("demo-token-"))) {
+        setItems(DEMO_RESORT_AMENITIES as GuestAmenity[]);
       } else {
         setItems(DEFAULT_RESORT_AMENITIES);
       }
     } catch {
-      // Fallback seamlessly to default resort amenities
-      setItems(DEFAULT_RESORT_AMENITIES);
+      if (isGuestPortal || Boolean(guestTokens.access()?.startsWith("demo-token-"))) {
+        setItems(DEMO_RESORT_AMENITIES as GuestAmenity[]);
+      } else {
+        setItems(DEFAULT_RESORT_AMENITIES);
+      }
     } finally {
       setLoading(false);
     }
