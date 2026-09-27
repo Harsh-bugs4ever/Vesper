@@ -9,7 +9,7 @@ from vesper_common.permissions import Perm, Role
 from vesper_common.security import Principal, current_user, requires
 from app.api.identity.models import User
 from app.api.property.models import Room
-from vesper_common.errors import Forbidden
+from vesper_common.errors import Forbidden, NotFound
 
 from . import service, reporting, metrics
 from .schemas import (
@@ -22,6 +22,7 @@ from .schemas import (
     TaskBoard,
     TaskCreate,
     TaskDetail,
+    TaskLocation,
     TaskOut,
     TaskStatusUpdate,
     TeamProgress,
@@ -248,6 +249,29 @@ def overdue(
     db: Session = Depends(get_session),
 ) -> list[TaskDetail]:
     return [_detail(t) for t in service.overdue_tasks(db, UUID(principal.property_id)) if principal.can_see_department(t.department_id)]
+
+
+@tasks_router.get("/{task_id}/location", response_model=TaskLocation)
+def task_location(
+    task_id: UUID,
+    principal: Principal = Depends(requires(Perm.TASKS_READ)),
+    db: Session = Depends(get_session),
+) -> TaskLocation:
+    """Reveal only the location of work visible to this staff member."""
+    task = service.get_task(db, UUID(principal.property_id), task_id)
+    principal.require_object(task)
+    if principal.role == Role.STAFF and not (
+        str(task.assignee_id) == principal.id or
+        (task.assignee_id is None and principal.can(Perm.TASKS_POOL_READ))
+    ):
+        raise NotFound("Task not found")
+    if task.room_id is None:
+        raise NotFound("Task has no room location")
+    room = db.get(Room, task.room_id)
+    if room is None or room.property_id != task.property_id:
+        raise NotFound("Task room not found")
+    return TaskLocation(task_id=task.id, room_id=room.id,
+                        room_number=room.number, floor=room.floor)
 
 
 @tasks_router.get("/progress/{department_id}", response_model=TeamProgress)
