@@ -6,7 +6,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Search, Users } from "lucide-r
 import { useAuth } from "@/components/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelBody } from "@/components/ui/panel";
-import { workforceApi } from "@/lib/api";
+import { workforceApi, type TeamRosterOut } from "@/lib/api";
 
 function propertyDate(weekOffset: number) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -26,7 +26,7 @@ export function StaffTeam() {
   const { user } = useAuth();
   const [weekOffset, setWeekOffset] = useState(0);
   const [search, setSearch] = useState("");
-  const roster = useQuery({
+  const roster = useQuery<TeamRosterOut>({
     queryKey: ["staff", "my-team", user?.propertyId, user?.departmentId, weekOffset],
     queryFn: () => workforceApi.myTeam(weekOffset === 0 ? undefined : propertyDate(weekOffset)),
     enabled: Boolean(user?.departmentId),

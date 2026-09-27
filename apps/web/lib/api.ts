@@ -1129,6 +1129,29 @@ export interface RosterDetail extends RosterOut {
   entries: RosterEntryOut[];
 }
 
+export interface TeamMemberShift {
+  work_date: string;
+  shift_key: string;
+  shift_name: string;
+  starts_at?: string;
+  ends_at?: string;
+}
+
+export interface TeamMember {
+  user_id: string;
+  full_name: string;
+  role_title: string;
+  employee_code?: string;
+  shifts: TeamMemberShift[];
+}
+
+export interface TeamRosterOut {
+  department_name?: string;
+  week_start?: string;
+  roster_status?: string;
+  members: TeamMember[];
+}
+
 export interface StaffReportOut {
   id: string;
   property_id: string;
@@ -1198,6 +1221,8 @@ export const workforceApi = {
     api.post<LeaveOut>("/workforce/leave", body),
   decideLeave: (leaveId: string, approve: boolean) =>
     api.post<LeaveOut>(`/workforce/leave/${leaveId}/decide`, { approve }),
+  myTeam: (week_start?: string) =>
+    api.get<TeamRosterOut>("/workforce/my-team", week_start ? { week_start } : undefined),
 };
 
 export const reportsApi = {

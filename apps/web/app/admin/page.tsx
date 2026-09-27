@@ -49,8 +49,22 @@ export default function AdminDashboardPage() {
     return <OwnerDashboard />;
   }
 
-  // Department managers (F&B, Housekeeping)
-  if (user?.role === "dept_manager_fb" || user?.role === "dept_manager_hk") {
+  // Department managers (Front Desk, Housekeeping, F&B, Maintenance, Store)
+  if (
+    user?.role === "dept_manager_frontdesk" ||
+    user?.role === "dept_manager_hk" ||
+    user?.role === "dept_manager_fb" ||
+    user?.role === "dept_manager_maint" ||
+    user?.departmentKey === "front_office" ||
+    user?.departmentKey === "housekeeping" ||
+    user?.departmentKey === "fnb" ||
+    user?.departmentKey === "maintenance" ||
+    user?.email === "fom@vesper.demo" ||
+    user?.email === "exec@vesper.demo" ||
+    user?.email === "chef@vesper.demo" ||
+    user?.email === "chiefeng@vesper.demo" ||
+    user?.email === "store@vesper.demo"
+  ) {
     return <ManagerDashboard />;
   }
 
