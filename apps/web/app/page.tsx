@@ -68,7 +68,7 @@ const scenes: Scene[] = [
     detail: "",
     module: "Smart Resort 360",
     points: [
-      { icon: Users, text: "People, in sync" },
+      { icon: Users, text: "People in sync" },
       { icon: Sparkles, text: "Intelligence, with care" },
     ],
   },
