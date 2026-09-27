@@ -106,6 +106,13 @@ class TaskDetail(TaskOut):
     is_overdue: bool
 
 
+class TaskLocation(BaseModel):
+    task_id: UUID
+    room_id: UUID
+    room_number: str
+    floor: int
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     department_id: UUID
